@@ -8,6 +8,7 @@ from fem.section import create_section
 from fem.constraint import Constraint
 from fem.load import PointLoad, DistributedLoad, MomentLoad
 from fem.analysis import EulerBernoulliAnalysis
+from config import DEFAULT_E, DEFAULT_NU, SECTION_TYPES, ELEMENT_TYPES
 
 st.title("FEM Beam Analysis Tool")
 
@@ -21,113 +22,109 @@ for i in range(n_nodes):
     y = col2.number_input(f"Node {i+1} y", value=0.0)
     nodes.append((x, y))
 
-# --- Input: Material ---
-st.header("Material")
-E = st.number_input("Young's modulus E", value=70e3)
-nu = st.number_input("Poisson's ratio ν", min_value=0.0, max_value=0.5, value=0.3)
-material = Material(1, E, nu)
-
-# --- Input: Section ---
-st.header("Section")
-section_types = [
-    "rectangular_bar", "rectangular_tube", "circular_bar", "circular_tube",
-    "trapezoidal_bar", "trapezoidal_tube", "hexagonal_bar", "hexagonal_tube",
-    "ibeam", "c_section", "l_section", "t_section", "z_section", "hat_section", "general"
-]
-section_type = st.selectbox("Section type", section_types, index=0)
-
-section_kwargs = {}
-if section_type == "rectangular_bar":
-    width = st.number_input("Width", value=0.05)
-    height = st.number_input("Height", value=0.10)
-    section_kwargs = dict(width=width, height=height)
-elif section_type == "rectangular_tube":
-    width = st.number_input("Width", value=0.05)
-    height = st.number_input("Height", value=0.10)
-    thickness = st.number_input("Thickness", value=0.005)
-    section_kwargs = dict(width=width, height=height, thickness=thickness)
-elif section_type == "circular_bar":
-    diameter = st.number_input("Diameter", value=0.05)
-    section_kwargs = dict(diameter=diameter)
-elif section_type == "circular_tube":
-    outer_diameter = st.number_input("Outer diameter", value=0.05)
-    thickness = st.number_input("Thickness", value=0.005)
-    section_kwargs = dict(outer_diameter=outer_diameter, thickness=thickness)
-elif section_type == "trapezoidal_bar":
-    base1 = st.number_input("Base 1", value=0.05)
-    base2 = st.number_input("Base 2", value=0.10)
-    height = st.number_input("Height", value=0.10)
-    section_kwargs = dict(base1=base1, base2=base2, height=height)
-elif section_type == "trapezoidal_tube":
-    base1 = st.number_input("Base 1", value=0.05)
-    base2 = st.number_input("Base 2", value=0.10)
-    height = st.number_input("Height", value=0.10)
-    thickness = st.number_input("Thickness", value=0.005)
-    section_kwargs = dict(base1=base1, base2=base2, height=height, thickness=thickness)
-elif section_type == "hexagonal_bar":
-    side = st.number_input("Side", value=0.05)
-    section_kwargs = dict(side=side)
-elif section_type == "hexagonal_tube":
-    outer_side = st.number_input("Outer side", value=0.05)
-    thickness = st.number_input("Thickness", value=0.005)
-    section_kwargs = dict(outer_side=outer_side, thickness=thickness)
-elif section_type == "ibeam":
-    h = st.number_input("Height h", value=0.10)
-    b = st.number_input("Flange width b", value=0.05)
-    tw = st.number_input("Web thickness tw", value=0.005)
-    tf = st.number_input("Flange thickness tf", value=0.005)
-    section_kwargs = dict(h=h, b=b, tw=tw, tf=tf)
-elif section_type == "c_section":
-    h = st.number_input("Height h", value=0.10)
-    b = st.number_input("Flange width b", value=0.05)
-    tw = st.number_input("Web thickness tw", value=0.005)
-    tf = st.number_input("Flange thickness tf", value=0.005)
-    section_kwargs = dict(h=h, b=b, tw=tw, tf=tf)
-elif section_type == "l_section":
-    b = st.number_input("Width b", value=0.05)
-    h = st.number_input("Height h", value=0.10)
-    t = st.number_input("Thickness t", value=0.005)
-    section_kwargs = dict(b=b, h=h, t=t)
-elif section_type == "t_section":
-    b = st.number_input("Flange width b", value=0.05)
-    h = st.number_input("Height h", value=0.10)
-    tw = st.number_input("Web thickness tw", value=0.005)
-    tf = st.number_input("Flange thickness tf", value=0.005)
-    section_kwargs = dict(b=b, h=h, tw=tw, tf=tf)
-elif section_type == "z_section":
-    h = st.number_input("Height h", value=0.10)
-    b = st.number_input("Flange width b", value=0.05)
-    tw = st.number_input("Web thickness tw", value=0.005)
-    tf = st.number_input("Flange thickness tf", value=0.005)
-    section_kwargs = dict(h=h, b=b, tw=tw, tf=tf)
-elif section_type == "hat_section":
-    h = st.number_input("Height h", value=0.10)
-    b = st.number_input("Flange width b", value=0.05)
-    tw = st.number_input("Web thickness tw", value=0.005)
-    tf = st.number_input("Flange thickness tf", value=0.005)
-    section_kwargs = dict(h=h, b=b, tw=tw, tf=tf)
-elif section_type == "general":
-    area = st.number_input("Area", value=0.001)
-    inertia = st.number_input("Inertia", value=1e-6)
-    section_kwargs = dict(area=area, inertia=inertia)
-
-section = create_section(section_type, 1, **section_kwargs)
+# --- Input: Properties (Material + Section) ---
+st.header("Properties (Material + Section)")
+properties = []
+n_properties = st.number_input("Number of properties", min_value=1, max_value=10, value=1)
+for i in range(n_properties):
+    st.subheader(f"Property {i+1}")
+    prop_name = st.text_input(f"Property {i+1} name", value=f"Property_{i+1}", key=f"propname_{i}")
+    # Material
+    E = st.number_input(f"Young's modulus E [{prop_name}]", value=DEFAULT_E, key=f"E_{i}")
+    nu = st.number_input(f"Poisson's ratio ν [{prop_name}]", min_value=0.0, max_value=0.5, value=DEFAULT_NU, key=f"nu_{i}")
+    material = Material(i+1, E, nu)
+    # Section
+    section_type = st.selectbox(f"Section type [{prop_name}]", SECTION_TYPES, index=0, key=f"sectype_{i}")
+    section_kwargs = {}
+    if section_type == "rectangular_bar":
+        width = st.number_input(f"Width [{prop_name}]", value=0.05, key=f"width_{i}")
+        height = st.number_input(f"Height [{prop_name}]", value=0.10, key=f"height_{i}")
+        section_kwargs = dict(width=width, height=height)
+    elif section_type == "rectangular_tube":
+        width = st.number_input(f"Width [{prop_name}]", value=0.05, key=f"width_{i}")
+        height = st.number_input(f"Height [{prop_name}]", value=0.10, key=f"height_{i}")
+        thickness = st.number_input(f"Thickness [{prop_name}]", value=0.005, key=f"thick_{i}")
+        section_kwargs = dict(width=width, height=height, thickness=thickness)
+    elif section_type == "circular_bar":
+        diameter = st.number_input(f"Diameter [{prop_name}]", value=0.05, key=f"diam_{i}")
+        section_kwargs = dict(diameter=diameter)
+    elif section_type == "circular_tube":
+        outer_diameter = st.number_input(f"Outer diameter [{prop_name}]", value=0.05, key=f"odiam_{i}")
+        thickness = st.number_input(f"Thickness [{prop_name}]", value=0.005, key=f"thick_{i}")
+        section_kwargs = dict(outer_diameter=outer_diameter, thickness=thickness)
+    elif section_type == "trapezoidal_bar":
+        base1 = st.number_input(f"Base 1 [{prop_name}]", value=0.05, key=f"base1_{i}")
+        base2 = st.number_input(f"Base 2 [{prop_name}]", value=0.10, key=f"base2_{i}")
+        height = st.number_input(f"Height [{prop_name}]", value=0.10, key=f"height_{i}")
+        section_kwargs = dict(base1=base1, base2=base2, height=height)
+    elif section_type == "trapezoidal_tube":
+        base1 = st.number_input(f"Base 1 [{prop_name}]", value=0.05, key=f"base1_{i}")
+        base2 = st.number_input(f"Base 2 [{prop_name}]", value=0.10, key=f"base2_{i}")
+        height = st.number_input(f"Height [{prop_name}]", value=0.10, key=f"height_{i}")
+        thickness = st.number_input(f"Thickness [{prop_name}]", value=0.005, key=f"thick_{i}")
+        section_kwargs = dict(base1=base1, base2=base2, height=height, thickness=thickness)
+    elif section_type == "hexagonal_bar":
+        side = st.number_input(f"Side [{prop_name}]", value=0.05, key=f"side_{i}")
+        section_kwargs = dict(side=side)
+    elif section_type == "hexagonal_tube":
+        outer_side = st.number_input(f"Outer side [{prop_name}]", value=0.05, key=f"oside_{i}")
+        thickness = st.number_input(f"Thickness [{prop_name}]", value=0.005, key=f"thick_{i}")
+        section_kwargs = dict(outer_side=outer_side, thickness=thickness)
+    elif section_type == "ibeam":
+        h = st.number_input(f"Height h [{prop_name}]", value=0.10, key=f"h_{i}")
+        b = st.number_input(f"Flange width b [{prop_name}]", value=0.05, key=f"b_{i}")
+        tw = st.number_input(f"Web thickness tw [{prop_name}]", value=0.005, key=f"tw_{i}")
+        tf = st.number_input(f"Flange thickness tf [{prop_name}]", value=0.005, key=f"tf_{i}")
+        section_kwargs = dict(h=h, b=b, tw=tw, tf=tf)
+    elif section_type == "c_section":
+        h = st.number_input(f"Height h [{prop_name}]", value=0.10, key=f"h_{i}")
+        b = st.number_input(f"Flange width b [{prop_name}]", value=0.05, key=f"b_{i}")
+        tw = st.number_input(f"Web thickness tw [{prop_name}]", value=0.005, key=f"tw_{i}")
+        tf = st.number_input(f"Flange thickness tf [{prop_name}]", value=0.005, key=f"tf_{i}")
+        section_kwargs = dict(h=h, b=b, tw=tw, tf=tf)
+    elif section_type == "l_section":
+        b = st.number_input(f"Width b [{prop_name}]", value=0.05, key=f"b_{i}")
+        h = st.number_input(f"Height h [{prop_name}]", value=0.10, key=f"h_{i}")
+        t = st.number_input(f"Thickness t [{prop_name}]", value=0.005, key=f"t_{i}")
+        section_kwargs = dict(b=b, h=h, t=t)
+    elif section_type == "t_section":
+        b = st.number_input(f"Flange width b [{prop_name}]", value=0.05, key=f"b_{i}")
+        h = st.number_input(f"Height h [{prop_name}]", value=0.10, key=f"h_{i}")
+        tw = st.number_input(f"Web thickness tw [{prop_name}]", value=0.005, key=f"tw_{i}")
+        tf = st.number_input(f"Flange thickness tf [{prop_name}]", value=0.005, key=f"tf_{i}")
+        section_kwargs = dict(b=b, h=h, tw=tw, tf=tf)
+    elif section_type == "z_section":
+        h = st.number_input(f"Height h [{prop_name}]", value=0.10, key=f"h_{i}")
+        b = st.number_input(f"Flange width b [{prop_name}]", value=0.05, key=f"b_{i}")
+        tw = st.number_input(f"Web thickness tw [{prop_name}]", value=0.005, key=f"tw_{i}")
+        tf = st.number_input(f"Flange thickness tf [{prop_name}]", value=0.005, key=f"tf_{i}")
+        section_kwargs = dict(h=h, b=b, tw=tw, tf=tf)
+    elif section_type == "hat_section":
+        h = st.number_input(f"Height h [{prop_name}]", value=0.10, key=f"h_{i}")
+        b = st.number_input(f"Flange width b [{prop_name}]", value=0.05, key=f"b_{i}")
+        tw = st.number_input(f"Web thickness tw [{prop_name}]", value=0.005, key=f"tw_{i}")
+        tf = st.number_input(f"Flange thickness tf [{prop_name}]", value=0.005, key=f"tf_{i}")
+        section_kwargs = dict(h=h, b=b, tw=tw, tf=tf)
+    elif section_type == "general":
+        area = st.number_input(f"Area [{prop_name}]", value=0.001, key=f"area_{i}")
+        inertia = st.number_input(f"Inertia [{prop_name}]", value=1e-6, key=f"inertia_{i}")
+        section_kwargs = dict(area=area, inertia=inertia)
+    section = create_section(section_type, i+1, **section_kwargs)
+    properties.append({"name": prop_name, "material": material, "section": section})
 
 # --- Input: Elements ---
 st.header("Elements")
 elements = []
-element_types = {
-    "Euler-Bernoulli 2-node": "euler_bernoulli_2node",
-    "Euler-Bernoulli 3-node": "euler_bernoulli_3node",
-    "Timoshenko 2-node": "timoshenko_2node"
-}
+element_types = ELEMENT_TYPES
+property_names = [prop["name"] for prop in properties]
 n_elements = st.number_input("Number of elements", min_value=1, max_value=n_nodes-1, value=n_nodes-1)
 for i in range(n_elements):
-    col1, col2, col3 = st.columns(3)
-    n1 = int(col1.number_input(f"Element {i+1} start node", min_value=1, max_value=n_nodes, value=i+1))
-    n2 = int(col2.number_input(f"Element {i+1} end node", min_value=1, max_value=n_nodes, value=i+2))
-    el_type = col3.selectbox(f"Element {i+1} type", list(element_types.keys()), index=0, key=f"etype_{i}")
-    elements.append((n1, n2, element_types[el_type]))
+    col1, col2 = st.columns(2)
+    n1 = int(col1.number_input(f"Start node (Elem {i+1})", min_value=1, max_value=n_nodes, value=i+1, key=f"en1_{i}"))
+    n2 = int(col2.number_input(f"End node (Elem {i+1})", min_value=1, max_value=n_nodes, value=i+2, key=f"en2_{i}"))
+    el_type = st.selectbox(f"Element type (Elem {i+1})", list(element_types.keys()), index=0, key=f"etype_{i}")
+    prop_idx = st.selectbox(f"Property (Elem {i+1})", property_names, index=0, key=f"propidx_{i}")
+    elements.append((n1, n2, element_types[el_type], prop_idx))
 
 # --- Input: Constraints ---
 st.header("Constraints")
@@ -179,8 +176,16 @@ if st.button("Run Analysis"):
     node_objs = []
     for x, y in nodes:
         node_objs.append(mesh.add_node(x, y))
-    for n1, n2, etype in elements:
-        mesh.add_element(mesh.get_node_by_id(n1), mesh.get_node_by_id(n2), material, section, element_type=etype)
+    # Add elements with selected property
+    for n1, n2, etype, prop_name in elements:
+        prop = next(p for p in properties if p["name"] == prop_name)
+        mesh.add_element(
+            mesh.get_node_by_id(n1),
+            mesh.get_node_by_id(n2),
+            prop["material"],
+            prop["section"],
+            element_type=etype
+        )
     # Add constraints
     for node_id, direction, value in constraints:
         mesh.constraints.add(Constraint(mesh.get_node_by_id(node_id), direction, value))
