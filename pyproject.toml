@@ -1,0 +1,20 @@
+[project]
+name = "beam-analysis-fem"
+version = "0.1.0"
+description = "Finite element analysis tool for beams using Euler-Bernoulli, Timoshenko, and Reddy-Bickford formulations."
+authors = [
+    { name = "Lucas Sarmento" }
+]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "seaborn",
+    "streamlit"
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"

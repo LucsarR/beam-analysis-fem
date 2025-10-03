@@ -2,6 +2,9 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 class Element(ABC):
+    """
+    Abstract base class for beam elements.
+    """
     def __init__(self, id, node_start, node_end, material, section):
         self.id = id
         self.node_start = node_start
@@ -17,7 +20,7 @@ class Element(ABC):
     def force_vector(self, q_ini=0, q_fim=0, p_ini=0, p_fim=0):
         pass
 
-class EulerBernoulliElement(Element):
+class EulerBernoulliElement2Node(Element):
     def __init__(self, id, node_start, node_end, material, section):
         super().__init__(id, node_start, node_end, material, section)
         self.length, self.c, self.s = self._compute_geometry()
@@ -75,4 +78,75 @@ class EulerBernoulliElement(Element):
             [(3*p_ini + 7*p_fim) / 20],
             [-(2*p_ini + 3*p_fim) * L / 60]
         ])
+        return fe_local.flatten()
+
+class EulerBernoulliElement3Node(Element):
+    def __init__(self, id, node_start, node_end, material, section):
+        super().__init__(id, node_start, node_end, material, section)
+        self.length, self.c, self.s = self._compute_geometry()
+
+    def _compute_geometry(self):
+        x1, y1 = self.node_start.x, self.node_start.y
+        x2, y2 = (self.node_start.x + self.node_end.x) / 2, (self.node_start.y + self.node_end.y) / 2
+        x3, y3 = self.node_end.x, self.node_end.y
+        L = np.sqrt((x3 - x1)**2 + (y3 - y1)**2)
+        c = (x3 - x1) / L
+        s = (y3 - y1) / L
+        return L, c, s
+
+    def stiffness_matrix(self):
+        E = self.material.E
+        A = self.section.area
+        I = self.section.inertia
+        L = self.length
+        c = self.c
+        s = self.s
+
+        # TODO: Implement the stiffness matrix for 3-node Euler-Bernoulli beam element
+
+        return k
+
+    def force_vector(self, q_ini=0, q_fim=0, p_ini=0, p_fim=0):
+        L = self.length
+        c = self.c
+        s = self.s
+
+        # TODO: Implement the force vector for 3-node Euler-Bernoulli beam element
+
+        return fe_local.flatten()
+    
+class TimoshenkoElement2Node(Element):
+    def __init__(self, id, node_start, node_end, material, section):
+        super().__init__(id, node_start, node_end, material, section)
+        self.length, self.c, self.s = self._compute_geometry()
+
+    def _compute_geometry(self):
+        x1, y1 = self.node_start.x, self.node_start.y
+        x2, y2 = self.node_end.x, self.node_end.y
+        L = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+        c = (x2 - x1) / L
+        s = (y2 - y1) / L
+        return L, c, s
+
+    def stiffness_matrix(self):
+        E = self.material.E
+        G = self.material.G
+        A = self.section.area
+        I = self.section.inertia
+        kappa = self.section.shear_coefficient
+        L = self.length
+        c = self.c
+        s = self.s
+
+        # TODO: Implement the stiffness matrix for Timoshenko beam element
+
+        return k
+
+    def force_vector(self, q_ini=0, q_fim=0, p_ini=0, p_fim=0):
+        L = self.length
+        c = self.c
+        s = self.s
+
+        # TODO: Implement the force vector for Timoshenko beam element
+
         return fe_local.flatten()

@@ -1,9 +1,16 @@
 class Mesh:
+    """
+    Class representing a finite element mesh.
+    """
     def __init__(self):
         self.nodes = []
         self.elements = []
         self.node_id_counter = 1
         self.element_id_counter = 1
+        self.point_loads = []
+        self.distributed_loads = []
+        from fem.constraint import ConstraintSet
+        self.constraints = ConstraintSet()
 
     def add_node(self, x, y):
         from fem.node import Node
@@ -12,18 +19,21 @@ class Mesh:
         self.node_id_counter += 1
         return node
 
-    def add_element(self, node_start, node_end, material, section, element_type="euler_bernoulli"):
-        from fem.element import EulerBernoulliElement
-        # Extend here for other element types
-        if element_type == "euler_bernoulli":
-            element = EulerBernoulliElement(self.element_id_counter, node_start, node_end, material, section)
+    def add_element(self, node_start, node_end, material, section, element_type="euler_bernoulli_2node"):
+        from fem.element import EulerBernoulliElement2Node, EulerBernoulliElement3Node,TimoshenkoElement2Node
+        if element_type == "euler_bernoulli_2node":
+            element = EulerBernoulliElement2Node(self.element_id_counter, node_start, node_end, material, section)
+        elif element_type == "euler_bernoulli_3node":
+            element = EulerBernoulliElement3Node(self.element_id_counter, node_start, node_end, material, section)
+        elif element_type == "timoshenko_2node":
+            element = TimoshenkoElement2Node(self.element_id_counter, node_start, node_end, material, section)
         else:
             raise NotImplementedError(f"Element type '{element_type}' not implemented.")
         self.elements.append(element)
         self.element_id_counter += 1
         return element
 
-    def generate_1d_mesh(self, x_start, y_start, x_end, y_end, n_elements, material, section, element_type="euler_bernoulli"):
+    def generate_1d_mesh(self, x_start, y_start, x_end, y_end, n_elements, material, section, element_type="euler_bernoulli_2node"):
         # Structured mesh between two points
         nodes = []
         for i in range(n_elements + 1):

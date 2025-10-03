@@ -2,6 +2,9 @@ from abc import ABC, abstractmethod
 import math
 
 class Section(ABC):
+    """
+    Abstract base class for cross-sectional properties.
+    """
     def __init__(self, id):
         self.id = id
         self.area = None

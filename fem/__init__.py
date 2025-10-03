@@ -1,10 +1,10 @@
 from .analysis import Analysis, EulerBernoulliAnalysis
-from .element import Element, EulerBernoulliElement
+from .element import Element, EulerBernoulliElement2Node, EulerBernoulliElement3Node, TimoshenkoElement2Node
 from .mesh import Mesh
 from .node import Node
 from .material import Material
 from .section import Section
-from .load import Load, DistributedLoad
+from .load import Load, PointLoad, DistributedLoad, MomentLoad
 from .spring import Spring
 
-# UPDATE
+# TODO: Update
