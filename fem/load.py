@@ -36,14 +36,3 @@ class DistributedLoad(Load):
         # Implementation depends on element type
         # Check the force_vector method in Element classes
         pass
-
-class MomentLoad(Load):
-    """
-    Represents a moment load applied to a node.
-    """
-    def __init__(self, magnitude):
-        super().__init__(magnitude)
-
-    def apply(self, F_global, node):
-        idx = 3 * (node.id - 1) + 2
-        F_global[idx] += self.magnitude

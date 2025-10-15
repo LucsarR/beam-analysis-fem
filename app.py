@@ -6,7 +6,7 @@ from fem.mesh import Mesh
 from fem.material import Material
 from fem.section import create_section
 from fem.constraint import Constraint
-from fem.load import PointLoad, DistributedLoad, MomentLoad
+from fem.load import PointLoad, DistributedLoad
 from fem.analysis import EulerBernoulliAnalysis
 from config import DEFAULT_E, DEFAULT_NU, SECTION_TYPES, ELEMENT_TYPES
 
@@ -159,16 +159,6 @@ for i in range(n_dist_loads):
     magnitude_end = col3.number_input(f"q_fim {i+1}", value=0.0)
     direction = col4.selectbox(f"Direction {i+1}", options=['x', 'y', 'l', 't'], key=f"ddir_{i}")
     distributed_loads.append((element_id, magnitude_start, magnitude_end, direction))
-
-# --- Input: Moment Loads ---
-st.header("Moment Loads")
-moment_loads = []
-n_moment_loads = st.number_input("Number of moment loads", min_value=0, max_value=n_nodes, value=0)
-for i in range(n_moment_loads):
-    col1, col2 = st.columns(2)
-    node_id = int(col1.number_input(f"Moment Load {i+1} node", min_value=1, max_value=n_nodes, value=1))
-    magnitude = col2.number_input(f"Moment {i+1} magnitude", value=0.0)
-    moment_loads.append((node_id, magnitude))
 
 # --- Run Analysis ---
 if st.button("Run Analysis"):
