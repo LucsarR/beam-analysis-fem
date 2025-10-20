@@ -47,41 +47,13 @@ class EulerBernoulliAnalysis(Analysis):
         # Apply distributed loads
         for load in getattr(self.mesh, "distributed_loads", []):
             el = load.element
-            c = el.c
-            s = el.s
-            # Project distributed load according to direction
-            if load.direction == 'x':
-                q_ini = load.magnitude_start * c
-                q_fim = load.magnitude_end * c
-                p_ini = -load.magnitude_start * s
-                p_fim = -load.magnitude_end * s
-            elif load.direction == 'y':
-                q_ini = load.magnitude_start * s
-                q_fim = load.magnitude_end * s
-                p_ini = load.magnitude_start * c
-                p_fim = load.magnitude_end * c
-            elif load.direction == 'l':
-                q_ini = load.magnitude_start
-                q_fim = load.magnitude_end
-                p_ini = 0
-                p_fim = 0
-            elif load.direction == 't':
-                q_ini = 0
-                q_fim = 0
-                p_ini = load.magnitude_start
-                p_fim = load.magnitude_end
-            else:
-                q_ini = 0
-                q_fim = 0
-                p_ini = 0
-                p_fim = 0
-            fe_dist = el.force_vector(q_ini=q_ini, q_fim=q_fim, p_ini=p_ini, p_fim=p_fim)
+            fe_global = load.apply(el)
             node_ids = [el.node_start.id, el.node_end.id]
             dof_indices = []
             for nid in node_ids:
                 dof_indices.extend([3*(nid-1), 3*(nid-1)+1, 3*(nid-1)+2])
             for i in range(6):
-                self.F_global[dof_indices[i]] += fe_dist[i]
+                self.F_global[dof_indices[i]] += fe_global[i]
 
     def solve(self):
         # Apply constraints

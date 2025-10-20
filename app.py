@@ -10,6 +10,11 @@ from fem.load import PointLoad, DistributedLoad
 from fem.analysis import EulerBernoulliAnalysis
 from config import DEFAULT_E, DEFAULT_NU, SECTION_TYPES, ELEMENT_TYPES
 
+# --- Post-processing and Plotting ---
+from post_processing.forces import StructureResults
+from post_processing.plotter import plot_structure_diagram, plot_normal_stress_distribution
+import matplotlib.pyplot as plt
+
 st.title("FEM Beam Analysis Tool")
 
 # --- Input: Nodes ---
@@ -153,12 +158,31 @@ st.header("Distributed Loads")
 distributed_loads = []
 n_dist_loads = st.number_input("Number of distributed loads", min_value=0, max_value=n_elements, value=0)
 for i in range(n_dist_loads):
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     element_id = int(col1.number_input(f"Distributed Load {i+1} element", min_value=1, max_value=n_elements, value=1))
-    magnitude_start = col2.number_input(f"q_ini {i+1}", value=0.0)
-    magnitude_end = col3.number_input(f"q_fim {i+1}", value=0.0)
-    direction = col4.selectbox(f"Direction {i+1}", options=['x', 'y', 'l', 't'], key=f"ddir_{i}")
-    distributed_loads.append((element_id, magnitude_start, magnitude_end, direction))
+    load_type = col2.selectbox(f"Type {i+1}", options=["constant", "linear", "custom"], key=f"dltype_{i}")
+    direction = col3.selectbox(f"Direction {i+1}", options=['x', 'y', 'l', 't'], key=f"ddir_{i}")
+    if load_type == "constant":
+        magnitude = col4.number_input(f"Value {i+1}", value=0.0, key=f"dlval_{i}")
+        distributed_loads.append((element_id, magnitude, None, direction, None))
+    elif load_type == "linear":
+        magnitude_start = col4.number_input(f"Start {i+1}", value=0.0, key=f"dlstart_{i}")
+        magnitude_end = col5.number_input(f"End {i+1}", value=0.0, key=f"dlend_{i}")
+        distributed_loads.append((element_id, magnitude_start, magnitude_end, direction, None))
+    elif load_type == "custom":
+        func_str = col4.text_input(f"Function f(x) {i+1}", value="", key=f"dlfunc_{i}")
+        # Validate function string
+        error_msg = ""
+        if func_str:
+            try:
+                import numpy as np
+                x = 0.0
+                L = 1.0
+                test_val = eval(func_str, {"np": np, "x": x, "L": L})
+            except Exception as e:
+                error_msg = f"Invalid function: {e}"
+                st.error(error_msg)
+        distributed_loads.append((element_id, None, None, direction, func_str if not error_msg else None))
 
 # --- Run Analysis ---
 if st.button("Run Analysis"):
@@ -184,16 +208,11 @@ if st.button("Run Analysis"):
         mesh.point_loads.append(PointLoad(magnitude, direction))
         mesh.point_loads[-1].node = mesh.get_node_by_id(node_id)
     # Add distributed loads
-    for element_id, magnitude_start, magnitude_end, direction in distributed_loads:
+    for element_id, magnitude_start, magnitude_end, direction, func_str in distributed_loads:
         el = mesh.get_element_by_id(element_id)
-        load = DistributedLoad(magnitude_start, magnitude_end, direction)
+        load = DistributedLoad(magnitude_start, magnitude_end, direction, func=func_str)
         load.element = el
         mesh.distributed_loads.append(load)
-    # Add moment loads
-    for node_id, magnitude in moment_loads:
-        load = MomentLoad(magnitude)
-        load.node = mesh.get_node_by_id(node_id)
-        mesh.point_loads.append(load)
     # Run analysis (only Euler-Bernoulli supported for now)
     analysis = EulerBernoulliAnalysis(mesh)
     analysis.assemble()
@@ -211,3 +230,49 @@ if st.button("Run Analysis"):
     # Export CSV
     csv = df_disp.to_csv(index=False).encode('utf-8')
     st.download_button("Download Displacements CSV", csv, "displacements.csv", "text/csv")
+
+    # Store results in session state
+    st.session_state["mesh"] = mesh
+    st.session_state["displacements"] = displacements
+
+    # --- Post-processing and Plotting ---
+    structure_results = StructureResults(mesh, displacements)
+    st.session_state["structure_results"] = structure_results
+
+# Use session state for post-processing and plotting
+if "structure_results" in st.session_state:
+    structure_results = st.session_state["structure_results"]
+
+    st.subheader("Diagrams")
+    diagram_type = st.selectbox(
+        "Select diagram to show",
+        options=["Moment", "Shear", "Normal Force"],
+        index=0
+    )
+    diagram_map = {
+        "Moment": "moment",
+        "Shear": "shear",
+        "Normal Force": "normal"
+    }
+    if st.button("Show Diagram"):
+        fig, ax = plot_structure_diagram(structure_results, force_type=diagram_map[diagram_type])
+        st.pyplot(fig)
+
+    st.subheader("Normal Stress Distribution in Cross Section")
+    element_ids = [el.id for el in st.session_state["mesh"].elements]
+    if element_ids:
+        selected_element_id = st.selectbox("Select element", element_ids)
+        selected_element_result = next(er for er in structure_results.element_results if er.element.id == selected_element_id)
+        x_pos = st.slider(
+            "Position x along element [m]",
+            min_value=0.0,
+            max_value=float(selected_element_result.length),
+            value=0.0,
+            step=0.01,
+        )
+        if st.button("Show Normal Stress Distribution"):
+            try:
+                fig, ax = plot_normal_stress_distribution(selected_element_result, x_pos)
+                st.pyplot(fig)
+            except Exception as e:
+                st.error(f"Error: {e}")

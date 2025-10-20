@@ -1,5 +1,6 @@
 # Project To-Do List
 
 - [ ] Testar as formulas do section.py
-- [ ] implementar polinomio interpolador com um no medio
-- [ ] Aplicar Mesh
+- [ ] Implementar Mesh
+- [ ] Arrumar plots 2D, melhorar resolução e arrumar os tubos
+- [ ]

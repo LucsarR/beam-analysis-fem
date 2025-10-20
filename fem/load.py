@@ -25,14 +25,17 @@ class DistributedLoad(Load):
     """
     Represents a distributed load applied to an element.
     direction: 'x', 'y', 'l', 't'
+    Supports constant, linear, or custom function (func) for the load distribution.
     """
-    def __init__(self, magnitude_start, magnitude_end, direction):
+    def __init__(self, magnitude_start=None, magnitude_end=None, direction='l', func=None):
         super().__init__(None)
         self.magnitude_start = magnitude_start
         self.magnitude_end = magnitude_end
         self.direction = direction
+        self.func = func  # string, e.g. "1000*np.sin(np.pi*x/L)"
 
     def apply(self, element):
-        # Implementation depends on element type
-        # Check the force_vector method in Element classes
-        pass
+        """
+        Calls the element's method to compute equivalent nodal loads.
+        """
+        return element.compute_equivalent_nodal_loads(self)
