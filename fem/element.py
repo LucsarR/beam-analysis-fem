@@ -353,6 +353,97 @@ class TimoshenkoElement2Node(Element):
         ])
         
         return fe_local.flatten()
+    
+    def compute_equivalent_nodal_loads(self, distributed_load, n_gauss=5):
+        """
+        Compute consistent nodal loads for a distributed load (constant, linear, or custom function).
+        Returns a 6-vector in GLOBAL coordinates.
+        For Timoshenko beam elements, uses the same approach as Euler-Bernoulli.
+        """
+        import numpy as np
+        L = self.length
+        c = self.c
+        s = self.s
+
+        # Build load function f(x) from distributed_load
+        if distributed_load.func:
+            # Custom function
+            def f(x):
+                try:
+                    return float(eval(distributed_load.func, {"np": np, "x": x, "L": L}))
+                except Exception as e:
+                    print(f"Error evaluating custom function '{distributed_load.func}': {e}")
+                    return 0.0
+        elif distributed_load.magnitude_start is not None and distributed_load.magnitude_end is not None:
+            # Linear
+            a = float(distributed_load.magnitude_start)
+            b = float(distributed_load.magnitude_end)
+            def f(x):
+                return a + (b - a) * (x / L)
+        elif distributed_load.magnitude_start is not None:
+            # Constant
+            a = float(distributed_load.magnitude_start)
+            def f(x):
+                return a
+        else:
+            def f(x):
+                return 0.0
+
+        # Project direction to local axes
+        if distributed_load.direction == 'x':
+            def q_local(x): return f(x) * c
+            def p_local(x): return -f(x) * s
+        elif distributed_load.direction == 'y':
+            def q_local(x): return f(x) * s
+            def p_local(x): return f(x) * c
+        elif distributed_load.direction == 'l':
+            def q_local(x): return f(x)
+            def p_local(x): return 0.0
+        elif distributed_load.direction == 't':
+            def q_local(x): return 0.0
+            def p_local(x): return f(x)
+        else:
+            def q_local(x): return 0.0
+            def p_local(x): return 0.0
+
+        # Gauss-Legendre quadrature points on [0,1] mapped to [0,L]
+        xi, wi = np.polynomial.legendre.leggauss(n_gauss)
+        t = 0.5 * (xi + 1.0)
+        wt = 0.5 * wi
+
+        ia1 = ia2 = iv1 = itheta1 = iv2 = itheta2 = 0.0
+        for ti, wi_scaled in zip(t, wt):
+            x = ti * L
+            N1_ax = 1.0 - ti
+            N2_ax = ti
+            qx = q_local(x)
+            ia1 += N1_ax * qx * wi_scaled * L
+            ia2 += N2_ax * qx * wi_scaled * L
+
+            # Use Hermite shape functions for transverse loads
+            Hv1 = 1 - 3*ti**2 + 2*ti**3
+            Ht1 = L * (ti - 2*ti**2 + ti**3)
+            Hv2 = 3*ti**2 - 2*ti**3
+            Ht2 = L * (-ti**2 + ti**3)
+            px = p_local(x)
+            iv1 += Hv1 * px * wi_scaled * L
+            itheta1 += Ht1 * px * wi_scaled * L
+            iv2 += Hv2 * px * wi_scaled * L
+            itheta2 += Ht2 * px * wi_scaled * L
+
+        # local consistent vector in order [u1, v1, theta1, u2, v2, theta2]
+        flocal = np.array([ia1, iv1, itheta1, ia2, iv2, itheta2], dtype=float)
+        # Transform to global coordinates
+        R = np.array([
+            [c, -s, 0, 0, 0, 0],
+            [s, c, 0, 0, 0, 0],
+            [0, 0, 1, 0, 0, 0],
+            [0, 0, 0, c, -s, 0],
+            [0, 0, 0, s, c, 0],
+            [0, 0, 0, 0, 0, 1]
+        ])
+        fe_global = R @ flocal
+        return fe_global.flatten()
 
     def bending_moment(self, x, displacements):
         """
