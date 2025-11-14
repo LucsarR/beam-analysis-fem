@@ -13,7 +13,6 @@ from config import DEFAULT_E, DEFAULT_NU, SECTION_TYPES, ELEMENT_TYPES
 # --- Post-processing and Plotting ---
 from post_processing.forces import StructureResults
 from post_processing.plotter import plot_structure_diagram, plot_normal_stress_distribution
-import matplotlib.pyplot as plt
 
 st.title("FEM Beam Analysis Tool")
 
@@ -129,7 +128,8 @@ for i in range(n_elements):
     n2 = int(col2.number_input(f"End node (Elem {i+1})", min_value=1, max_value=n_nodes, value=i+2, key=f"en2_{i}"))
     el_type = st.selectbox(f"Element type (Elem {i+1})", list(element_types.keys()), index=0, key=f"etype_{i}")
     prop_idx = st.selectbox(f"Property (Elem {i+1})", property_names, index=0, key=f"propidx_{i}")
-    elements.append((n1, n2, element_types[el_type], prop_idx))
+    n_subdiv = st.number_input(f"Subdivisions (Elem {i+1})", min_value=1, max_value=20, value=1, key=f"subdiv_{i}")
+    elements.append((n1, n2, element_types[el_type], prop_idx, n_subdiv))
 
 # --- Input: Constraints ---
 st.header("Constraints")
@@ -156,10 +156,10 @@ for i in range(n_loads):
 # --- Input: Distributed Loads ---
 st.header("Distributed Loads")
 distributed_loads = []
-n_dist_loads = st.number_input("Number of distributed loads", min_value=0, max_value=n_elements, value=0)
+n_dist_loads = st.number_input("Number of distributed loads", min_value=0, value=0)
 for i in range(n_dist_loads):
     col1, col2, col3, col4, col5 = st.columns(5)
-    element_id = int(col1.number_input(f"Distributed Load {i+1} element", min_value=1, max_value=n_elements, value=1))
+    element_id = int(col1.number_input(f"Distributed Load {i+1} element", min_value=1, value=1))
     load_type = col2.selectbox(f"Type {i+1}", options=["constant", "linear", "custom"], key=f"dltype_{i}")
     direction = col3.selectbox(f"Direction {i+1}", options=['x', 'y', 'l', 't'], key=f"ddir_{i}")
     if load_type == "constant":
@@ -191,15 +191,41 @@ if st.button("Run Analysis"):
     for x, y in nodes:
         node_objs.append(mesh.add_node(x, y))
     # Add elements with selected property
-    for n1, n2, etype, prop_name in elements:
+    for n1, n2, etype, prop_name, n_subdiv in elements:
         prop = next(p for p in properties if p["name"] == prop_name)
-        mesh.add_element(
-            mesh.get_node_by_id(n1),
-            mesh.get_node_by_id(n2),
-            prop["material"],
-            prop["section"],
-            element_type=etype
-        )
+        node_start = mesh.get_node_by_id(n1)
+        node_end = mesh.get_node_by_id(n2)
+        if n_subdiv == 1:
+            mesh.add_element(
+                node_start,
+                node_end,
+                prop["material"],
+                prop["section"],
+                element_type=etype
+            )
+        else:
+            # Subdivide element, reusing start/end nodes
+            x_start, y_start = node_start.x, node_start.y
+            x_end, y_end = node_end.x, node_end.y
+            subdiv_nodes = [node_start]
+            for i in range(1, n_subdiv):
+                x = x_start + (x_end - x_start) * i / n_subdiv
+                y = y_start + (y_end - y_start) * i / n_subdiv
+                # Check if node already exists at (x, y)
+                existing = next((n for n in mesh.nodes if np.isclose(n.x, x) and np.isclose(n.y, y)), None)
+                if existing:
+                    subdiv_nodes.append(existing)
+                else:
+                    subdiv_nodes.append(mesh.add_node(x, y))
+            subdiv_nodes.append(node_end)
+            for i in range(n_subdiv):
+                mesh.add_element(
+                    subdiv_nodes[i],
+                    subdiv_nodes[i+1],
+                    prop["material"],
+                    prop["section"],
+                    element_type=etype
+                )
     # Add constraints
     for node_id, direction, value in constraints:
         mesh.constraints.add(Constraint(mesh.get_node_by_id(node_id), direction, value))
@@ -254,9 +280,20 @@ if "structure_results" in st.session_state:
         "Shear": "shear",
         "Normal Force": "normal"
     }
+    fill_diagram = st.checkbox("Show force diagram as filled area above element", value=False)
+    if fill_diagram:
+        diagram_scale = st.slider("Force diagram scale", min_value=0.05, max_value=0.5, value=0.2)
+    else:
+        diagram_scale = 0.2  # Default value, not used unless fill_diagram is True
+
     if st.button("Show Diagram"):
-        fig, ax = plot_structure_diagram(structure_results, force_type=diagram_map[diagram_type])
-        st.pyplot(fig)
+        fig = plot_structure_diagram(
+            structure_results,
+            force_type=diagram_map[diagram_type],
+            fill_diagram=fill_diagram,
+            scale=diagram_scale
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Normal Stress Distribution in Cross Section")
     element_ids = [el.id for el in st.session_state["mesh"].elements]
@@ -264,7 +301,7 @@ if "structure_results" in st.session_state:
         selected_element_id = st.selectbox("Select element", element_ids)
         selected_element_result = next(er for er in structure_results.element_results if er.element.id == selected_element_id)
         x_pos = st.slider(
-            "Position x along element [m]",
+            "Position ALONG element",
             min_value=0.0,
             max_value=float(selected_element_result.length),
             value=0.0,
@@ -272,7 +309,7 @@ if "structure_results" in st.session_state:
         )
         if st.button("Show Normal Stress Distribution"):
             try:
-                fig, ax = plot_normal_stress_distribution(selected_element_result, x_pos)
-                st.pyplot(fig)
+                fig = plot_normal_stress_distribution(selected_element_result, x_pos)
+                st.plotly_chart(fig, use_container_width=True)
             except Exception as e:
                 st.error(f"Error: {e}")

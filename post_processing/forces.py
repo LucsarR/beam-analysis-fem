@@ -1,3 +1,5 @@
+import numpy as np
+
 class ElementResults:
     """
     Stores and computes results for a single element: bending moment, shear force, normal force.
@@ -43,7 +45,11 @@ class StructureResults:
         dof_indices = []
         for nid in node_ids:
             dof_indices.extend([3*(nid-1), 3*(nid-1)+1, 3*(nid-1)+2])
-        return self.displacements[dof_indices]
+        global_disp = self.displacements[dof_indices]
+        # Transform to local coordinates
+        R = element.R
+        local_disp = R.T @ global_disp
+        return local_disp
 
     def get_diagram(self, force_type, n_points=50):
         # Returns arrays for plotting diagrams (moment, shear, normal)

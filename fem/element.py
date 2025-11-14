@@ -23,7 +23,7 @@ class Element(ABC):
 class EulerBernoulliElement2Node(Element):
     def __init__(self, id, node_start, node_end, material, section):
         super().__init__(id, node_start, node_end, material, section)
-        self.length, self.c, self.s = self._compute_geometry()
+        self.length, self.c, self.s, self.R = self._compute_geometry()
 
     def _compute_geometry(self):
         x1, y1 = self.node_start.x, self.node_start.y
@@ -31,36 +31,6 @@ class EulerBernoulliElement2Node(Element):
         L = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
         c = (x2 - x1) / L
         s = (y2 - y1) / L
-        return L, c, s
-
-    def stiffness_matrix(self):
-        E = self.material.E
-        A = self.section.area
-        I = self.section.inertia
-        L = self.length
-        c = self.c
-        s = self.s
-        mu = (A * L**2) / (2 * I)
-        aux_1 = mu * c**2 + 6 * s**2
-        aux_2 = mu * s**2 + 6 * c**2
-        aux_3 = (mu - 6) * c * s
-        aux_4 = 3 * L * c
-        aux_5 = 3 * L * s
-        aux_6 = L**2
-        k_local = 2 * E * I / L**3 * np.array([
-            [aux_1, aux_3, -aux_5, -aux_1, -aux_3, -aux_5],
-            [aux_3, aux_2, aux_4, -aux_3, -aux_2, aux_4],
-            [-aux_5, aux_4, 2*aux_6, aux_5, -aux_4, aux_6],
-            [-aux_1, -aux_3, aux_5, aux_1, aux_3, aux_5],
-            [-aux_3, -aux_2, -aux_4, aux_3, aux_2, -aux_4],
-            [-aux_5, aux_4, aux_6, aux_5, -aux_4, 2*aux_6]
-        ])
-        return k_local
-
-    def force_vector(self, q_ini=0, q_fim=0, p_ini=0, p_fim=0):
-        L = self.length
-        c = self.c
-        s = self.s
         # Transformation matrix
         R = np.array([
             [c, -s, 0, 0, 0, 0],
@@ -70,6 +40,29 @@ class EulerBernoulliElement2Node(Element):
             [0, 0, 0, s, c, 0],
             [0, 0, 0, 0, 0, 1]
         ])
+        return L, c, s, R
+
+    def stiffness_matrix(self):
+        E = self.material.E
+        A = self.section.area
+        I = self.section.inertia
+        L = self.length
+        R = self.R
+        mu = (A * L**2) / (2 * I)
+        # Local stiffness matrix
+        k_local = 2 * E * I / L**3 * np.array([
+            [mu, 0, 0, -mu, 0, 0],
+            [0, 6, 3*L, 0, -6, 3*L],
+            [0, 3*L, 2*L**2, 0, -3*L, L**2],
+            [-mu, 0, 0, mu, 0, 0],
+            [0, -6, -3*L, 0, 6, -3*L],
+            [0, 3*L, L**2, 0, -3*L, 2*L**2]
+        ])
+        return R @ k_local @ R.T
+
+    def force_vector(self, q_ini=0, q_fim=0, p_ini=0, p_fim=0):
+        L = self.length
+        R = self.R
         fe_local = L * R @ np.array([
             [(2*q_ini + q_fim) / 6],
             [(7*p_ini + 3*p_fim) / 20],
@@ -158,14 +151,7 @@ class EulerBernoulliElement2Node(Element):
         # local consistent vector in order [u1, v1, theta1, u2, v2, theta2]
         flocal = np.array([ia1, iv1, itheta1, ia2, iv2, itheta2], dtype=float)
         # Transform to global coordinates
-        R = np.array([
-            [c, -s, 0, 0, 0, 0],
-            [s, c, 0, 0, 0, 0],
-            [0, 0, 1, 0, 0, 0],
-            [0, 0, 0, c, -s, 0],
-            [0, 0, 0, s, c, 0],
-            [0, 0, 0, 0, 0, 1]
-        ])
+        R = self.R
         fe_global = R @ flocal
         return fe_global.flatten()
 
@@ -184,12 +170,12 @@ class EulerBernoulliElement2Node(Element):
         xi = x / L
         # Hermite shape function second derivatives
         d2N1 = (12 / L**2) * (xi - 0.5)
-        d2N2 = (6 / L) * (xi - 1)
+        d2N2 = (6 / L) * (xi - 2/3)
         d2N3 = (-12 / L**2) * (xi - 0.5)
-        d2N4 = (6 / L) * xi
-        # Bending moment: M(x) = -E*I * w''(x)
+        d2N4 = (6 / L) * (xi - 1/3)
+        # Bending moment: M(x) = E*I * w''(x)
         w_dd = d2N1 * v1 + d2N2 * theta1 + d2N3 * v2 + d2N4 * theta2
-        return -E * I * w_dd
+        return E * I * w_dd
 
     def shear_force(self, x, displacements):
         """

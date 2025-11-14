@@ -37,4 +37,4 @@ This tool performs finite element analysis on beams using three different formul
 * **Python**
 * **Streamlit**
 * **NumPy** & **SciPy**
-* **Matplotlib** & **Seaborn**
+* **Matplotlib** & **Seaborn** & **Plotly**
