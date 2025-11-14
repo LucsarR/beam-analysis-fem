@@ -272,27 +272,165 @@ class TimoshenkoElement2Node(Element):
         L = self.length
         c = self.c
         s = self.s
-
-        # TODO: Implement the stiffness matrix for Timoshenko beam element
-
+        
+        # Shear area
+        As = kappa * A
+        
+        # Shear parameter (phi)
+        phi = 12 * E * I / (G * As * L**2)
+        
+        # Local stiffness matrix for Timoshenko beam
+        # DOFs: [u1, v1, theta1, u2, v2, theta2]
+        k_local = np.zeros((6, 6))
+        
+        # Axial stiffness terms (same as Euler-Bernoulli)
+        k_local[0, 0] = E * A / L
+        k_local[0, 3] = -E * A / L
+        k_local[3, 0] = -E * A / L
+        k_local[3, 3] = E * A / L
+        
+        # Bending and shear stiffness terms
+        # These terms account for shear deformation
+        k_local[1, 1] = 12 * E * I / (L**3 * (1 + phi))
+        k_local[1, 2] = 6 * E * I / (L**2 * (1 + phi))
+        k_local[1, 4] = -12 * E * I / (L**3 * (1 + phi))
+        k_local[1, 5] = 6 * E * I / (L**2 * (1 + phi))
+        
+        k_local[2, 1] = 6 * E * I / (L**2 * (1 + phi))
+        k_local[2, 2] = (4 + phi) * E * I / (L * (1 + phi))
+        k_local[2, 4] = -6 * E * I / (L**2 * (1 + phi))
+        k_local[2, 5] = (2 - phi) * E * I / (L * (1 + phi))
+        
+        k_local[4, 1] = -12 * E * I / (L**3 * (1 + phi))
+        k_local[4, 2] = -6 * E * I / (L**2 * (1 + phi))
+        k_local[4, 4] = 12 * E * I / (L**3 * (1 + phi))
+        k_local[4, 5] = -6 * E * I / (L**2 * (1 + phi))
+        
+        k_local[5, 1] = 6 * E * I / (L**2 * (1 + phi))
+        k_local[5, 2] = (2 - phi) * E * I / (L * (1 + phi))
+        k_local[5, 4] = -6 * E * I / (L**2 * (1 + phi))
+        k_local[5, 5] = (4 + phi) * E * I / (L * (1 + phi))
+        
+        # Transformation matrix
+        R = np.array([
+            [c, -s, 0, 0, 0, 0],
+            [s, c, 0, 0, 0, 0],
+            [0, 0, 1, 0, 0, 0],
+            [0, 0, 0, c, -s, 0],
+            [0, 0, 0, s, c, 0],
+            [0, 0, 0, 0, 0, 1]
+        ])
+        
+        # Transform to global coordinates
+        k = R @ k_local @ R.T
+        
         return k
 
     def force_vector(self, q_ini=0, q_fim=0, p_ini=0, p_fim=0):
         L = self.length
         c = self.c
         s = self.s
-
-        # TODO: Implement the force vector for Timoshenko beam element
-
+        
+        # Transformation matrix
+        R = np.array([
+            [c, -s, 0, 0, 0, 0],
+            [s, c, 0, 0, 0, 0],
+            [0, 0, 1, 0, 0, 0],
+            [0, 0, 0, c, -s, 0],
+            [0, 0, 0, s, c, 0],
+            [0, 0, 0, 0, 0, 1]
+        ])
+        
+        # Consistent nodal load vector for uniformly distributed loads
+        # Similar to Euler-Bernoulli but with shear deformation effects
+        fe_local = L * R @ np.array([
+            [(2*q_ini + q_fim) / 6],
+            [(7*p_ini + 3*p_fim) / 20],
+            [(3*p_ini + 2*p_fim) * L / 60],
+            [(q_ini + 2*q_fim) / 6],
+            [(3*p_ini + 7*p_fim) / 20],
+            [-(2*p_ini + 3*p_fim) * L / 60]
+        ])
+        
         return fe_local.flatten()
 
     def bending_moment(self, x, displacements):
-        # Compute moment at x using shape functions and displacements
-        pass
+        """
+        Returns bending moment M(x) at position x (in local coordinates, 0 <= x <= L).
+        For Timoshenko beam theory.
+        """
+        E = self.material.E
+        I = self.section.inertia
+        L = self.length
+        # Local DOFs: [u1, v1, theta1, u2, v2, theta2]
+        v1 = displacements[1]
+        theta1 = displacements[2]
+        v2 = displacements[4]
+        theta2 = displacements[5]
+        xi = x / L
+        
+        # Linear interpolation for rotation (theta)
+        theta = (1 - xi) * theta1 + xi * theta2
+        
+        # Shape functions for transverse displacement
+        N1 = 1 - xi
+        N2 = xi
+        
+        # Derivative of transverse displacement
+        dv_dx = (-v1 + v2) / L
+        
+        # Bending moment: M(x) = E*I * d(theta)/dx for Timoshenko
+        # For linear shape functions: dtheta/dx = (theta2 - theta1) / L
+        dtheta_dx = (theta2 - theta1) / L
+        
+        return E * I * dtheta_dx
+    
     def shear_force(self, x, displacements):
-        pass
+        """
+        Returns shear force V(x) at position x (in local coordinates, 0 <= x <= L).
+        For Timoshenko beam theory.
+        """
+        E = self.material.E
+        G = self.material.G
+        I = self.section.inertia
+        A = self.section.area
+        kappa = self.section.shear_coefficient
+        L = self.length
+        
+        v1 = displacements[1]
+        theta1 = displacements[2]
+        v2 = displacements[4]
+        theta2 = displacements[5]
+        xi = x / L
+        
+        # Shear force: V = kappa*G*A*(dv/dx - theta)
+        # Linear interpolation for rotation
+        theta = (1 - xi) * theta1 + xi * theta2
+        
+        # Derivative of transverse displacement
+        dv_dx = (-v1 + v2) / L
+        
+        # Shear force
+        V = kappa * G * A * (dv_dx - theta)
+        
+        return V
+    
     def normal_force(self, x, displacements):
-        pass
+        """
+        Returns normal (axial) force N(x) at position x (in local coordinates, 0 <= x <= L).
+        """
+        E = self.material.E
+        A = self.section.area
+        L = self.length
+        u1 = displacements[0]
+        u2 = displacements[3]
+        xi = x / L
+        # Linear shape function derivatives
+        dN1 = -1 / L
+        dN2 = 1 / L
+        # Axial strain: epsilon(x) = du/dx = dN1*u1 + dN2*u2
+        epsilon = dN1 * u1 + dN2 * u2
+        return E * A * epsilon
 
 class ElementResults:
     ...
