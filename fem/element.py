@@ -272,27 +272,256 @@ class TimoshenkoElement2Node(Element):
         L = self.length
         c = self.c
         s = self.s
-
-        # TODO: Implement the stiffness matrix for Timoshenko beam element
-
+        
+        # Shear area
+        As = kappa * A
+        
+        # Shear parameter (phi)
+        phi = 12 * E * I / (G * As * L**2)
+        
+        # Local stiffness matrix for Timoshenko beam
+        # DOFs: [u1, v1, theta1, u2, v2, theta2]
+        k_local = np.zeros((6, 6))
+        
+        # Axial stiffness terms (same as Euler-Bernoulli)
+        k_local[0, 0] = E * A / L
+        k_local[0, 3] = -E * A / L
+        k_local[3, 0] = -E * A / L
+        k_local[3, 3] = E * A / L
+        
+        # Bending and shear stiffness terms
+        # These terms account for shear deformation
+        k_local[1, 1] = 12 * E * I / (L**3 * (1 + phi))
+        k_local[1, 2] = 6 * E * I / (L**2 * (1 + phi))
+        k_local[1, 4] = -12 * E * I / (L**3 * (1 + phi))
+        k_local[1, 5] = 6 * E * I / (L**2 * (1 + phi))
+        
+        k_local[2, 1] = 6 * E * I / (L**2 * (1 + phi))
+        k_local[2, 2] = (4 + phi) * E * I / (L * (1 + phi))
+        k_local[2, 4] = -6 * E * I / (L**2 * (1 + phi))
+        k_local[2, 5] = (2 - phi) * E * I / (L * (1 + phi))
+        
+        k_local[4, 1] = -12 * E * I / (L**3 * (1 + phi))
+        k_local[4, 2] = -6 * E * I / (L**2 * (1 + phi))
+        k_local[4, 4] = 12 * E * I / (L**3 * (1 + phi))
+        k_local[4, 5] = -6 * E * I / (L**2 * (1 + phi))
+        
+        k_local[5, 1] = 6 * E * I / (L**2 * (1 + phi))
+        k_local[5, 2] = (2 - phi) * E * I / (L * (1 + phi))
+        k_local[5, 4] = -6 * E * I / (L**2 * (1 + phi))
+        k_local[5, 5] = (4 + phi) * E * I / (L * (1 + phi))
+        
+        # Transformation matrix
+        R = np.array([
+            [c, -s, 0, 0, 0, 0],
+            [s, c, 0, 0, 0, 0],
+            [0, 0, 1, 0, 0, 0],
+            [0, 0, 0, c, -s, 0],
+            [0, 0, 0, s, c, 0],
+            [0, 0, 0, 0, 0, 1]
+        ])
+        
+        # Transform to global coordinates
+        k = R @ k_local @ R.T
+        
         return k
 
     def force_vector(self, q_ini=0, q_fim=0, p_ini=0, p_fim=0):
         L = self.length
         c = self.c
         s = self.s
-
-        # TODO: Implement the force vector for Timoshenko beam element
-
+        
+        # Transformation matrix
+        R = np.array([
+            [c, -s, 0, 0, 0, 0],
+            [s, c, 0, 0, 0, 0],
+            [0, 0, 1, 0, 0, 0],
+            [0, 0, 0, c, -s, 0],
+            [0, 0, 0, s, c, 0],
+            [0, 0, 0, 0, 0, 1]
+        ])
+        
+        # Consistent nodal load vector for uniformly distributed loads
+        # Similar to Euler-Bernoulli but with shear deformation effects
+        fe_local = L * R @ np.array([
+            [(2*q_ini + q_fim) / 6],
+            [(7*p_ini + 3*p_fim) / 20],
+            [(3*p_ini + 2*p_fim) * L / 60],
+            [(q_ini + 2*q_fim) / 6],
+            [(3*p_ini + 7*p_fim) / 20],
+            [-(2*p_ini + 3*p_fim) * L / 60]
+        ])
+        
         return fe_local.flatten()
+    
+    def compute_equivalent_nodal_loads(self, distributed_load, n_gauss=5):
+        """
+        Compute consistent nodal loads for a distributed load (constant, linear, or custom function).
+        Returns a 6-vector in GLOBAL coordinates.
+        For Timoshenko beam elements, uses the same approach as Euler-Bernoulli.
+        """
+        import numpy as np
+        L = self.length
+        c = self.c
+        s = self.s
+
+        # Build load function f(x) from distributed_load
+        if distributed_load.func:
+            # Custom function
+            def f(x):
+                try:
+                    return float(eval(distributed_load.func, {"np": np, "x": x, "L": L}))
+                except Exception as e:
+                    print(f"Error evaluating custom function '{distributed_load.func}': {e}")
+                    return 0.0
+        elif distributed_load.magnitude_start is not None and distributed_load.magnitude_end is not None:
+            # Linear
+            a = float(distributed_load.magnitude_start)
+            b = float(distributed_load.magnitude_end)
+            def f(x):
+                return a + (b - a) * (x / L)
+        elif distributed_load.magnitude_start is not None:
+            # Constant
+            a = float(distributed_load.magnitude_start)
+            def f(x):
+                return a
+        else:
+            def f(x):
+                return 0.0
+
+        # Project direction to local axes
+        if distributed_load.direction == 'x':
+            def q_local(x): return f(x) * c
+            def p_local(x): return -f(x) * s
+        elif distributed_load.direction == 'y':
+            def q_local(x): return f(x) * s
+            def p_local(x): return f(x) * c
+        elif distributed_load.direction == 'l':
+            def q_local(x): return f(x)
+            def p_local(x): return 0.0
+        elif distributed_load.direction == 't':
+            def q_local(x): return 0.0
+            def p_local(x): return f(x)
+        else:
+            def q_local(x): return 0.0
+            def p_local(x): return 0.0
+
+        # Gauss-Legendre quadrature points on [0,1] mapped to [0,L]
+        xi, wi = np.polynomial.legendre.leggauss(n_gauss)
+        t = 0.5 * (xi + 1.0)
+        wt = 0.5 * wi
+
+        ia1 = ia2 = iv1 = itheta1 = iv2 = itheta2 = 0.0
+        for ti, wi_scaled in zip(t, wt):
+            x = ti * L
+            N1_ax = 1.0 - ti
+            N2_ax = ti
+            qx = q_local(x)
+            ia1 += N1_ax * qx * wi_scaled * L
+            ia2 += N2_ax * qx * wi_scaled * L
+
+            # Use Hermite shape functions for transverse loads
+            Hv1 = 1 - 3*ti**2 + 2*ti**3
+            Ht1 = L * (ti - 2*ti**2 + ti**3)
+            Hv2 = 3*ti**2 - 2*ti**3
+            Ht2 = L * (-ti**2 + ti**3)
+            px = p_local(x)
+            iv1 += Hv1 * px * wi_scaled * L
+            itheta1 += Ht1 * px * wi_scaled * L
+            iv2 += Hv2 * px * wi_scaled * L
+            itheta2 += Ht2 * px * wi_scaled * L
+
+        # local consistent vector in order [u1, v1, theta1, u2, v2, theta2]
+        flocal = np.array([ia1, iv1, itheta1, ia2, iv2, itheta2], dtype=float)
+        # Transform to global coordinates
+        R = np.array([
+            [c, -s, 0, 0, 0, 0],
+            [s, c, 0, 0, 0, 0],
+            [0, 0, 1, 0, 0, 0],
+            [0, 0, 0, c, -s, 0],
+            [0, 0, 0, s, c, 0],
+            [0, 0, 0, 0, 0, 1]
+        ])
+        fe_global = R @ flocal
+        return fe_global.flatten()
 
     def bending_moment(self, x, displacements):
-        # Compute moment at x using shape functions and displacements
-        pass
+        """
+        Returns bending moment M(x) at position x (in local coordinates, 0 <= x <= L).
+        For Timoshenko beam theory.
+        """
+        E = self.material.E
+        I = self.section.inertia
+        L = self.length
+        # Local DOFs: [u1, v1, theta1, u2, v2, theta2]
+        v1 = displacements[1]
+        theta1 = displacements[2]
+        v2 = displacements[4]
+        theta2 = displacements[5]
+        xi = x / L
+        
+        # Linear interpolation for rotation (theta)
+        theta = (1 - xi) * theta1 + xi * theta2
+        
+        # Shape functions for transverse displacement
+        N1 = 1 - xi
+        N2 = xi
+        
+        # Derivative of transverse displacement
+        dv_dx = (-v1 + v2) / L
+        
+        # Bending moment: M(x) = E*I * d(theta)/dx for Timoshenko
+        # For linear shape functions: dtheta/dx = (theta2 - theta1) / L
+        dtheta_dx = (theta2 - theta1) / L
+        
+        return E * I * dtheta_dx
+    
     def shear_force(self, x, displacements):
-        pass
+        """
+        Returns shear force V(x) at position x (in local coordinates, 0 <= x <= L).
+        For Timoshenko beam theory.
+        """
+        E = self.material.E
+        G = self.material.G
+        I = self.section.inertia
+        A = self.section.area
+        kappa = self.section.shear_coefficient
+        L = self.length
+        
+        v1 = displacements[1]
+        theta1 = displacements[2]
+        v2 = displacements[4]
+        theta2 = displacements[5]
+        xi = x / L
+        
+        # Shear force: V = kappa*G*A*(dv/dx - theta)
+        # Linear interpolation for rotation
+        theta = (1 - xi) * theta1 + xi * theta2
+        
+        # Derivative of transverse displacement
+        dv_dx = (-v1 + v2) / L
+        
+        # Shear force
+        V = kappa * G * A * (dv_dx - theta)
+        
+        return V
+    
     def normal_force(self, x, displacements):
-        pass
+        """
+        Returns normal (axial) force N(x) at position x (in local coordinates, 0 <= x <= L).
+        """
+        E = self.material.E
+        A = self.section.area
+        L = self.length
+        u1 = displacements[0]
+        u2 = displacements[3]
+        xi = x / L
+        # Linear shape function derivatives
+        dN1 = -1 / L
+        dN2 = 1 / L
+        # Axial strain: epsilon(x) = du/dx = dN1*u1 + dN2*u2
+        epsilon = dN1 * u1 + dN2 * u2
+        return E * A * epsilon
 
 class ElementResults:
     ...

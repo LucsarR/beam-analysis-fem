@@ -10,6 +10,7 @@ class Section(ABC):
         self.id = id
         self.area = None
         self.inertia = None
+        self.shear_coefficient = 5/6  # Default shear coefficient (kappa) for Timoshenko beam theory
 
     @abstractmethod
     def compute_properties(self):
@@ -85,6 +86,7 @@ class CircularBar(Section):
     def compute_properties(self):
         self.area = math.pi * (self.diameter/2)**2
         self.inertia = (math.pi/64) * self.diameter**4
+        self.shear_coefficient = 9/10  # Shear coefficient for circular sections
 
     def xy_grid(self, n_points=100):
         r = self.diameter/2
@@ -105,6 +107,7 @@ class CircularTube(Section):
         inner_diameter = self.outer_diameter - 2*self.thickness
         self.area = math.pi/4 * (self.outer_diameter**2 - inner_diameter**2)
         self.inertia = (math.pi/64) * (self.outer_diameter**4 - inner_diameter**4)
+        self.shear_coefficient = 9/10  # Shear coefficient for circular sections
 
     def xy_grid(self, n_points=100):
         r_outer = self.outer_diameter/2
