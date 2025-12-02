@@ -62,3 +62,5 @@ class Mesh:
         node_data = [(node.id, node.x, node.y) for node in self.nodes]
         element_data = [(el.id, el.node_start.id, el.node_end.id) for el in self.elements]
         return {"nodes": node_data, "elements": element_data}
+    
+    # TODO: Verify if mesh is correctly integrated with the element classes and other components of the FEM framework. 
