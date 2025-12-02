@@ -253,7 +253,7 @@ class EulerBernoulliElement3Node(Element):
 class TimoshenkoElement2Node(Element):
     def __init__(self, id, node_start, node_end, material, section):
         super().__init__(id, node_start, node_end, material, section)
-        self.length, self.c, self.s = self._compute_geometry()
+        self.length, self.c, self.s, self.R = self._compute_geometry()
 
     def _compute_geometry(self):
         x1, y1 = self.node_start.x, self.node_start.y
@@ -261,7 +261,16 @@ class TimoshenkoElement2Node(Element):
         L = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
         c = (x2 - x1) / L
         s = (y2 - y1) / L
-        return L, c, s
+        # Transformation matrix (same as Euler-Bernoulli for consistency)
+        R = np.array([
+            [c, -s, 0, 0, 0, 0],
+            [s, c, 0, 0, 0, 0],
+            [0, 0, 1, 0, 0, 0],
+            [0, 0, 0, c, -s, 0],
+            [0, 0, 0, s, c, 0],
+            [0, 0, 0, 0, 0, 1]
+        ])
+        return L, c, s, R
 
     def stiffness_matrix(self):
         E = self.material.E
@@ -270,8 +279,7 @@ class TimoshenkoElement2Node(Element):
         I = self.section.inertia
         kappa = self.section.shear_coefficient
         L = self.length
-        c = self.c
-        s = self.s
+        R = self.R
         
         # Shear area
         As = kappa * A
@@ -311,35 +319,12 @@ class TimoshenkoElement2Node(Element):
         k_local[5, 4] = -6 * E * I / (L**2 * (1 + phi))
         k_local[5, 5] = (4 + phi) * E * I / (L * (1 + phi))
         
-        # Transformation matrix
-        R = np.array([
-            [c, -s, 0, 0, 0, 0],
-            [s, c, 0, 0, 0, 0],
-            [0, 0, 1, 0, 0, 0],
-            [0, 0, 0, c, -s, 0],
-            [0, 0, 0, s, c, 0],
-            [0, 0, 0, 0, 0, 1]
-        ])
-        
         # Transform to global coordinates
-        k = R @ k_local @ R.T
-        
-        return k
+        return R @ k_local @ R.T
 
     def force_vector(self, q_ini=0, q_fim=0, p_ini=0, p_fim=0):
         L = self.length
-        c = self.c
-        s = self.s
-        
-        # Transformation matrix
-        R = np.array([
-            [c, -s, 0, 0, 0, 0],
-            [s, c, 0, 0, 0, 0],
-            [0, 0, 1, 0, 0, 0],
-            [0, 0, 0, c, -s, 0],
-            [0, 0, 0, s, c, 0],
-            [0, 0, 0, 0, 0, 1]
-        ])
+        R = self.R
         
         # Consistent nodal load vector for uniformly distributed loads
         # Similar to Euler-Bernoulli but with shear deformation effects
@@ -433,16 +418,8 @@ class TimoshenkoElement2Node(Element):
 
         # local consistent vector in order [u1, v1, theta1, u2, v2, theta2]
         flocal = np.array([ia1, iv1, itheta1, ia2, iv2, itheta2], dtype=float)
-        # Transform to global coordinates
-        R = np.array([
-            [c, -s, 0, 0, 0, 0],
-            [s, c, 0, 0, 0, 0],
-            [0, 0, 1, 0, 0, 0],
-            [0, 0, 0, c, -s, 0],
-            [0, 0, 0, s, c, 0],
-            [0, 0, 0, 0, 0, 1]
-        ])
-        fe_global = R @ flocal
+        # Transform to global coordinates using self.R
+        fe_global = self.R @ flocal
         return fe_global.flatten()
 
     def bending_moment(self, x, displacements):

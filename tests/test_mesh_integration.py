@@ -1,0 +1,494 @@
+"""
+Integration tests for the Mesh class to verify it is correctly integrated with
+element classes and other components of the FEM framework.
+
+This test suite verifies:
+1. Mesh creation and basic operations
+2. Node and element management
+3. Integration with different element types (EulerBernoulli, Timoshenko)
+4. Integration with Material and Section classes
+5. Integration with Constraint and Load classes
+6. Integration with Analysis classes
+7. Integration with post-processing (StructureResults, ElementResults)
+8. Mesh generation utilities (generate_1d_mesh)
+9. Mesh query and export methods
+"""
+
+import numpy as np
+from fem.mesh import Mesh
+from fem.material import Material
+from fem.section import RectangularBar, CircularBar
+from fem.constraint import Constraint
+from fem.load import PointLoad, DistributedLoad
+from fem.analysis import EulerBernoulliAnalysis
+from fem.spring import Spring
+from post_processing.forces import StructureResults
+
+
+def test_mesh_creation():
+    """Test basic mesh creation and attributes."""
+    mesh = Mesh()
+    assert mesh.nodes == []
+    assert mesh.elements == []
+    assert mesh.node_id_counter == 1
+    assert mesh.element_id_counter == 1
+    assert mesh.point_loads == []
+    assert mesh.distributed_loads == []
+    assert mesh.constraints is not None
+    print("✓ test_mesh_creation passed")
+
+
+def test_add_nodes():
+    """Test adding nodes to the mesh."""
+    mesh = Mesh()
+    n1 = mesh.add_node(0, 0)
+    n2 = mesh.add_node(1, 0)
+    n3 = mesh.add_node(2, 0.5)
+    
+    assert len(mesh.nodes) == 3
+    assert n1.id == 1
+    assert n2.id == 2
+    assert n3.id == 3
+    assert n1.x == 0 and n1.y == 0
+    assert n2.x == 1 and n2.y == 0
+    assert n3.x == 2 and n3.y == 0.5
+    assert mesh.node_id_counter == 4
+    print("✓ test_add_nodes passed")
+
+
+def test_add_elements():
+    """Test adding elements to the mesh with different types."""
+    mesh = Mesh()
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+    
+    n1 = mesh.add_node(0, 0)
+    n2 = mesh.add_node(1, 0)
+    n3 = mesh.add_node(2, 0)
+    
+    # Add Euler-Bernoulli 2-node element
+    el1 = mesh.add_element(n1, n2, mat, sec, 'euler_bernoulli_2node')
+    assert el1.id == 1
+    assert el1.node_start == n1
+    assert el1.node_end == n2
+    assert el1.material == mat
+    assert el1.section == sec
+    
+    # Add Timoshenko 2-node element
+    el2 = mesh.add_element(n2, n3, mat, sec, 'timoshenko_2node')
+    assert el2.id == 2
+    assert len(mesh.elements) == 2
+    assert mesh.element_id_counter == 3
+    
+    # Test invalid element type
+    try:
+        mesh.add_element(n1, n2, mat, sec, 'invalid_type')
+        assert False, "Should raise NotImplementedError"
+    except NotImplementedError:
+        pass
+    
+    print("✓ test_add_elements passed")
+
+
+def test_element_attributes():
+    """Test that all element types have consistent attributes."""
+    mesh = Mesh()
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+    
+    n1 = mesh.add_node(0, 0)
+    n2 = mesh.add_node(1, 0)
+    
+    # Test EulerBernoulli element
+    el_eb = mesh.add_element(n1, n2, mat, sec, 'euler_bernoulli_2node')
+    assert hasattr(el_eb, 'R'), "EulerBernoulli element missing R attribute"
+    assert hasattr(el_eb, 'c'), "EulerBernoulli element missing c attribute"
+    assert hasattr(el_eb, 's'), "EulerBernoulli element missing s attribute"
+    assert hasattr(el_eb, 'length'), "EulerBernoulli element missing length attribute"
+    
+    # Test Timoshenko element
+    mesh2 = Mesh()
+    n3 = mesh2.add_node(0, 0)
+    n4 = mesh2.add_node(1, 0)
+    el_tim = mesh2.add_element(n3, n4, mat, sec, 'timoshenko_2node')
+    assert hasattr(el_tim, 'R'), "Timoshenko element missing R attribute"
+    assert hasattr(el_tim, 'c'), "Timoshenko element missing c attribute"
+    assert hasattr(el_tim, 's'), "Timoshenko element missing s attribute"
+    assert hasattr(el_tim, 'length'), "Timoshenko element missing length attribute"
+    
+    print("✓ test_element_attributes passed")
+
+
+def test_generate_1d_mesh():
+    """Test automatic 1D mesh generation."""
+    mesh = Mesh()
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+    
+    # Generate mesh with 5 elements
+    nodes = mesh.generate_1d_mesh(0, 0, 5, 0, 5, mat, sec, 'euler_bernoulli_2node')
+    
+    assert len(nodes) == 6  # n_elements + 1
+    assert len(mesh.nodes) == 6
+    assert len(mesh.elements) == 5
+    
+    # Verify node positions
+    for i, node in enumerate(nodes):
+        assert abs(node.x - i) < 1e-10
+        assert abs(node.y - 0) < 1e-10
+        assert node.id == i + 1
+    
+    # Verify element connectivity
+    for i, element in enumerate(mesh.elements):
+        assert element.node_start.id == i + 1
+        assert element.node_end.id == i + 2
+        assert element.id == i + 1
+    
+    print("✓ test_generate_1d_mesh passed")
+
+
+def test_constraint_integration():
+    """Test integration with constraint system."""
+    mesh = Mesh()
+    n1 = mesh.add_node(0, 0)
+    n2 = mesh.add_node(1, 0)
+    
+    # Add constraints through mesh.constraints
+    mesh.constraints.add(Constraint(n1, 0, 0.0))  # Fix x
+    mesh.constraints.add(Constraint(n1, 1, 0.0))  # Fix y
+    mesh.constraints.add(Constraint(n1, 2, 0.0))  # Fix rotation
+    
+    assert len(mesh.constraints.constraints) == 3
+    print("✓ test_constraint_integration passed")
+
+
+def test_point_load_integration():
+    """Test integration with point loads."""
+    mesh = Mesh()
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+    
+    n1 = mesh.add_node(0, 0)
+    n2 = mesh.add_node(1, 0)
+    mesh.add_element(n1, n2, mat, sec)
+    
+    # Add constraints
+    mesh.constraints.add(Constraint(n1, 0, 0.0))
+    mesh.constraints.add(Constraint(n1, 1, 0.0))
+    mesh.constraints.add(Constraint(n1, 2, 0.0))
+    
+    # Add point load
+    load = PointLoad(-1000, 1)  # -1000 N in y direction
+    load.node = n2
+    mesh.point_loads.append(load)
+    
+    # Run analysis
+    analysis = EulerBernoulliAnalysis(mesh)
+    analysis.assemble()
+    displacements = analysis.solve()
+    
+    assert displacements is not None
+    assert len(displacements) == 6  # 2 nodes * 3 DOF
+    # Verify boundary conditions are satisfied
+    assert abs(displacements[0]) < 1e-9  # x displacement at n1
+    assert abs(displacements[1]) < 1e-9  # y displacement at n1
+    assert abs(displacements[2]) < 1e-9  # rotation at n1
+    # Free end should have displacement
+    assert abs(displacements[4]) > 1e-6  # y displacement at n2
+    
+    print("✓ test_point_load_integration passed")
+
+
+def test_distributed_load_integration():
+    """Test integration with distributed loads."""
+    mesh = Mesh()
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+    
+    n1 = mesh.add_node(0, 0)
+    n2 = mesh.add_node(2, 0)
+    el = mesh.add_element(n1, n2, mat, sec)
+    
+    # Add constraints
+    mesh.constraints.add(Constraint(n1, 0, 0.0))
+    mesh.constraints.add(Constraint(n1, 1, 0.0))
+    mesh.constraints.add(Constraint(n1, 2, 0.0))
+    
+    # Add constant distributed load
+    dist_load = DistributedLoad(magnitude_start=-1000, direction='y')
+    dist_load.element = el
+    mesh.distributed_loads.append(dist_load)
+    
+    # Compute equivalent nodal loads
+    fe = el.compute_equivalent_nodal_loads(dist_load)
+    assert len(fe) == 6
+    
+    # Run analysis
+    analysis = EulerBernoulliAnalysis(mesh)
+    analysis.assemble()
+    displacements = analysis.solve()
+    
+    assert displacements is not None
+    assert abs(displacements[4]) > 1e-6  # Should have significant displacement
+    
+    print("✓ test_distributed_load_integration passed")
+
+
+def test_mixed_element_types():
+    """Test mesh with mixed element types."""
+    mesh = Mesh()
+    mat = Material(1, 210e9, 0.3)
+    sec1 = RectangularBar(1, 0.05, 0.1)
+    sec2 = CircularBar(2, 0.08)
+    
+    n1 = mesh.add_node(0, 0)
+    n2 = mesh.add_node(1, 0)
+    n3 = mesh.add_node(2, 0)
+    
+    el1 = mesh.add_element(n1, n2, mat, sec1, 'euler_bernoulli_2node')
+    el2 = mesh.add_element(n2, n3, mat, sec2, 'timoshenko_2node')
+    
+    assert len(mesh.elements) == 2
+    assert el1.__class__.__name__ == 'EulerBernoulliElement2Node'
+    assert el2.__class__.__name__ == 'TimoshenkoElement2Node'
+    
+    print("✓ test_mixed_element_types passed")
+
+
+def test_get_node_by_id():
+    """Test get_node_by_id method."""
+    mesh = Mesh()
+    n1 = mesh.add_node(0, 0)
+    n2 = mesh.add_node(1, 0)
+    n3 = mesh.add_node(2, 0)
+    
+    node = mesh.get_node_by_id(2)
+    assert node is not None
+    assert node.id == 2
+    assert node.x == 1
+    assert node.y == 0
+    
+    # Test non-existent node
+    node = mesh.get_node_by_id(999)
+    assert node is None
+    
+    print("✓ test_get_node_by_id passed")
+
+
+def test_get_element_by_id():
+    """Test get_element_by_id method."""
+    mesh = Mesh()
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+    
+    n1 = mesh.add_node(0, 0)
+    n2 = mesh.add_node(1, 0)
+    n3 = mesh.add_node(2, 0)
+    
+    el1 = mesh.add_element(n1, n2, mat, sec)
+    el2 = mesh.add_element(n2, n3, mat, sec)
+    
+    element = mesh.get_element_by_id(2)
+    assert element is not None
+    assert element.id == 2
+    assert element.node_start == n2
+    assert element.node_end == n3
+    
+    # Test non-existent element
+    element = mesh.get_element_by_id(999)
+    assert element is None
+    
+    print("✓ test_get_element_by_id passed")
+
+
+def test_export_mesh():
+    """Test mesh export functionality."""
+    mesh = Mesh()
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+    
+    n1 = mesh.add_node(0, 0)
+    n2 = mesh.add_node(1, 0)
+    n3 = mesh.add_node(2, 0)
+    
+    mesh.add_element(n1, n2, mat, sec)
+    mesh.add_element(n2, n3, mat, sec)
+    
+    export_data = mesh.export_mesh()
+    
+    assert 'nodes' in export_data
+    assert 'elements' in export_data
+    assert len(export_data['nodes']) == 3
+    assert len(export_data['elements']) == 2
+    
+    # Verify node data format
+    node_data = export_data['nodes'][0]
+    assert len(node_data) == 3  # (id, x, y)
+    
+    # Verify element data format
+    elem_data = export_data['elements'][0]
+    assert len(elem_data) == 3  # (id, node_start_id, node_end_id)
+    
+    print("✓ test_export_mesh passed")
+
+
+def test_node_attributes():
+    """Test that nodes can store references to loads and springs."""
+    mesh = Mesh()
+    n1 = mesh.add_node(0, 0)
+    
+    assert hasattr(n1, 'loads'), "Node missing loads attribute"
+    assert hasattr(n1, 'springs'), "Node missing springs attribute"
+    assert n1.loads == []
+    assert n1.springs == []
+    
+    # Test adding references
+    load = PointLoad(-1000, 1)
+    n1.loads.append(load)
+    assert len(n1.loads) == 1
+    
+    spring = Spring(n1, 1e6, 1)
+    n1.springs.append(spring)
+    assert len(n1.springs) == 1
+    
+    print("✓ test_node_attributes passed")
+
+
+def test_element_geometry():
+    """Test element geometry calculations for inclined elements."""
+    mesh = Mesh()
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+    
+    # 3-4-5 right triangle
+    n1 = mesh.add_node(0, 0)
+    n2 = mesh.add_node(3, 4)
+    el = mesh.add_element(n1, n2, mat, sec)
+    
+    assert abs(el.length - 5.0) < 1e-10
+    assert abs(el.c - 0.6) < 1e-10  # cos(theta) = 3/5
+    assert abs(el.s - 0.8) < 1e-10  # sin(theta) = 4/5
+    
+    print("✓ test_element_geometry passed")
+
+
+def test_structure_results_integration():
+    """Test integration with StructureResults post-processing."""
+    mesh = Mesh()
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+    
+    n1 = mesh.add_node(0, 0)
+    n2 = mesh.add_node(1, 0)
+    n3 = mesh.add_node(2, 0)
+    
+    mesh.add_element(n1, n2, mat, sec, 'euler_bernoulli_2node')
+    mesh.add_element(n2, n3, mat, sec, 'euler_bernoulli_2node')
+    
+    # Add constraints
+    mesh.constraints.add(Constraint(n1, 0, 0.0))
+    mesh.constraints.add(Constraint(n1, 1, 0.0))
+    mesh.constraints.add(Constraint(n1, 2, 0.0))
+    
+    # Add load
+    load = PointLoad(-1000, 1)
+    load.node = n3
+    mesh.point_loads.append(load)
+    
+    # Analyze
+    analysis = EulerBernoulliAnalysis(mesh)
+    analysis.assemble()
+    displacements = analysis.solve()
+    
+    # Create StructureResults
+    results = StructureResults(mesh, displacements)
+    assert results is not None
+    assert len(results.element_results) == 2
+    
+    # Test force calculations
+    for er in results.element_results:
+        x = er.length / 2
+        M = er.bending_moment(x)
+        V = er.shear_force(x)
+        N = er.normal_force(x)
+        assert M is not None
+        assert V is not None
+        assert N is not None
+    
+    print("✓ test_structure_results_integration passed")
+
+
+def test_timoshenko_structure_results():
+    """Test StructureResults with Timoshenko elements."""
+    mesh = Mesh()
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+    
+    n1 = mesh.add_node(0, 0)
+    n2 = mesh.add_node(1, 0)
+    
+    mesh.add_element(n1, n2, mat, sec, 'timoshenko_2node')
+    
+    # Add constraints
+    mesh.constraints.add(Constraint(n1, 0, 0.0))
+    mesh.constraints.add(Constraint(n1, 1, 0.0))
+    mesh.constraints.add(Constraint(n1, 2, 0.0))
+    
+    # Add load
+    load = PointLoad(-1000, 1)
+    load.node = n2
+    mesh.point_loads.append(load)
+    
+    # Analyze
+    analysis = EulerBernoulliAnalysis(mesh)
+    analysis.assemble()
+    displacements = analysis.solve()
+    
+    # Create StructureResults - should work with Timoshenko elements now
+    results = StructureResults(mesh, displacements)
+    assert results is not None
+    assert len(results.element_results) == 1
+    
+    # Test force calculations
+    er = results.element_results[0]
+    x = er.length / 2
+    M = er.bending_moment(x)
+    V = er.shear_force(x)
+    N = er.normal_force(x)
+    assert M is not None
+    assert V is not None
+    assert N is not None
+    
+    print("✓ test_timoshenko_structure_results passed")
+
+
+def run_all_tests():
+    """Run all integration tests."""
+    print("\n" + "="*60)
+    print("Running Mesh Integration Tests")
+    print("="*60 + "\n")
+    
+    test_mesh_creation()
+    test_add_nodes()
+    test_add_elements()
+    test_element_attributes()
+    test_generate_1d_mesh()
+    test_constraint_integration()
+    test_point_load_integration()
+    test_distributed_load_integration()
+    test_mixed_element_types()
+    test_get_node_by_id()
+    test_get_element_by_id()
+    test_export_mesh()
+    test_node_attributes()
+    test_element_geometry()
+    test_structure_results_integration()
+    test_timoshenko_structure_results()
+    
+    print("\n" + "="*60)
+    print("✅ All Mesh Integration Tests Passed!")
+    print("="*60 + "\n")
+
+
+if __name__ == "__main__":
+    run_all_tests()
