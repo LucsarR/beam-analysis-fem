@@ -156,4 +156,8 @@ class Mesh:
         # Export mesh data for visualization/post-processing
         node_data = [(node.id, node.x, node.y) for node in self.nodes]
         element_data = [(el.id, el.node_start.id, el.node_end.id) for el in self.elements]
-        return {"nodes": node_data, "elements": element_data} 
+        return {"nodes": node_data, "elements": element_data}
+    
+    # TODO: Verify if mesh is working correctly, if it is correctly converging (displacement and forces) when adding more elements to the mesh, with euler_bernoulli and timoshenko elements.
+    # Validate that nodes exist when creating elements
+    # Detect disconnected elements
