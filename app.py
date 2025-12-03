@@ -1284,5 +1284,3 @@ with tab4:
     - Custom distributed load functions use Python syntax
     """)
 
-# Remove the old TODO comment
-# The functionality has been implemented!
