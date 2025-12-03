@@ -313,3 +313,6 @@ if "structure_results" in st.session_state:
                 st.plotly_chart(fig, use_container_width=True)
             except Exception as e:
                 st.error(f"Error: {e}")
+
+
+# TODO: Create a more user friendly app interface with better layout and validation, create a way to save/load projects.

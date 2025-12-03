@@ -1,17 +1,9 @@
 # Project To-Do List
 
 - [ ] Testar as formulas do section.py
-- [x] Testar Mesh - Comprehensive tests added for mesh convergence with:
-  - Simple and complex structures
-  - Multiple loads (point and distributed) simultaneously
-  - Multiple constraints at different nodes
-  - Elements at various angles (not just horizontal)
-  - Both Euler-Bernoulli and Timoshenko elements
-  - Convergence of displacement and force solutions
 - [ ] Testar funcao no load distribuido
 - [ ] Tentar fazer com integracao numerica como uma solucao paralela da matriz de rigidez
 - [ ] Implementar euler-bernoulli 3node
-- [x] Testar Timoshenko (shear areas, forces) - Verified in convergence tests
 - [ ] Shear Stress Distribution in Cross Section
 - [ ] area nao ta 90 graus acima
 - [ ] quando cria varios elementos com o mesh a escala do diagrama fica ruim
