@@ -218,6 +218,11 @@ def test_euler_bernoulli_cantilever_convergence():
     print("\nConvergence verification:")
     
     # Check that error decreases with mesh refinement
+    # Defensive check for zero analytical solution (though unlikely in beam problems)
+    if abs(analytical_deflection) < 1e-15:
+        print("  ⚠ Warning: Analytical deflection is essentially zero, cannot compute relative error")
+        return
+    
     deflection_errors = [abs((d - analytical_deflection) / analytical_deflection) * 100 
                          for d in tip_deflections]
     
@@ -266,6 +271,9 @@ def test_timoshenko_cantilever_convergence():
     I = b * h**3 / 12  # Second moment of area
     
     # Analytical solution (Euler-Bernoulli provides a good reference for slender beams)
+    # Note: For complete Timoshenko analytical solution, shear deformation should be added:
+    # δ_total = δ_bending + δ_shear = PL³/(3EI) + PL/(GAk)
+    # However, for this test we're primarily verifying convergence behavior
     analytical_deflection = analytical_cantilever_tip_deflection(P, L, E, I)
     
     print(f"\nBeam properties: L={L}m, b={b}m, h={h}m")
@@ -334,7 +342,10 @@ def test_timoshenko_cantilever_convergence():
     
     # Check that Timoshenko deflection is larger than Euler-Bernoulli (includes shear)
     ratio = tip_deflections[-1] / analytical_deflection
-    if ratio > 1.0 and ratio < 1.2:  # Should be larger but not too much for slender beam
+    # Theoretical ratio depends on beam geometry (L/h) and material properties.
+    # For this beam (L=2m, h=0.1m, L/h=20), the shear contribution is small (~0.2%)
+    # Range [1.0, 1.2] allows for various beam geometries in the test
+    if ratio > 1.0 and ratio < 1.2:
         print(f"  ✓ Timoshenko deflection ({ratio:.4f}× EB) correctly includes shear deformation")
     else:
         print(f"  ⚠ Timoshenko/EB ratio ({ratio:.4f}) is unexpected")
@@ -528,6 +539,8 @@ def test_mesh_comparison_euler_vs_timoshenko():
         load_tim = PointLoad(P, 1)
         load_tim.node = nodes_tim[-1]
         mesh_tim.point_loads.append(load_tim)
+        # Note: EulerBernoulliAnalysis is a generic analysis class that works with any element type
+        # via polymorphism (it calls element.stiffness_matrix() which is implemented by each element)
         analysis_tim = EulerBernoulliAnalysis(mesh_tim)
         analysis_tim.assemble()
         displacements_tim = analysis_tim.solve()
