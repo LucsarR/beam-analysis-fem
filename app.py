@@ -1091,10 +1091,11 @@ with tab2:
                         mesh.distributed_loads.append(load)
                     
                     # Run analysis
-                    # Note: EulerBernoulliAnalysis is a generic beam analysis class that works
-                    # with all element types (Euler-Bernoulli, Timoshenko, and mixed) through
-                    # polymorphism. Each element implements its own stiffness_matrix() method
-                    # according to its respective beam theory.
+                    # Note: EulerBernoulliAnalysis (or its alias BeamAnalysis) is a generic
+                    # beam analysis class that works with all element types (Euler-Bernoulli,
+                    # Timoshenko, and mixed) through polymorphism. Each element implements its
+                    # own stiffness_matrix() method according to its respective beam theory.
+                    # For new code, consider using BeamAnalysis for clarity.
                     analysis = EulerBernoulliAnalysis(mesh)
                     analysis.assemble()
                     displacements = analysis.solve()
