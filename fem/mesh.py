@@ -157,5 +157,3 @@ class Mesh:
         node_data = [(node.id, node.x, node.y) for node in self.nodes]
         element_data = [(el.id, el.node_start.id, el.node_end.id) for el in self.elements]
         return {"nodes": node_data, "elements": element_data}
-    
-    # TODO: Verify if mesh is working correctly, if it is correctly converging (displacement and forces) when adding more elements to the mesh, with euler_bernoulli and timoshenko elements. Test for complex structures with multiple loads and constraints and angles.
