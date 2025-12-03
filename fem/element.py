@@ -530,17 +530,6 @@ class EulerBernoulliElement3Node(Element):
         epsilon = (1/L) * (dN1_dxi * u1 + dN2_dxi * u2 + dN3_dxi * u3)
         
         return E * A * epsilon
-        xi = x / L
-        
-        # Derivatives of quadratic shape functions
-        dN1_dxi = -3 + 4*xi
-        dN2_dxi = 4 - 8*xi
-        dN3_dxi = -1 + 4*xi
-        
-        # du/dx = (1/L) * du/dxi
-        epsilon = (1/L) * (dN1_dxi * u1 + dN2_dxi * u2 + dN3_dxi * u3)
-        
-        return E * A * epsilon
     
 class TimoshenkoElement2Node(Element):
     def __init__(self, id, node_start, node_end, material, section):
