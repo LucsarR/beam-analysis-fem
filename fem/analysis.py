@@ -85,3 +85,6 @@ class EulerBernoulliAnalysis(Analysis):
 # Alias for better semantics - this makes it clear that the analysis
 # works with any beam element type (Euler-Bernoulli, Timoshenko, etc.)
 BeamAnalysis = EulerBernoulliAnalysis
+
+
+# TODO: Correct the semantic problem above

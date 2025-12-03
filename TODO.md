@@ -8,6 +8,7 @@
 - [ ] area nao ta 90 graus acima
 - [ ] quando cria varios elementos com o mesh a escala do diagrama fica ruim
 - [ ] Fazer com que os pontos sejam precisos na hora de dar hover (Saber para um valor exato de xy)
+- [ ] Verificar Shear Coefficients 
 
 # Ajuste do front-end
 - [ ] Tirar +- dos itens que exigem um valor especifico para rodar(posicoes dos nos, E, G, poisson,etc)
