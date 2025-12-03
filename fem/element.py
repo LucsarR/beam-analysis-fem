@@ -237,7 +237,7 @@ class EulerBernoulliElement3Node(Element):
         c = self.c
         s = self.s
 
-        # TODO: Implement the stiffness matrix for 3-node Euler-Bernoulli beam element
+        # TODO: Implement the stiffness matrix for 3-node Euler-Bernoulli beam element with central node and run tests
 
         return k
 
@@ -246,7 +246,7 @@ class EulerBernoulliElement3Node(Element):
         c = self.c
         s = self.s
 
-        # TODO: Implement the force vector for 3-node Euler-Bernoulli beam element
+        # TODO: Implement the force vector for 3-node Euler-Bernoulli beam element with central node and run tests
 
         return fe_local.flatten()
     
