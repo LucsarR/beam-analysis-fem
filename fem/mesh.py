@@ -1,3 +1,5 @@
+import numpy as np
+
 class Mesh:
     """
     Class representing a finite element mesh.
@@ -74,7 +76,18 @@ class Mesh:
         if element_type == "euler_bernoulli_2node":
             element = EulerBernoulliElement2Node(self.element_id_counter, node_start, node_end, material, section)
         elif element_type == "euler_bernoulli_3node":
-            element = EulerBernoulliElement3Node(self.element_id_counter, node_start, node_end, material, section)
+            # For 3-node element, create or find the central node
+            x_center = (node_start.x + node_end.x) / 2
+            y_center = (node_start.y + node_end.y) / 2
+            # Check if central node already exists
+            node_center = None
+            for node in self.nodes:
+                if np.isclose(node.x, x_center) and np.isclose(node.y, y_center):
+                    node_center = node
+                    break
+            if node_center is None:
+                node_center = self.add_node(x_center, y_center)
+            element = EulerBernoulliElement3Node(self.element_id_counter, node_start, node_end, material, section, node_center)
         elif element_type == "timoshenko_2node":
             element = TimoshenkoElement2Node(self.element_id_counter, node_start, node_end, material, section)
         else:

@@ -24,10 +24,9 @@ class BeamAnalysis(Analysis):
     
     This class works with all beam element types through polymorphism:
     - Euler-Bernoulli 2-node elements (fully supported)
+    - Euler-Bernoulli 3-node elements (fully supported)
     - Timoshenko 2-node elements (fully supported)
     - Mixed element types in the same mesh
-    
-    Note: 3-node Euler-Bernoulli elements are not yet fully implemented.
     
     The class assembles the global stiffness matrix and force vector by calling
     each element's stiffness_matrix() and force_vector() methods, which are
@@ -44,14 +43,28 @@ class BeamAnalysis(Analysis):
         for element in self.mesh.elements:
             k_local = element.stiffness_matrix()
             fe_local = element.force_vector()
+            
             # Get global DOF indices for the element
-            node_ids = [element.node_start.id, element.node_end.id]
-            dof_indices = []
-            for nid in node_ids:
-                dof_indices.extend([3*(nid-1), 3*(nid-1)+1, 3*(nid-1)+2])
+            # Handle both 2-node (6 DOF) and 3-node (8 DOF) elements
+            if hasattr(element, 'node_center') and element.node_center is not None:
+                # 3-node element with 8 DOFs: [u1, v1, θ1, u2, v2, u3, v3, θ3]
+                # Center node has only u and v (no rotation)
+                dof_indices = [
+                    3*(element.node_start.id-1), 3*(element.node_start.id-1)+1, 3*(element.node_start.id-1)+2,  # u1, v1, θ1
+                    3*(element.node_center.id-1), 3*(element.node_center.id-1)+1,  # u2, v2
+                    3*(element.node_end.id-1), 3*(element.node_end.id-1)+1, 3*(element.node_end.id-1)+2  # u3, v3, θ3
+                ]
+            else:
+                # 2-node element with 6 DOFs
+                node_ids = [element.node_start.id, element.node_end.id]
+                dof_indices = []
+                for nid in node_ids:
+                    dof_indices.extend([3*(nid-1), 3*(nid-1)+1, 3*(nid-1)+2])
+            
             # Assemble into global matrices
-            for i in range(6):
-                for j in range(6):
+            n_elem_dof = len(dof_indices)
+            for i in range(n_elem_dof):
+                for j in range(n_elem_dof):
                     self.K_global[dof_indices[i], dof_indices[j]] += k_local[i, j]
                 self.F_global[dof_indices[i]] += fe_local[i]
 
@@ -63,11 +76,24 @@ class BeamAnalysis(Analysis):
         for load in getattr(self.mesh, "distributed_loads", []):
             el = load.element
             fe_global = load.apply(el)
-            node_ids = [el.node_start.id, el.node_end.id]
-            dof_indices = []
-            for nid in node_ids:
-                dof_indices.extend([3*(nid-1), 3*(nid-1)+1, 3*(nid-1)+2])
-            for i in range(6):
+            
+            # Handle both 2-node and 3-node elements
+            if hasattr(el, 'node_center') and el.node_center is not None:
+                # 3-node element
+                dof_indices = [
+                    3*(el.node_start.id-1), 3*(el.node_start.id-1)+1, 3*(el.node_start.id-1)+2,
+                    3*(el.node_center.id-1), 3*(el.node_center.id-1)+1,
+                    3*(el.node_end.id-1), 3*(el.node_end.id-1)+1, 3*(el.node_end.id-1)+2
+                ]
+            else:
+                # 2-node element
+                node_ids = [el.node_start.id, el.node_end.id]
+                dof_indices = []
+                for nid in node_ids:
+                    dof_indices.extend([3*(nid-1), 3*(nid-1)+1, 3*(nid-1)+2])
+            
+            n_elem_dof = len(dof_indices)
+            for i in range(n_elem_dof):
                 self.F_global[dof_indices[i]] += fe_global[i]
 
     def solve(self):
