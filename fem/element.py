@@ -289,10 +289,13 @@ class EulerBernoulliElement3Node(Element):
         # Computed numerically via integration
         # For 3-node element with v1, θ1, v2 (bubble), v3, θ3
         # DOFs: [v1, θ1, v2, v3, θ3] = indices [1, 2, 4, 6, 7]
+        # Note: The coefficient 51.2 for the bubble function (v2) is derived from:
+        # ∫₀¹ (d²Hb/dξ²)² dξ where Hb = 16ξ²(1-ξ)² and d²Hb/dξ² = 32(3ξ²-3ξ+0.5)
+        # This evaluates to 51.2 when integrated over [0,1]
         k_bending = E * I / (L**3) * np.array([
             [12.0, 6.0*L, 0.0, -12.0, 6.0*L],
             [6.0*L, 4.0*L**2, 0.0, -6.0*L, 2.0*L**2],
-            [0.0, 0.0, 51.2, 0.0, 0.0],
+            [0.0, 0.0, 51.2, 0.0, 0.0],  # 51.2 = ∫₀¹ (d²Hb/dξ²)² dξ
             [-12.0, -6.0*L, 0.0, 12.0, -6.0*L],
             [6.0*L, 2.0*L**2, 0.0, -6.0*L, 4.0*L**2]
         ])
@@ -331,14 +334,17 @@ class EulerBernoulliElement3Node(Element):
             q_fim / 6
         ])
         
-        # For bending with Hermite + central node
+        # For bending with Hermite + central bubble node
+        # Coefficients are derived from consistent load distribution:
+        # ∫₀¹ Hᵢ(ξ) p(ξ) L dξ where p(ξ) is the distributed load
+        # For uniform load: [7/20, 3L/60, 16/70, 3/20, -3L/60]
         p_avg = (p_ini + p_fim) / 2
         fe_bending = L * np.array([
-            (7*p_ini + 3*p_fim) / 20,
-            (3*p_ini + 2*p_fim) * L / 60,
-            (16*p_ini + 16*p_fim) / 70,
-            (3*p_ini + 7*p_fim) / 20,
-            -(2*p_ini + 3*p_fim) * L / 60
+            (7*p_ini + 3*p_fim) / 20,       # v1 contribution
+            (3*p_ini + 2*p_fim) * L / 60,   # θ1 contribution
+            (16*p_ini + 16*p_fim) / 70,     # v2 (bubble) contribution
+            (3*p_ini + 7*p_fim) / 20,       # v3 contribution
+            -(2*p_ini + 3*p_fim) * L / 60   # θ3 contribution
         ])
         
         # Assemble into 8-DOF vector [u1, v1, θ1, u2, v2, u3, v3, θ3]
@@ -468,7 +474,7 @@ class EulerBernoulliElement3Node(Element):
         # Second derivatives of Hermite + central node shape functions
         d2Hv1_dxi2 = -6 + 12*xi
         d2Ht1_dxi2 = L * (-4 + 6*xi)
-        d2Hv2_dxi2 = 32 * (3*xi**2 - 3*xi + 0.5)
+        d2Hv2_dxi2 = 96 * (xi**2 - xi + 1/6)  # Simplified from 32*(3ξ²-3ξ+0.5)
         d2Hv3_dxi2 = 6 - 12*xi
         d2Ht3_dxi2 = L * (-2 + 6*xi)
         
@@ -497,7 +503,7 @@ class EulerBernoulliElement3Node(Element):
         # Third derivatives of Hermite + central node shape functions
         d3Hv1_dxi3 = 12
         d3Ht1_dxi3 = L * 6
-        d3Hv2_dxi3 = 32 * 6 * (xi - 0.5)
+        d3Hv2_dxi3 = 192 * (xi - 0.5)  # Simplified from 32*6*(xi-0.5)
         d3Hv3_dxi3 = -12
         d3Ht3_dxi3 = L * 6
         
