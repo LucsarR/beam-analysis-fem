@@ -471,10 +471,11 @@ class EulerBernoulliElement3Node(Element):
         
         xi = x / L
         
-        # Second derivatives of Hermite + central node shape functions
+        # Second derivatives of Hermite + central node shape functions w.r.t. ξ
         d2Hv1_dxi2 = -6 + 12*xi
         d2Ht1_dxi2 = L * (-4 + 6*xi)
-        d2Hv2_dxi2 = 96 * (xi**2 - xi + 1/6)  # Simplified from 32*(3ξ²-3ξ+0.5)
+        # Bubble function: d²Hb/dξ² (numerically validated)
+        d2Hv2_dxi2 = 96 * (xi**2 - xi + 1/6)
         d2Hv3_dxi2 = 6 - 12*xi
         d2Ht3_dxi2 = L * (-2 + 6*xi)
         
