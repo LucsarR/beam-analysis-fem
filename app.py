@@ -1284,3 +1284,4 @@ with tab4:
     - Custom distributed load functions use Python syntax
     """)
 
+# TODO: Implement Timoshenko analysis visualization support
