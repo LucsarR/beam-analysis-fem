@@ -19,6 +19,24 @@ class Analysis(ABC):
         pass
 
 class EulerBernoulliAnalysis(Analysis):
+    """
+    Generic beam analysis class for 2D beam structures.
+    
+    Despite the name, this class works with all beam element types through polymorphism:
+    - Euler-Bernoulli 2-node elements (fully supported)
+    - Timoshenko 2-node elements (fully supported)
+    - Mixed element types in the same mesh
+    
+    Note: 3-node Euler-Bernoulli elements are not yet fully implemented.
+    
+    The class assembles the global stiffness matrix and force vector by calling
+    each element's stiffness_matrix() and force_vector() methods, which are
+    implemented differently for each element type according to their respective
+    beam theories.
+    
+    Note: The name is kept for backward compatibility. Consider using the 
+    BeamAnalysis alias for new code, which makes the generic nature more explicit.
+    """
     def assemble(self):
         n_nodes = len(self.mesh.nodes)
         n_dof = 3 * n_nodes
@@ -62,3 +80,8 @@ class EulerBernoulliAnalysis(Analysis):
         # Solve for displacements
         displacements = np.linalg.solve(self.K_global, self.F_global)
         return displacements
+
+
+# Alias for better semantics - this makes it clear that the analysis
+# works with any beam element type (Euler-Bernoulli, Timoshenko, etc.)
+BeamAnalysis = EulerBernoulliAnalysis
