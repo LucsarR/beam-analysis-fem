@@ -158,10 +158,4 @@ class Mesh:
         element_data = [(el.id, el.node_start.id, el.node_end.id) for el in self.elements]
         return {"nodes": node_data, "elements": element_data}
     
-    # VERIFIED: Mesh convergence has been validated through comprehensive tests in tests/test_mesh_convergence.py
-    # - Displacement solutions converge correctly with mesh refinement for both element types
-    # - Force solutions (moment, shear) converge correctly with mesh refinement
-    # - Both Euler-Bernoulli and Timoshenko elements work correctly
-    # - Timoshenko elements correctly include shear deformation effects
-    # TODO: Validate that nodes exist when creating elements
-    # TODO: Detect disconnected elements
+    # TODO: Verify if mesh is working correctly, if it is correctly converging (displacement and forces) when adding more elements to the mesh, with euler_bernoulli and timoshenko elements. Test for complex structures with multiple loads and constraints and angles.
