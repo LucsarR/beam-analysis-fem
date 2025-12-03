@@ -256,6 +256,20 @@ class TimoshenkoElement2Node(Element):
         self.length, self.c, self.s, self.R = self._compute_geometry()
 
     def _compute_geometry(self):
+        """
+        Compute element geometry parameters and transformation matrix.
+        
+        Returns:
+            tuple: (L, c, s, R) where:
+                - L (float): Element length
+                - c (float): Direction cosine (cos of angle with x-axis)
+                - s (float): Direction sine (sin of angle with x-axis)
+                - R (ndarray): 6x6 transformation matrix from local to global coordinates
+                
+        Note:
+            This method now returns 4 values (including R) for consistency with
+            other element types and to enable proper integration with post-processing.
+        """
         x1, y1 = self.node_start.x, self.node_start.y
         x2, y2 = self.node_end.x, self.node_end.y
         L = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
