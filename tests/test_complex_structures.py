@@ -350,7 +350,9 @@ def test_timoshenko_angled_beam_convergence():
         mesh.point_loads.append(load)
         
         # Analyze
-        analysis = EulerBernoulliAnalysis(mesh)  # Works with all element types
+        # Note: EulerBernoulliAnalysis is a generic analysis class that works with any element type
+        # via polymorphism (calls element.stiffness_matrix() which each element implements)
+        analysis = EulerBernoulliAnalysis(mesh)
         analysis.assemble()
         displacements = analysis.solve()
         
@@ -442,6 +444,8 @@ def test_complex_structure_forces_convergence():
         displacements = analysis.solve()
         
         # Calculate moment at midspan element
+        # For even number of elements, midspan node is at n_elements // 2
+        # The element ending at midspan is at index n_elements // 2 - 1
         midspan_element_idx = n_elements // 2 - 1
         midspan_element = mesh.elements[midspan_element_idx]
         
@@ -456,6 +460,7 @@ def test_complex_structure_forces_convergence():
             displacements[3*(node_end_id-1) + 2]
         ])
         u_local = midspan_element.R.T @ u_global
+        # Get moment at the END of this element (which is at the midspan node)
         moment = midspan_element.bending_moment(midspan_element.length, u_local)
         midspan_moments.append(moment)
         

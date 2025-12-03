@@ -10,8 +10,10 @@ This script runs:
 
 import sys
 import subprocess
+import os
+from pathlib import Path
 
-def run_test(test_file):
+def run_test(test_file, project_root):
     """Run a test file and return success status."""
     print(f"\n{'='*70}")
     print(f"Running: {test_file}")
@@ -19,14 +21,17 @@ def run_test(test_file):
     
     result = subprocess.run(
         [sys.executable, f"tests/{test_file}"],
-        cwd="/home/runner/work/beam-analysis-fem/beam-analysis-fem",
-        env={"PYTHONPATH": "/home/runner/work/beam-analysis-fem/beam-analysis-fem"}
+        cwd=project_root,
+        env={"PYTHONPATH": str(project_root)}
     )
     
     return result.returncode == 0
 
 def main():
     """Run all mesh tests."""
+    # Determine project root (directory containing this script)
+    project_root = Path(__file__).parent.resolve()
+    
     print("\n" + "="*70)
     print("RUNNING ALL MESH TESTS")
     print("="*70)
@@ -39,7 +44,7 @@ def main():
     
     results = {}
     for test in tests:
-        results[test] = run_test(test)
+        results[test] = run_test(test, project_root)
     
     # Summary
     print("\n" + "="*70)
