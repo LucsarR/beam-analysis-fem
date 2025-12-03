@@ -1091,6 +1091,10 @@ with tab2:
                         mesh.distributed_loads.append(load)
                     
                     # Run analysis
+                    # Note: EulerBernoulliAnalysis is a generic beam analysis class that works
+                    # with all element types (Euler-Bernoulli, Timoshenko, and mixed) through
+                    # polymorphism. Each element implements its own stiffness_matrix() method
+                    # according to its respective beam theory.
                     analysis = EulerBernoulliAnalysis(mesh)
                     analysis.assemble()
                     displacements = analysis.solve()
@@ -1274,14 +1278,13 @@ with tab4:
     - Units: Lengths in meters, forces in Newtons, stresses in MPa
     
     ### 🔧 Supported Features
-    - **Element Types**: Euler-Bernoulli, Timoshenko
+    - **Element Types**: Euler-Bernoulli, Timoshenko (both fully supported for analysis and visualization)
     - **Section Types**: Rectangular, Circular, I-beam, C-section, and more
     - **Load Types**: Point loads, distributed loads (constant, linear, custom functions)
-    - **Analysis**: Linear static analysis
+    - **Analysis**: Linear static analysis with both Euler-Bernoulli and Timoshenko beam theories
+    - **Visualization**: Force diagrams (moment, shear, normal), stress distributions, and deformed shapes
     
     ### ⚠️ Known Limitations
-    - Only Euler-Bernoulli analysis is fully supported for visualization
     - Custom distributed load functions use Python syntax
+    - 3-node Euler-Bernoulli elements are not yet fully implemented
     """)
-
-# TODO: Implement Timoshenko analysis visualization support
