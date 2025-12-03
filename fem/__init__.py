@@ -1,4 +1,4 @@
-from .analysis import Analysis, EulerBernoulliAnalysis, BeamAnalysis
+from .analysis import Analysis, BeamAnalysis, EulerBernoulliAnalysis
 from .element import Element, EulerBernoulliElement2Node, EulerBernoulliElement3Node, TimoshenkoElement2Node
 from .mesh import Mesh
 from .node import Node
@@ -9,8 +9,8 @@ from .spring import Spring
 
 __all__ = [
     'Analysis',
-    'EulerBernoulliAnalysis',
     'BeamAnalysis',
+    'EulerBernoulliAnalysis',  # Backward compatibility alias
     'Element',
     'EulerBernoulliElement2Node',
     'EulerBernoulliElement3Node',
