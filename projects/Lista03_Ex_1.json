@@ -1,0 +1,132 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "created": "2025-12-03T11:06:44.230842",
+    "description": ""
+  },
+  "nodes": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      -4000.0
+    ],
+    [
+      2000.0,
+      -5500.0
+    ]
+  ],
+  "properties": [
+    {
+      "name": "Property_1",
+      "material": {
+        "E": 70000.0,
+        "nu": 0.3
+      },
+      "section": {
+        "type": "general",
+        "kwargs": {
+          "area": 19200.0,
+          "inertia": 40960000.0
+        }
+      }
+    },
+    {
+      "name": "Property_2",
+      "material": {
+        "E": 70000.0,
+        "nu": 0.3
+      },
+      "section": {
+        "type": "general",
+        "kwargs": {
+          "area": 21600.0,
+          "inertia": 58320000.0
+        }
+      }
+    }
+  ],
+  "elements": [
+    [
+      1,
+      2,
+      "euler_bernoulli_2node",
+      "Property_1",
+      1
+    ],
+    [
+      2,
+      3,
+      "euler_bernoulli_2node",
+      "Property_2",
+      1
+    ]
+  ],
+  "constraints": [
+    [
+      1,
+      0,
+      0.0
+    ],
+    [
+      1,
+      1,
+      0.0
+    ],
+    [
+      1,
+      2,
+      0.0
+    ],
+    [
+      3,
+      0,
+      4.0
+    ],
+    [
+      3,
+      1,
+      3.0
+    ]
+  ],
+  "point_loads": [
+    [
+      2,
+      0,
+      20000.0
+    ],
+    [
+      2,
+      2,
+      15000000.0
+    ]
+  ],
+  "distributed_loads": [
+    [
+      1,
+      0.0,
+      10.0,
+      "x",
+      null,
+      "linear"
+    ],
+    [
+      1,
+      -5.0,
+      null,
+      "y",
+      null,
+      "constant"
+    ],
+    [
+      2,
+      10.0,
+      5.0,
+      "t",
+      null,
+      "linear"
+    ]
+  ]
+}
