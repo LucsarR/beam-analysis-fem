@@ -11,6 +11,7 @@
 - [ ] Verificar Shear Coefficients 
 
 # Ajuste do front-end
+- [ ] Opcao de preview na estrutura com forças e cargas
 - [ ] Tirar +- dos itens que exigem um valor especifico para rodar(posicoes dos nos, E, G, poisson,etc)
 - [ ] Verificar unidades no app, e numero de casa depois da virgula
 - [ ] Point Loads inicia em Y force arrumar
