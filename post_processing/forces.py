@@ -40,11 +40,23 @@ class StructureResults:
         ]
 
     def _get_element_dofs(self, element):
-        # Extract DOFs for the element from global displacement vector
-        node_ids = [element.node_start.id, element.node_end.id]
-        dof_indices = []
-        for nid in node_ids:
-            dof_indices.extend([3*(nid-1), 3*(nid-1)+1, 3*(nid-1)+2])
+        """Extract DOFs for the element from global displacement vector."""
+        # Handle both 2-node (6 DOF) and 3-node (8 DOF) elements
+        if hasattr(element, 'node_center') and element.node_center is not None:
+            # 3-node element with 8 DOFs: [u1, v1, θ1, u2, v2, u3, v3, θ3]
+            # Center node has only u and v (no rotation)
+            dof_indices = [
+                3*(element.node_start.id-1), 3*(element.node_start.id-1)+1, 3*(element.node_start.id-1)+2,  # u1, v1, θ1
+                3*(element.node_center.id-1), 3*(element.node_center.id-1)+1,  # u2, v2
+                3*(element.node_end.id-1), 3*(element.node_end.id-1)+1, 3*(element.node_end.id-1)+2  # u3, v3, θ3
+            ]
+        else:
+            # 2-node element with 6 DOFs
+            node_ids = [element.node_start.id, element.node_end.id]
+            dof_indices = []
+            for nid in node_ids:
+                dof_indices.extend([3*(nid-1), 3*(nid-1)+1, 3*(nid-1)+2])
+        
         global_disp = self.displacements[dof_indices]
         # Transform to local coordinates
         R = element.R
