@@ -22,7 +22,7 @@ This tool performs finite element analysis on beams using three different formul
 ### Euler-Bernoulli 2-Node
 Standard 2-node beam element based on classical beam theory. Suitable for slender beams where shear deformation is negligible.
 
-### Euler-Bernoulli 3-Node ⭐ NEW
+### Euler-Bernoulli 3-Node
 Enhanced 3-node element with a central node for improved accuracy:
 - Uses quadratic shape functions for axial displacement
 - Uses Hermite cubic polynomials + bubble function for bending

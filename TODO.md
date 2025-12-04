@@ -3,13 +3,7 @@
 - [ ] Testar as formulas do section.py
 - [ ] Testar funcao no load distribuido
 - [ ] Tentar fazer com integracao numerica como uma solucao paralela da matriz de rigidez
-- [x] Implementar euler-bernoulli 3node ✅ COMPLETED
-  - [x] Stiffness matrix (8 DOFs: u1, v1, θ1, u2, v2, u3, v3, θ3)
-  - [x] Force vector with distributed loads
-  - [x] Central node creation in mesh
-  - [x] Integration with analysis and post-processing
-  - [x] Comprehensive test suite (8 tests)
-  - [x] Documentation and references
+- [ ] Euler-bernoulli 3node está com 8 nós somente(central sem rotacao). Tentar com 9 nós (ver se é viavel).
 - [ ] Shear Stress Distribution in Cross Section
 - [ ] area nao ta 90 graus acima
 - [ ] quando cria varios elementos com o mesh a escala do diagrama fica ruim
