@@ -10,14 +10,20 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
     
     Args:
         nodes: List of (x, y) tuples representing node coordinates
-        elements: List of (n1, n2, etype, prop_name, n_subdiv) tuples
+        elements: List of (n1, n2, etype, prop_name, n_subdiv) tuples where n1, n2 are 1-based node IDs
         properties: List of property dicts with 'name', 'material', 'section', etc.
-        constraints: List of (node_id, direction, value) tuples
-        point_loads: List of (node_id, direction, magnitude) tuples
+        constraints: List of (node_id, direction, value) tuples where direction is 0=x, 1=y, 2=rotation
+        point_loads: List of (node_id, direction, magnitude) tuples where direction is 0=x, 1=y, 2=moment
         distributed_loads: List of (element_id, magnitude_start, magnitude_end, direction, func_str, load_type) tuples
     
     Returns:
         Plotly figure object
+    
+    Note:
+        - Empty lists are handled gracefully (will show only available elements)
+        - Node IDs in elements, constraints, and loads are 1-based indices
+        - If an element references an invalid node ID, that element will be skipped
+        - Scaling automatically adjusts for structures with zero range (e.g., vertical/horizontal beams)
     """
     fig = go.Figure()
     
@@ -38,12 +44,17 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
     ))
     
     # Calculate structure bounds for scaling
-    x_range = max(node_xs) - min(node_xs) if len(node_xs) > 1 else 1.0
-    y_range = max(node_ys) - min(node_ys) if len(node_ys) > 1 else 1.0
-    scale = max(x_range, y_range) * 0.1  # Scale for arrows and symbols
+    x_range = max(node_xs) - min(node_xs)
+    y_range = max(node_ys) - min(node_ys)
+    # Use a minimum scale of 1.0 to handle structures with zero range (e.g., vertical/horizontal beams)
+    scale = max(x_range, y_range, 1.0) * 0.1  # Scale for arrows and symbols
     
     # Plot elements
     for i, (n1, n2, etype, prop_name, n_subdiv) in enumerate(elements):
+        # Skip elements with invalid node IDs
+        if n1 < 1 or n1 > len(nodes) or n2 < 1 or n2 > len(nodes):
+            continue
+        
         x1, y1 = nodes[n1-1]
         x2, y2 = nodes[n2-1]
         
@@ -63,6 +74,10 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
     constraint_labels = {0: 'X-fixed', 1: 'Y-fixed', 2: 'Rotation-fixed'}
     
     for node_id, direction, value in constraints:
+        # Skip constraints with invalid node IDs
+        if node_id < 1 or node_id > len(nodes):
+            continue
+        
         x, y = nodes[node_id-1]
         
         # Offset constraint symbols slightly from node
@@ -74,18 +89,22 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
             y=[y - offset_y],
             mode='markers',
             marker=dict(
-                color=constraint_colors[direction],
+                color=constraint_colors.get(direction, 'gray'),
                 size=15,
                 symbol=constraint_symbols.get(direction, 'square'),
                 line=dict(color='black', width=1)
             ),
-            name=f'{constraint_labels[direction]}',
-            hovertemplate=f'Constraint<br>Node: {node_id}<br>DOF: {constraint_labels[direction]}<br>Value: {value:.3f}<extra></extra>',
+            name=f'{constraint_labels.get(direction, "Unknown")}',
+            hovertemplate=f'Constraint<br>Node: {node_id}<br>DOF: {constraint_labels.get(direction, "Unknown")}<br>Value: {value:.3f}<extra></extra>',
             showlegend=False
         ))
     
     # Plot point loads as arrows
     for node_id, direction, magnitude in point_loads:
+        # Skip loads with invalid node IDs
+        if node_id < 1 or node_id > len(nodes):
+            continue
+        
         x, y = nodes[node_id-1]
         
         # Determine arrow direction
@@ -193,7 +212,11 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
             if load_type == "constant":
                 mag = magnitude_start if magnitude_start is not None else 0.0
             elif load_type == "linear":
-                mag = magnitude_start + t * (magnitude_end - magnitude_start) if magnitude_start is not None and magnitude_end is not None else 0.0
+                # Linear interpolation between start and end magnitude
+                if magnitude_start is not None and magnitude_end is not None:
+                    mag = magnitude_start + t * (magnitude_end - magnitude_start)
+                else:
+                    mag = 0.0
             else:  # custom function
                 # For preview, just show arrows - actual magnitude calculation requires eval
                 mag = 1.0  # placeholder

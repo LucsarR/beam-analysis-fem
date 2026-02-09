@@ -116,6 +116,31 @@ def test_angled_structure():
     print(f"  ✓ Number of traces: {len(fig.data)}")
     return True
 
+def test_invalid_node_ids():
+    """Test preview handles invalid node IDs gracefully"""
+    print("\n[TEST 5] Structure with Invalid Node IDs")
+    print("-" * 70)
+    
+    nodes = [(0.0, 0.0), (1.0, 0.0)]
+    # Element with invalid node ID (node 5 doesn't exist)
+    elements = [(1, 2, "euler_bernoulli_2node", "P1", 1), (1, 5, "euler_bernoulli_2node", "P1", 1)]
+    properties = [{"name": "P1", "material": None, "section": None}]
+    # Constraint with invalid node ID
+    constraints = [(1, 0, 0.0), (10, 1, 0.0)]
+    # Load with invalid node ID
+    point_loads = [(2, 1, -1000.0), (8, 0, 500.0)]
+    distributed_loads = []
+    
+    # Should not raise an exception, just skip invalid elements
+    fig = plot_structure_preview(nodes, elements, properties, constraints, point_loads, distributed_loads)
+    
+    assert isinstance(fig, go.Figure), "Should handle invalid node IDs gracefully"
+    assert len(fig.data) > 0, "Should still show valid nodes and elements"
+    
+    print(f"  ✓ Invalid node IDs handled gracefully")
+    print(f"  ✓ Number of traces: {len(fig.data)}")
+    return True
+
 def run_all_tests():
     """Run all tests for the preview function"""
     print("=" * 70)
@@ -127,6 +152,7 @@ def run_all_tests():
         test_structure_with_all_elements,
         test_empty_loads,
         test_angled_structure,
+        test_invalid_node_ids,
     ]
     
     passed = 0
