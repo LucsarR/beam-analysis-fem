@@ -16,7 +16,7 @@ from config import DEFAULT_E, DEFAULT_NU, SECTION_TYPES, ELEMENT_TYPES
 
 # --- Post-processing and Plotting ---
 from post_processing.forces import StructureResults
-from post_processing.plotter import plot_structure_diagram, plot_normal_stress_distribution
+from post_processing.plotter import plot_structure_diagram, plot_normal_stress_distribution, plot_structure_preview
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -1218,6 +1218,27 @@ with tab2:
                 st.warning(msg)
     
     if can_analyze:
+        # Preview button - shows structure with loads before analysis
+        if st.button("👁️ Preview Structure with Loads", use_container_width=True):
+            with st.spinner("Generating structure preview..."):
+                try:
+                    preview_fig = plot_structure_preview(
+                        nodes=nodes,
+                        elements=st.session_state.get("elements", []),
+                        properties=st.session_state.get("properties", []),
+                        constraints=st.session_state.get("constraints", []),
+                        point_loads=st.session_state.get("point_loads", []),
+                        distributed_loads=st.session_state.get("distributed_loads", [])
+                    )
+                    st.plotly_chart(preview_fig, use_container_width=True)
+                    st.success("✅ Structure preview generated successfully! Review your setup before running the analysis.")
+                except Exception as e:
+                    st.error(f"Error generating preview: {str(e)}")
+                    import traceback
+                    st.code(traceback.format_exc())
+        
+        st.divider()
+        
         if st.button("🚀 Run Analysis", type="primary", use_container_width=True):
             with st.spinner("Running finite element analysis..."):
                 try:
