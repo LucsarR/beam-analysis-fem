@@ -255,6 +255,8 @@ with tab1:
         
         st.session_state["nodes"] = nodes
 
+    # TODO: Preview do formato da section na hora de selecionar com medidas, para ajudar o usuário a entender o que cada medida representa.
+
     # --- Input: Properties (Material + Section) ---
     with st.expander("🔧 Properties (Material + Section)", expanded=True):
         st.markdown("Define material and section properties for your elements.")

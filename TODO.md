@@ -14,9 +14,11 @@
 - [ ] Implementar possibilidade de digitar o G da propriedade, com verificacao de erro(somente dois podem ser digitados ao mesmo tempo (E,G,v))
 - [ ] Testar Springs com restricao rotacional tbm
 - [ ] Load Distribution escrever bonitinho em Latex do lado no app.py
+- [ ] Procurar por codigo duplicado(deixar mais clean)
 
 # Ajuste do front-end
 - [ ] Opcao de preview na estrutura com forças e cargas
+- [ ] Preview da section na hora de selecionar
 - [ ] Na aba analyses nao diz o total de nos considerando o mesh
 - [ ] Tirar +- dos itens que exigem um valor especifico para rodar(posicoes dos nos, E, G, poisson,etc)
 - [ ] Verificar unidades no app (retirar todas), e numero de casa depois da virgula deixar usuario escolher
