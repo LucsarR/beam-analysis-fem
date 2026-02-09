@@ -3,6 +3,240 @@ import plotly.graph_objects as go
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 
+def plot_structure_preview(nodes, elements, properties, constraints, point_loads, distributed_loads):
+    """
+    Interactive Plotly plot: structure preview showing nodes, elements, loads, and constraints
+    BEFORE analysis is run. This allows users to verify their setup before running the analysis.
+    
+    Args:
+        nodes: List of (x, y) tuples representing node coordinates
+        elements: List of (n1, n2, etype, prop_name, n_subdiv) tuples
+        properties: List of property dicts with 'name', 'material', 'section', etc.
+        constraints: List of (node_id, direction, value) tuples
+        point_loads: List of (node_id, direction, magnitude) tuples
+        distributed_loads: List of (element_id, magnitude_start, magnitude_end, direction, func_str, load_type) tuples
+    
+    Returns:
+        Plotly figure object
+    """
+    fig = go.Figure()
+    
+    # Plot nodes
+    node_xs = [node[0] for node in nodes]
+    node_ys = [node[1] for node in nodes]
+    node_ids = [str(i+1) for i in range(len(nodes))]
+    
+    fig.add_trace(go.Scatter(
+        x=node_xs,
+        y=node_ys,
+        mode='markers+text',
+        marker=dict(color='blue', size=12, symbol='circle'),
+        text=node_ids,
+        textposition='top center',
+        name='Nodes',
+        hovertemplate='Node %{text}<br>x=%{x:.3f}<br>y=%{y:.3f}<extra></extra>'
+    ))
+    
+    # Calculate structure bounds for scaling
+    x_range = max(node_xs) - min(node_xs) if len(node_xs) > 1 else 1.0
+    y_range = max(node_ys) - min(node_ys) if len(node_ys) > 1 else 1.0
+    scale = max(x_range, y_range) * 0.1  # Scale for arrows and symbols
+    
+    # Plot elements
+    for i, (n1, n2, etype, prop_name, n_subdiv) in enumerate(elements):
+        x1, y1 = nodes[n1-1]
+        x2, y2 = nodes[n2-1]
+        
+        fig.add_trace(go.Scatter(
+            x=[x1, x2],
+            y=[y1, y2],
+            mode='lines',
+            line=dict(color='black', width=3),
+            name=f'Element {i+1}',
+            hovertemplate=f'Element {i+1}<br>Nodes: {n1} → {n2}<br>Type: {etype}<br>Property: {prop_name}<extra></extra>',
+            showlegend=False
+        ))
+    
+    # Plot constraints (boundary conditions)
+    constraint_symbols = {0: 'triangle-right', 1: 'triangle-up', 2: 'circle'}  # x, y, rotation
+    constraint_colors = {0: 'red', 1: 'green', 2: 'purple'}
+    constraint_labels = {0: 'X-fixed', 1: 'Y-fixed', 2: 'Rotation-fixed'}
+    
+    for node_id, direction, value in constraints:
+        x, y = nodes[node_id-1]
+        
+        # Offset constraint symbols slightly from node
+        offset_x = scale * 0.3 * (1 if direction == 0 else 0)
+        offset_y = scale * 0.3 * (1 if direction == 1 else 0)
+        
+        fig.add_trace(go.Scatter(
+            x=[x - offset_x],
+            y=[y - offset_y],
+            mode='markers',
+            marker=dict(
+                color=constraint_colors[direction],
+                size=15,
+                symbol=constraint_symbols.get(direction, 'square'),
+                line=dict(color='black', width=1)
+            ),
+            name=f'{constraint_labels[direction]}',
+            hovertemplate=f'Constraint<br>Node: {node_id}<br>DOF: {constraint_labels[direction]}<br>Value: {value:.3f}<extra></extra>',
+            showlegend=False
+        ))
+    
+    # Plot point loads as arrows
+    for node_id, direction, magnitude in point_loads:
+        x, y = nodes[node_id-1]
+        
+        # Determine arrow direction
+        if direction == 0:  # X direction
+            dx = scale * np.sign(magnitude)
+            dy = 0
+        elif direction == 1:  # Y direction
+            dx = 0
+            dy = scale * np.sign(magnitude)
+        else:  # Moment (direction == 2)
+            # Draw a small arc for moment
+            theta = np.linspace(0, 1.5*np.pi, 20)
+            arc_r = scale * 0.4
+            arc_x = x + arc_r * np.cos(theta)
+            arc_y = y + arc_r * np.sin(theta)
+            
+            fig.add_trace(go.Scatter(
+                x=arc_x,
+                y=arc_y,
+                mode='lines',
+                line=dict(color='orange', width=3),
+                name=f'Moment Load',
+                hovertemplate=f'Moment Load<br>Node: {node_id}<br>Magnitude: {magnitude:.3f}<extra></extra>',
+                showlegend=False
+            ))
+            
+            # Add arrowhead for moment
+            arrow_x = arc_x[-1]
+            arrow_y = arc_y[-1]
+            arrow_dx = (arc_x[-1] - arc_x[-2]) * 2
+            arrow_dy = (arc_y[-1] - arc_y[-2]) * 2
+            
+            fig.add_annotation(
+                x=arrow_x, y=arrow_y,
+                ax=arrow_x - arrow_dx, ay=arrow_y - arrow_dy,
+                xref='x', yref='y',
+                axref='x', ayref='y',
+                showarrow=True,
+                arrowhead=2,
+                arrowsize=1,
+                arrowwidth=3,
+                arrowcolor='orange'
+            )
+            continue
+        
+        # For X and Y loads, draw arrow
+        fig.add_annotation(
+            x=x, y=y,
+            ax=x - dx, ay=y - dy,
+            xref='x', yref='y',
+            axref='x', ayref='y',
+            showarrow=True,
+            arrowhead=2,
+            arrowsize=1.5,
+            arrowwidth=4,
+            arrowcolor='orange',
+            text=f'{magnitude:.1f}N',
+            font=dict(size=10, color='orange'),
+            bgcolor='rgba(255,255,255,0.7)'
+        )
+    
+    # Plot distributed loads
+    for element_id, magnitude_start, magnitude_end, direction, func_str, load_type in distributed_loads:
+        # Find the element
+        if element_id > len(elements):
+            continue
+        
+        n1, n2, _, _, _ = elements[element_id-1]
+        x1, y1 = nodes[n1-1]
+        x2, y2 = nodes[n2-1]
+        
+        # Calculate element properties
+        L = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+        if L < 1e-10:
+            continue
+        
+        # Element direction
+        dx_elem = (x2 - x1) / L
+        dy_elem = (y2 - y1) / L
+        
+        # Perpendicular direction (for transverse loads)
+        perp_x = -dy_elem
+        perp_y = dx_elem
+        
+        # Determine load direction vector
+        if direction == 'x':
+            load_dir_x, load_dir_y = 1.0, 0.0
+        elif direction == 'y':
+            load_dir_x, load_dir_y = 0.0, 1.0
+        elif direction == 'l':  # local axial
+            load_dir_x, load_dir_y = dx_elem, dy_elem
+        elif direction == 't':  # local transverse
+            load_dir_x, load_dir_y = perp_x, perp_y
+        else:
+            load_dir_x, load_dir_y = 0.0, 1.0
+        
+        # Draw multiple arrows along the element to represent distributed load
+        n_arrows = 5
+        for i in range(n_arrows):
+            t = (i + 0.5) / n_arrows
+            px = x1 + t * (x2 - x1)
+            py = y1 + t * (y2 - y1)
+            
+            # Determine magnitude at this position
+            if load_type == "constant":
+                mag = magnitude_start if magnitude_start is not None else 0.0
+            elif load_type == "linear":
+                mag = magnitude_start + t * (magnitude_end - magnitude_start) if magnitude_start is not None and magnitude_end is not None else 0.0
+            else:  # custom function
+                # For preview, just show arrows - actual magnitude calculation requires eval
+                mag = 1.0  # placeholder
+            
+            # Arrow length proportional to magnitude
+            arrow_scale = scale * 0.5 * np.sign(mag) if mag != 0 else scale * 0.5
+            arrow_dx = load_dir_x * arrow_scale
+            arrow_dy = load_dir_y * arrow_scale
+            
+            fig.add_annotation(
+                x=px, y=py,
+                ax=px - arrow_dx, ay=py - arrow_dy,
+                xref='x', yref='y',
+                axref='x', ayref='y',
+                showarrow=True,
+                arrowhead=2,
+                arrowsize=1,
+                arrowwidth=2,
+                arrowcolor='darkorange'
+            )
+    
+    # Update layout
+    fig.update_layout(
+        title="Structure Preview - Nodes, Elements, Loads, and Constraints",
+        xaxis_title="x (m)",
+        yaxis_title="y (m)",
+        showlegend=True,
+        width=900,
+        height=600,
+        hovermode='closest',
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="right",
+            x=0.99
+        )
+    )
+    
+    # Equal aspect ratio
+    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    
+    return fig
+
 def plot_structure_diagram(structure_results, force_type="moment", n_points=50, scale=0.2, fill_diagram=False):
     """
     Interactive Plotly plot: structure in 2D with force diagram (moment, shear, normal) along each element.
