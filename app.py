@@ -382,6 +382,8 @@ if "point_loads" not in st.session_state:
 if "distributed_loads" not in st.session_state:
     st.session_state["distributed_loads"] = []
 
+# TODO: Fazer um botao clicavel antes da analise para mostrar a estrutura com as cargas aplicadas, para o usuario ter certeza que esta tudo certo antes de rodar a analise. Talvez usar o plot_structure_diagram para isso, mostrando os nodos, elementos, cargas e restricoes.
+
 # --- Main Content: Tabs for better organization ---
 tab1, tab2, tab3, tab4 = st.tabs(["📐 Structure Definition", "⚙️ Analysis", "📊 Results", "ℹ️ Help"])
 
