@@ -18,7 +18,7 @@
 
 # Ajuste do front-end
 - [ ] Opcao de preview na estrutura com forças e cargas
-- [ ] Preview da section na hora de selecionar
+- [x] Preview da section na hora de selecionar
 - [ ] Na aba analyses nao diz o total de nos considerando o mesh
 - [ ] Tirar +- dos itens que exigem um valor especifico para rodar(posicoes dos nos, E, G, poisson,etc)
 - [ ] Verificar unidades no app (retirar todas), e numero de casa depois da virgula deixar usuario escolher
