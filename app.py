@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import json
 from datetime import datetime
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 
 from fem.mesh import Mesh
 from fem.material import Material
@@ -108,6 +110,190 @@ def validate_number(value, min_val=None, max_val=None, field_name="Value"):
     if max_val is not None and value > max_val:
         return False, f"{field_name} must be at most {max_val}."
     return True, ""
+
+def create_section_preview(section_type, **kwargs):
+    """
+    Create a matplotlib figure with a schematic diagram of the section type,
+    showing the dimensions with labels to help users understand the measurements.
+    """
+    fig, ax = plt.subplots(figsize=(4, 4))
+    ax.set_aspect('equal')
+    ax.axis('off')
+    
+    # Helper function to add dimension lines
+    def add_dimension(x1, y1, x2, y2, label, offset=0.05, text_offset=0.02):
+        """Add a dimension line with arrows and label"""
+        # Draw the dimension line
+        ax.plot([x1, x2], [y1, y2], 'k-', linewidth=1)
+        # Add arrows
+        dx = x2 - x1
+        dy = y2 - y1
+        arrow_size = 0.03
+        if abs(dx) > abs(dy):  # Horizontal dimension
+            ax.plot([x1, x1 + arrow_size], [y1, y1], 'k-', linewidth=1)
+            ax.plot([x2, x2 - arrow_size], [y2, y2], 'k-', linewidth=1)
+            # Add label
+            ax.text((x1 + x2) / 2, y1 - text_offset, label, ha='center', va='top', fontsize=9, color='blue')
+        else:  # Vertical dimension
+            ax.plot([x1, x1], [y1, y1 + arrow_size], 'k-', linewidth=1)
+            ax.plot([x2, x2], [y2, y2 - arrow_size], 'k-', linewidth=1)
+            # Add label
+            ax.text(x1 - text_offset, (y1 + y2) / 2, label, ha='right', va='center', fontsize=9, color='blue')
+    
+    if section_type == "rectangular_bar":
+        width = kwargs.get("width", 0.05)
+        height = kwargs.get("height", 0.10)
+        # Draw rectangle
+        rect = mpatches.Rectangle((-width/2, -height/2), width, height, 
+                                   linewidth=2, edgecolor='black', facecolor='lightgray')
+        ax.add_patch(rect)
+        # Add dimensions
+        add_dimension(-width/2, -height/2 - 0.08, width/2, -height/2 - 0.08, 'width')
+        add_dimension(-width/2 - 0.08, -height/2, -width/2 - 0.08, height/2, 'height')
+        ax.set_xlim(-width, width)
+        ax.set_ylim(-height, height)
+    
+    elif section_type == "rectangular_tube":
+        width = kwargs.get("width", 0.05)
+        height = kwargs.get("height", 0.10)
+        thickness = kwargs.get("thickness", 0.005)
+        # Draw outer rectangle
+        outer_rect = mpatches.Rectangle((-width/2, -height/2), width, height, 
+                                         linewidth=2, edgecolor='black', facecolor='lightgray')
+        ax.add_patch(outer_rect)
+        # Draw inner rectangle (hollow)
+        inner_rect = mpatches.Rectangle((-width/2 + thickness, -height/2 + thickness), 
+                                         width - 2*thickness, height - 2*thickness, 
+                                         linewidth=1, edgecolor='black', facecolor='white')
+        ax.add_patch(inner_rect)
+        # Add dimensions
+        add_dimension(-width/2, -height/2 - 0.08, width/2, -height/2 - 0.08, 'width')
+        add_dimension(-width/2 - 0.08, -height/2, -width/2 - 0.08, height/2, 'height')
+        # Show thickness
+        add_dimension(-width/2, height/2 + 0.02, -width/2 + thickness, height/2 + 0.02, 't', offset=0.02, text_offset=0.01)
+        ax.set_xlim(-width, width)
+        ax.set_ylim(-height, height)
+    
+    elif section_type == "circular_bar":
+        diameter = kwargs.get("diameter", 0.05)
+        radius = diameter / 2
+        # Draw circle
+        circle = mpatches.Circle((0, 0), radius, linewidth=2, edgecolor='black', facecolor='lightgray')
+        ax.add_patch(circle)
+        # Add dimension (diameter)
+        ax.plot([-radius, radius], [0, 0], 'b--', linewidth=1)
+        add_dimension(-radius, -radius - 0.05, radius, -radius - 0.05, 'diameter')
+        ax.set_xlim(-radius * 2, radius * 2)
+        ax.set_ylim(-radius * 2, radius * 2)
+    
+    elif section_type == "circular_tube":
+        outer_diameter = kwargs.get("outer_diameter", 0.05)
+        thickness = kwargs.get("thickness", 0.005)
+        outer_radius = outer_diameter / 2
+        inner_radius = outer_radius - thickness
+        # Draw outer circle
+        outer_circle = mpatches.Circle((0, 0), outer_radius, linewidth=2, edgecolor='black', facecolor='lightgray')
+        ax.add_patch(outer_circle)
+        # Draw inner circle (hollow)
+        inner_circle = mpatches.Circle((0, 0), inner_radius, linewidth=1, edgecolor='black', facecolor='white')
+        ax.add_patch(inner_circle)
+        # Add dimensions
+        ax.plot([-outer_radius, outer_radius], [0, 0], 'b--', linewidth=1)
+        add_dimension(-outer_radius, -outer_radius - 0.05, outer_radius, -outer_radius - 0.05, 'outer_diameter')
+        add_dimension(0, outer_radius + 0.02, 0, inner_radius + 0.02, 't', text_offset=0.01)
+        ax.set_xlim(-outer_radius * 2, outer_radius * 2)
+        ax.set_ylim(-outer_radius * 2, outer_radius * 2)
+    
+    elif section_type == "trapezoidal_bar":
+        base1 = kwargs.get("base1", 0.05)
+        base2 = kwargs.get("base2", 0.10)
+        height = kwargs.get("height", 0.10)
+        # Draw trapezoid
+        points = [[-base1/2, -height/2], [base1/2, -height/2], 
+                  [base2/2, height/2], [-base2/2, height/2]]
+        trapezoid = mpatches.Polygon(points, closed=True, linewidth=2, 
+                                      edgecolor='black', facecolor='lightgray')
+        ax.add_patch(trapezoid)
+        # Add dimensions
+        add_dimension(-base1/2, -height/2 - 0.08, base1/2, -height/2 - 0.08, 'base1')
+        add_dimension(-base2/2, height/2 + 0.05, base2/2, height/2 + 0.05, 'base2')
+        max_base = max(base1, base2)
+        add_dimension(-max_base/2 - 0.08, -height/2, -max_base/2 - 0.08, height/2, 'height')
+        ax.set_xlim(-max_base, max_base)
+        ax.set_ylim(-height, height)
+    
+    elif section_type == "trapezoidal_tube":
+        base1 = kwargs.get("base1", 0.05)
+        base2 = kwargs.get("base2", 0.10)
+        height = kwargs.get("height", 0.10)
+        thickness = kwargs.get("thickness", 0.005)
+        # Draw outer trapezoid
+        outer_points = [[-base1/2, -height/2], [base1/2, -height/2], 
+                        [base2/2, height/2], [-base2/2, height/2]]
+        outer_trapezoid = mpatches.Polygon(outer_points, closed=True, linewidth=2, 
+                                            edgecolor='black', facecolor='lightgray')
+        ax.add_patch(outer_trapezoid)
+        # Draw inner trapezoid (approximate)
+        inner_base1 = max(base1 - 2*thickness, 0.001)
+        inner_base2 = max(base2 - 2*thickness, 0.001)
+        inner_height = max(height - 2*thickness, 0.001)
+        inner_points = [[-inner_base1/2, -inner_height/2], [inner_base1/2, -inner_height/2], 
+                        [inner_base2/2, inner_height/2], [-inner_base2/2, inner_height/2]]
+        inner_trapezoid = mpatches.Polygon(inner_points, closed=True, linewidth=1, 
+                                            edgecolor='black', facecolor='white')
+        ax.add_patch(inner_trapezoid)
+        # Add dimensions
+        add_dimension(-base1/2, -height/2 - 0.08, base1/2, -height/2 - 0.08, 'base1')
+        add_dimension(-base2/2, height/2 + 0.05, base2/2, height/2 + 0.05, 'base2')
+        max_base = max(base1, base2)
+        add_dimension(-max_base/2 - 0.08, -height/2, -max_base/2 - 0.08, height/2, 'height')
+        ax.set_xlim(-max_base, max_base)
+        ax.set_ylim(-height, height)
+    
+    elif section_type == "ibeam":
+        h = kwargs.get("h", 0.10)
+        b = kwargs.get("b", 0.05)
+        tw = kwargs.get("tw", 0.005)
+        tf = kwargs.get("tf", 0.005)
+        # Draw I-beam using rectangles
+        # Bottom flange
+        bottom_flange = mpatches.Rectangle((-b/2, -h/2), b, tf, 
+                                            linewidth=1, edgecolor='black', facecolor='lightgray')
+        ax.add_patch(bottom_flange)
+        # Web
+        web = mpatches.Rectangle((-tw/2, -h/2 + tf), tw, h - 2*tf, 
+                                  linewidth=1, edgecolor='black', facecolor='lightgray')
+        ax.add_patch(web)
+        # Top flange
+        top_flange = mpatches.Rectangle((-b/2, h/2 - tf), b, tf, 
+                                         linewidth=1, edgecolor='black', facecolor='lightgray')
+        ax.add_patch(top_flange)
+        # Add dimensions
+        add_dimension(-b/2, -h/2 - 0.08, b/2, -h/2 - 0.08, 'b')
+        add_dimension(-b/2 - 0.08, -h/2, -b/2 - 0.08, h/2, 'h')
+        add_dimension(-tw/2, h/2 + 0.03, tw/2, h/2 + 0.03, 'tw', text_offset=0.01)
+        add_dimension(b/2 + 0.02, h/2 - tf, b/2 + 0.02, h/2, 'tf', text_offset=0.01)
+        ax.set_xlim(-b, b)
+        ax.set_ylim(-h, h)
+    
+    elif section_type in ["c_section", "l_section", "t_section", "z_section", "hat_section", "hexagonal_bar", "hexagonal_tube"]:
+        # For complex sections, show a simplified diagram
+        ax.text(0, 0, f"{section_type.replace('_', ' ').title()}\n\nSee parameters\nfor dimensions", 
+                ha='center', va='center', fontsize=10, 
+                bbox=dict(boxstyle='round', facecolor='lightgray', alpha=0.5))
+        ax.set_xlim(-0.5, 0.5)
+        ax.set_ylim(-0.5, 0.5)
+    
+    elif section_type == "general":
+        # For general section, just show a placeholder
+        ax.text(0, 0, "General Section\n\nArea and Inertia\ndefined manually", 
+                ha='center', va='center', fontsize=10,
+                bbox=dict(boxstyle='round', facecolor='lightgray', alpha=0.5))
+        ax.set_xlim(-0.5, 0.5)
+        ax.set_ylim(-0.5, 0.5)
+    
+    plt.tight_layout()
+    return fig
 
 # --- Sidebar for Project Management ---
 with st.sidebar:
@@ -676,6 +862,15 @@ with tab1:
                             key=f"inertia_{i}"
                         )
                         section_kwargs = dict(area=area, inertia=inertia)
+                    
+                    # Display section preview diagram
+                    st.markdown("**Section Preview**")
+                    try:
+                        preview_fig = create_section_preview(section_type, **section_kwargs)
+                        st.pyplot(preview_fig, use_container_width=False)
+                        plt.close(preview_fig)  # Clean up to avoid memory issues
+                    except Exception as e:
+                        st.info("Preview not available for this section type.")
                 
                 material = Material(i+1, E, nu)
                 section = create_section(section_type, i+1, **section_kwargs)
