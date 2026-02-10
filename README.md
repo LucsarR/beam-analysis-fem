@@ -11,6 +11,7 @@ This tool performs finite element analysis on beams using three different formul
   * **Euler-Bernoulli 2-node**: Standard linear beam element
   * **Euler-Bernoulli 3-node**: Enhanced element with central node for improved accuracy with distributed loads
   * **Timoshenko 2-node**: Includes shear deformation effects
+  * **Timoshenko 3-node**: Enhanced element with central node for improved accuracy with distributed loads and shear deformation
 * Interactive web interface for setting up simulations
 * Visualization of displacement, shear force, and bending moment diagrams
 * Support for point loads and distributed loads (constant, linear, and custom functions)
@@ -32,6 +33,15 @@ Enhanced 3-node element with a central node for improved accuracy:
 
 ### Timoshenko 2-Node
 Includes shear deformation effects. More accurate for thick beams and high frequencies.
+
+### Timoshenko 3-Node
+Enhanced 3-node element with shear deformation effects:
+- Uses quadratic shape functions for axial and transverse displacement
+- Uses quadratic shape functions for rotation
+- Provides better representation of distributed loads
+- Includes shear deformation for thick beams
+- Uses selective reduced integration to avoid shear locking
+- All three nodes have rotation DOFs (unlike Euler-Bernoulli 3-node)
 
 ## 🚀 How to Run
 
