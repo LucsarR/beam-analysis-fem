@@ -350,7 +350,11 @@ def plot_structure_diagram(structure_results, force_type="moment", n_points=50, 
         vmin = np.min(all_vals)
         vmax = np.max(all_vals)
         norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
-        cmap = cm.get_cmap(colorscale)
+        try:
+            import matplotlib
+            cmap = matplotlib.colormaps[colorscale]
+        except (AttributeError, KeyError):
+            cmap = cm.get_cmap(colorscale)
         for i in range(n_points - 1):
             color_rgba = cmap(norm(vals[i]))
             color_hex = mcolors.to_hex(color_rgba)
@@ -581,7 +585,13 @@ def plot_normal_stress_side_view(structure_results, fiber_positions=None, n_poin
     
     # Color normalization
     norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
-    cmap = cm.get_cmap('RdBu_r')  # Red for tension, blue for compression
+    try:
+        # Use new API (matplotlib >= 3.7)
+        import matplotlib
+        cmap = matplotlib.colormaps['RdBu_r']  # Red for tension, blue for compression
+    except (AttributeError, KeyError):
+        # Fallback for older matplotlib versions
+        cmap = cm.get_cmap('RdBu_r')
     
     # Plot elements and stress distributions
     for el_data in element_data:
