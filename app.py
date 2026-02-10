@@ -1365,7 +1365,6 @@ with tab2:
                         
                         # Map direction to labels
                         direction_labels = {0: "X", 1: "Y", 2: "Rotation"}
-                        direction_units = {0: "N", 1: "N", 2: "N·m"}
                         
                         # Create node lookup dictionary for O(1) access
                         node_lookup = {n.id: n for n in mesh.nodes}
@@ -1378,8 +1377,7 @@ with tab2:
                                 "X": f"{node.x:.4f}",
                                 "Y": f"{node.y:.4f}",
                                 "Direction": direction_labels[direction],
-                                "Reaction": f"{force:.6e}",
-                                "Unit": direction_units[direction]
+                                "Reaction": f"{force:.6e}"
                             })
                         
                         df_reactions = pd.DataFrame(reaction_data)

@@ -241,8 +241,8 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
     # Update layout
     fig.update_layout(
         title="Structure Preview - Nodes, Elements, Loads, and Constraints",
-        xaxis_title="x (m)",
-        yaxis_title="y (m)",
+        xaxis_title="x",
+        yaxis_title="y",
         showlegend=True,
         width=900,
         height=600,
@@ -386,7 +386,7 @@ def plot_structure_diagram(structure_results, force_type="moment", n_points=50, 
                 x=x_poly,
                 y=y_poly,
                 fill='toself',
-                fillcolor='rgba(0,0,255,0.2)' if force_type == "moment" else 'rgba(255,140,0,0.2)' if force_type == "shear" else 'rgba(0,128,0,0.2)',
+                fillcolor='rgba(0,128,0,0.2)',
                 line=dict(color='rgba(0,0,0,0)', width=0),
                 hoverinfo='skip',
                 showlegend=False,
@@ -692,8 +692,8 @@ def plot_normal_stress_side_view(element_result, x, n_points=30):
     # Update layout
     fig.update_layout(
         title=f"Normal Stress Profile - Side View at x={x:.2f}",
-        xaxis_title="Position along element (m)",
-        yaxis_title="Section height (m)",
+        xaxis_title="Position along element",
+        yaxis_title="Section height",
         width=900,
         height=500,
         showlegend=False,
