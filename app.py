@@ -1487,8 +1487,10 @@ with tab3:
                     - Each colored line represents stress at a specific fiber position (y-coordinate in cross-section)
                     - Lines offset from the beam centerline show stress magnitude
                     - Hover over lines to see exact stress values
-                    - Top fiber (y > 0): typically under tension for downward loads
-                    - Bottom fiber (y < 0): typically under compression for downward loads
+                    - Color indicates stress type:
+                      - Red shades = tension (positive stress)
+                      - Blue shades = compression (negative stress)
+                    - Stress distribution depends on loading and boundary conditions
                     """)
                 except Exception as e:
                     st.error(f"Error generating side view stress distribution: {e}")

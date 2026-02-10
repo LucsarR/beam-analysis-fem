@@ -613,7 +613,6 @@ def plot_normal_stress_side_view(structure_results, fiber_positions=None, n_poin
         perp = np.array([-dy, dx]) / L if L > 0 else np.array([0, 1])
         
         # Plot stress distribution for each fiber position
-        fiber_colors = ['red', 'green', 'blue']  # Different colors for different fibers
         fiber_names = ['Top Fiber', 'Neutral Axis', 'Bottom Fiber']
         
         for idx, y_fiber in enumerate(el_data['fibers']):
@@ -645,14 +644,13 @@ def plot_normal_stress_side_view(structure_results, fiber_positions=None, n_poin
                 pxs.append(px)
                 pys.append(py)
             
+            # Determine fiber label
+            fiber_label = fiber_names[idx] if idx < len(fiber_names) else f"Fiber {idx+1}"
+            
             # Plot stress line with gradient coloring
             for i in range(n_points - 1):
                 color_rgba = cmap(norm(stresses[i]))
                 color_hex = mcolors.to_hex(color_rgba)
-                
-                fiber_label = f"y={y_fiber:.4f}m" if idx < len(fiber_names) else f"Fiber {idx+1}"
-                if idx < len(fiber_names):
-                    fiber_label = fiber_names[idx]
                 
                 fig.add_trace(go.Scatter(
                     x=[pxs[i], pxs[i+1]],
@@ -664,13 +662,18 @@ def plot_normal_stress_side_view(structure_results, fiber_positions=None, n_poin
                     showlegend=False
                 ))
             
-            # Add a single legend entry for this fiber (using the first segment)
+            # Add a single legend entry for this fiber (using representative color from colormap)
+            # Use the average stress for this fiber to determine a representative color
             if el_result == element_data[0]['element']:  # Only add legend for first element
+                avg_stress = np.mean(stresses)
+                representative_color_rgba = cmap(norm(avg_stress))
+                representative_color_hex = mcolors.to_hex(representative_color_rgba)
+                
                 fig.add_trace(go.Scatter(
                     x=[None], y=[None],
                     mode='lines',
-                    line=dict(color=fiber_colors[idx] if idx < len(fiber_colors) else 'gray', width=3),
-                    name=f'{fiber_names[idx] if idx < len(fiber_names) else f"Fiber {idx+1}"} (y={y_fiber:.4f}m)',
+                    line=dict(color=representative_color_hex, width=3),
+                    name=f'{fiber_label} (y={y_fiber:.4f}m)',
                     showlegend=True
                 ))
     
