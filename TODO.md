@@ -17,14 +17,23 @@
 - [ ] Procurar por codigo duplicado(deixar mais clean)
 
 # Ajuste do front-end
-- [ ] Opcao de preview na estrutura com forças e cargas
-- [x] Preview da section na hora de selecionar
 - [ ] Na aba analyses nao diz o total de nos considerando o mesh
 - [ ] Tirar +- dos itens que exigem um valor especifico para rodar(posicoes dos nos, E, G, poisson,etc)
 - [ ] Verificar unidades no app (retirar todas), e numero de casa depois da virgula deixar usuario escolher
 - [ ] Point Loads inicia em Y force arrumar
 - [ ] Arrumar Load de arquivo para rodar deve-se deletar o arquivo
-- [ ] Distrubuted Loads inicia com aba fechada
+- [ ] Arrumar botar valores as vezes tem que clicar no enter para aceitar o valor
+
+# Ajustes Professor
+- [ ] Verificar Timoshenko com os exemplos do livro (Logan e o Reddy) e colocar mais tipos de carga (carga distribuida.etc).
+- [ ] Procurar artigos de Reddy-Bickford (prioridade de pesquisa)
+- [ ] Implementar euler-bernoulli 3node.
+- [ ] Implementar distribuição de sigma normal visao de lado
+- [ ] Arrumar cor das areas acima do elemento (colocar cores claras)
+- [ ] Arrumar direção do vetor de area
+- [ ] Checar função no load distribuido
+- [ ] Implementar reação
+- [ ] Tentar fazer com integração numérica como uma solução paralela da matriz de rigidez (baixa prioridade)
 
 - pag 242 a first course
 - pag 282 a first course

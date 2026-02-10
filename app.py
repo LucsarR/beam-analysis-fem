@@ -1071,7 +1071,7 @@ with tab1:
             st.info("ℹ️ No point loads defined.")
 
     # --- Input: Distributed Loads ---
-    with st.expander("📏 Distributed Loads", expanded=False):
+    with st.expander("📏 Distributed Loads", expanded=True):
         st.markdown("Define distributed loads along elements.")
         
         n_dist_loads = st.number_input(
@@ -1420,6 +1420,8 @@ with tab3:
                 except Exception as e:
                     st.error(f"Error generating diagram: {e}")
         
+        # TODO: Implementar distribuição de sigma normal visao de lado.
+
         # Normal Stress Distribution
         with st.expander("🔍 Normal Stress Distribution in Cross Section", expanded=False):
             element_ids = [el.id for el in st.session_state["mesh"].elements]
