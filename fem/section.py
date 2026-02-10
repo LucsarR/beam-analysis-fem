@@ -2,6 +2,9 @@ from abc import ABC, abstractmethod
 import math
 import numpy as np
 
+# Constants
+DEFAULT_GRID_RESOLUTION = 100  # Default number of grid points for xy_grid generation
+
 class Section(ABC):
     """
     Abstract base class for cross-sectional properties.
@@ -24,7 +27,7 @@ class Section(ABC):
             raise ValueError("Section area/inertia not set.")
         return N / self.area - M * y / self.inertia
 
-    def xy_grid(self, n_points=100):
+    def xy_grid(self, n_points=DEFAULT_GRID_RESOLUTION):
         """
         Returns X, Y, mask arrays for the section shape in local coordinates.
         Default: None (not implemented).
@@ -36,7 +39,7 @@ class Section(ABC):
         Returns (y_min, y_max) for the section.
         Default implementation tries to use xy_grid, subclasses can override.
         """
-        X, Y, mask = self.xy_grid(100)
+        X, Y, mask = self.xy_grid(DEFAULT_GRID_RESOLUTION)
         if X is None:
             # For general sections without geometry, estimate from inertia
             if self.area and self.inertia:

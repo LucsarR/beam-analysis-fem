@@ -3,6 +3,9 @@ import plotly.graph_objects as go
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 
+# Constants
+STRESS_TOLERANCE = 1e-6  # Tolerance for detecting near-zero stress values
+
 def plot_structure_preview(nodes, elements, properties, constraints, point_loads, distributed_loads):
     """
     Interactive Plotly plot: structure preview showing nodes, elements, loads, and constraints
@@ -579,7 +582,7 @@ def plot_normal_stress_side_view(element_result, n_points=50):
     ))
     
     # Add stress at neutral axis (if it varies)
-    if not np.allclose(stress_neutral, 0.0, atol=1e-6):
+    if not np.allclose(stress_neutral, 0.0, atol=STRESS_TOLERANCE):
         fig.add_trace(go.Scatter(
             x=xs,
             y=stress_neutral,
