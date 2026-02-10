@@ -620,6 +620,14 @@ def plot_normal_stress_side_view(element_result, n_points=20):
     norm = mcolors.Normalize(vmin=-stress_max, vmax=stress_max)
     cmap = cm.get_cmap('rainbow')
     
+    # Collect hover information for top and bottom fibers
+    top_hover_xs = []
+    top_hover_ys = []
+    top_hover_texts = []
+    bottom_hover_xs = []
+    bottom_hover_ys = []
+    bottom_hover_texts = []
+    
     # Plot stress arrows at top fiber
     for i, x_local in enumerate(xs_local):
         t = x_local / L
@@ -656,9 +664,13 @@ def plot_normal_stress_side_view(element_result, n_points=20):
             arrowsize=1,
             arrowwidth=2,
             arrowcolor=color_hex,
-            text='',
-            hovertext=f'x={x_local:.3f}<br>σ_top={stress_val:.3f} MPa'
+            text=''
         )
+        
+        # Store hover information
+        top_hover_xs.append(top_x + arrow_dx)
+        top_hover_ys.append(top_y + arrow_dy)
+        top_hover_texts.append(f'Top fiber<br>x={x_local:.3f} m<br>σ={stress_val:.3f} MPa')
         
         # Bottom fiber arrow
         bottom_x = px - perp_x * section_height / 2
@@ -690,22 +702,49 @@ def plot_normal_stress_side_view(element_result, n_points=20):
             arrowsize=1,
             arrowwidth=2,
             arrowcolor=color_hex,
-            text='',
-            hovertext=f'x={x_local:.3f}<br>σ_bottom={stress_val:.3f} MPa'
+            text=''
         )
+        
+        # Store hover information
+        bottom_hover_xs.append(bottom_x + arrow_dx)
+        bottom_hover_ys.append(bottom_y + arrow_dy)
+        bottom_hover_texts.append(f'Bottom fiber<br>x={x_local:.3f} m<br>σ={stress_val:.3f} MPa')
     
-    # Add colorbar using a dummy scatter trace
-    colorbar_vals = np.linspace(-stress_max, stress_max, 100)
+    # Add invisible hover markers at arrow tips
     fig.add_trace(go.Scatter(
-        x=[None] * 100,
-        y=[None] * 100,
+        x=top_hover_xs,
+        y=top_hover_ys,
+        mode='markers',
+        marker=dict(size=8, opacity=0),
+        text=top_hover_texts,
+        hoverinfo='text',
+        showlegend=False
+    ))
+    
+    fig.add_trace(go.Scatter(
+        x=bottom_hover_xs,
+        y=bottom_hover_ys,
+        mode='markers',
+        marker=dict(size=8, opacity=0),
+        text=bottom_hover_texts,
+        hoverinfo='text',
+        showlegend=False
+    ))
+    
+    # Add colorbar using a minimal scatter trace
+    colorbar_vals = np.linspace(-stress_max, stress_max, 2)
+    fig.add_trace(go.Scatter(
+        x=[0],
+        y=[0],
         mode='markers',
         marker=dict(
             size=0.1,
             color=colorbar_vals,
             colorscale='rainbow',
             colorbar=dict(title='Normal Stress (MPa)'),
-            showscale=True
+            showscale=True,
+            cmin=-stress_max,
+            cmax=stress_max
         ),
         hoverinfo='none',
         showlegend=False
