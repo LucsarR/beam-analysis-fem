@@ -1420,7 +1420,7 @@ with tab3:
                 except Exception as e:
                     st.error(f"Error generating diagram: {e}")
         
-        # TODO: Implementar distribuição de sigma normal visao de lado.
+        # TODO: Implementar distribuição de sigma normal visao de lado. em conjunto com a distribuição de sigma normal na seção transversal, para comparação entre elas.
 
         # Normal Stress Distribution
         with st.expander("🔍 Normal Stress Distribution in Cross Section", expanded=False):
