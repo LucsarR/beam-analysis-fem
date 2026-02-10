@@ -323,8 +323,12 @@ class EulerBernoulliElement3Node(Element):
             
             # Now enforce compatibility: dw/dx = θ
             # Using penalty method with carefully chosen penalty parameter
-            # Penalty should be large enough to enforce constraint but not cause ill-conditioning
-            penalty = 10000 * E * I / L  # Increased penalty parameter for better constraint enforcement
+            # The penalty value of 10000*EI/L was chosen empirically to:
+            # 1. Enforce the Euler-Bernoulli constraint θ = dw/dx reasonably well
+            # 2. Avoid numerical ill-conditioning from too large a penalty
+            # 3. Balance constraint enforcement with solution accuracy
+            # For better accuracy, use finer meshes rather than increasing penalty
+            penalty = 10000 * E * I / L  # Empirically chosen for constraint/conditioning balance
             
             # Quadratic shape functions for v
             N1_v = (1 - xi) * (1 - 2*xi)
@@ -561,6 +565,8 @@ class EulerBernoulliElement3Node(Element):
         d2theta_dx2 = (1/L**2) * (d2N1_theta_dxi2 * theta1 + d2N2_theta_dxi2 * theta2 + d2N3_theta_dxi2 * theta3)
         
         # Shear force: V = -EI * d²θ/dx²
+        # Sign convention: negative because V = -dM/dx for Euler-Bernoulli beams
+        # Positive shear causes counterclockwise rotation of the element
         return -E * I * d2theta_dx2
 
     def normal_force(self, x, displacements):
