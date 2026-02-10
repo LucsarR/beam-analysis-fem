@@ -330,7 +330,10 @@ def plot_structure_diagram(structure_results, force_type="moment", n_points=50, 
 
         dx = x2 - x1
         dy = y2 - y1
-        perp = np.array([-dy, dx])
+        # Perpendicular vector: rotate 90° clockwise to place diagrams on right side
+        # This ensures fill area appears "above" the element in global coordinates
+        # Changed from [-dy, dx] to [dy, -dx] to fix TODO item: "Arrumar direção do vetor de area"
+        perp = np.array([dy, -dx])
         norm_perp = np.linalg.norm(perp)
         if norm_perp > 0:
             perp = perp / norm_perp

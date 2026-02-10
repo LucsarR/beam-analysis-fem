@@ -32,9 +32,10 @@ class StructureResults:
     """
     Manages results for all elements in the mesh.
     """
-    def __init__(self, mesh, displacements):
+    def __init__(self, mesh, displacements, reactions=None):
         self.mesh = mesh
         self.displacements = displacements
+        self.reactions = reactions  # Dictionary: {(node_id, direction): reaction_force}
         self.element_results = [
             ElementResults(el, self._get_element_dofs(el)) for el in mesh.elements
         ]
