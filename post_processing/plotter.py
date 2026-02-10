@@ -495,3 +495,204 @@ def plot_normal_stress_distribution(element_result, x, n_points=200):
     )
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     return fig
+
+def plot_normal_stress_side_view(element_result, x, n_points=30):
+    """
+    Interactive Plotly plot: Side view of normal stress distribution along the element height.
+    Shows:
+    - Horizontal line representing the beam element (side view)
+    - Vertical line at cut position x
+    - Stress profile with arrows showing stress magnitude and direction at different heights
+    
+    Args:
+        element_result: ElementResults object
+        x: Position along element where to show stress
+        n_points: Number of points to sample along the section height
+    
+    Returns:
+        Plotly figure object
+    """
+    section = element_result.element.section
+    
+    # Get normal force and moment at position x
+    N = element_result.normal_force(x)
+    M = element_result.bending_moment(x)
+    
+    # Determine section height range
+    if hasattr(section, 'height'):
+        # Rectangular or tube sections
+        h = section.height
+        y_min, y_max = -h/2, h/2
+    elif hasattr(section, 'diameter'):
+        # Circular sections
+        d = section.diameter
+        y_min, y_max = -d/2, d/2
+    else:
+        # Generic section - use a reasonable default
+        y_min, y_max = -0.1, 0.1
+    
+    # Sample stress values at different heights
+    y_values = np.linspace(y_min, y_max, n_points)
+    sigma_values = np.array([section.normal_stress(N, M, y) for y in y_values])
+    
+    # Determine max stress for scaling arrows
+    max_sigma = np.max(np.abs(sigma_values))
+    if max_sigma < 1e-12:
+        max_sigma = 1.0  # Avoid division by zero
+    
+    # Create figure
+    fig = go.Figure()
+    
+    # Element length
+    L = element_result.length
+    
+    # Draw beam element as horizontal line (side view)
+    fig.add_trace(go.Scatter(
+        x=[0, L],
+        y=[0, 0],
+        mode='lines',
+        line=dict(color='black', width=4),
+        name='Beam Element',
+        hoverinfo='text',
+        text=[f'Element start (x=0)', f'Element end (x={L:.3f})'],
+        showlegend=False
+    ))
+    
+    # Draw vertical line at cut position
+    section_height = y_max - y_min
+    fig.add_trace(go.Scatter(
+        x=[x, x],
+        y=[-section_height*0.6, section_height*0.6],
+        mode='lines',
+        line=dict(color='red', width=3, dash='dash'),
+        name='Cut Position',
+        hoverinfo='text',
+        text=[f'Cut at x={x:.3f}', ''],
+        showlegend=False
+    ))
+    
+    # Colormap for stress values
+    vmin = np.min(sigma_values)
+    vmax = np.max(sigma_values)
+    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+    cmap = cm.get_cmap('rainbow')
+    
+    # Scale factor for arrows (proportional to element length)
+    arrow_scale = L * 0.15
+    
+    # Draw stress profile with arrows at each height
+    for i, (y, sigma) in enumerate(zip(y_values, sigma_values)):
+        # Normalize stress for arrow length
+        sigma_normalized = sigma / max_sigma if max_sigma > 0 else 0
+        arrow_length = sigma_normalized * arrow_scale
+        
+        # Arrow color based on stress value
+        color_rgba = cmap(norm(sigma))
+        color_hex = mcolors.to_hex(color_rgba)
+        
+        # Arrow position: starts at cut line, extends based on stress
+        x_start = x
+        x_end = x + arrow_length
+        
+        # Draw arrow line
+        fig.add_trace(go.Scatter(
+            x=[x_start, x_end],
+            y=[y, y],
+            mode='lines',
+            line=dict(color=color_hex, width=2),
+            hoverinfo='text',
+            text=[f'Height y={y:.4f}<br>Stress σ={sigma:.3f}'],
+            showlegend=False
+        ))
+        
+        # Add arrowhead
+        if abs(arrow_length) > 1e-6:
+            # Arrowhead direction based on stress sign
+            arrow_sign = np.sign(arrow_length)
+            arrow_size = min(abs(arrow_length) * 0.15, L * 0.02)
+            
+            fig.add_annotation(
+                x=x_end,
+                y=y,
+                ax=x_end - arrow_sign * arrow_size * 1.5,
+                ay=y,
+                xref='x',
+                yref='y',
+                axref='x',
+                ayref='y',
+                showarrow=True,
+                arrowhead=2,
+                arrowsize=1.5,
+                arrowwidth=2,
+                arrowcolor=color_hex
+            )
+    
+    # Add text annotations for compression/tension
+    if len(sigma_values) > 0:
+        # Top fiber
+        top_stress = sigma_values[-1]
+        fig.add_annotation(
+            x=L * 1.05,
+            y=y_max,
+            text=f"Top: σ={top_stress:.2f}",
+            showarrow=False,
+            font=dict(size=10),
+            bgcolor="rgba(255,255,255,0.8)"
+        )
+        
+        # Bottom fiber
+        bottom_stress = sigma_values[0]
+        fig.add_annotation(
+            x=L * 1.05,
+            y=y_min,
+            text=f"Bottom: σ={bottom_stress:.2f}",
+            showarrow=False,
+            font=dict(size=10),
+            bgcolor="rgba(255,255,255,0.8)"
+        )
+    
+    # Calculate and show neutral axis if moment exists
+    if abs(M) > 1e-12:
+        y_neutral = N * section.inertia / (M * section.area)
+        if y_min <= y_neutral <= y_max:
+            # Draw neutral axis
+            fig.add_trace(go.Scatter(
+                x=[0, L],
+                y=[y_neutral, y_neutral],
+                mode='lines',
+                line=dict(color='gray', dash='dot', width=2),
+                name='Neutral Axis',
+                hoverinfo='text',
+                text=[f'Neutral Axis (y={y_neutral:.4f})', ''],
+                showlegend=False
+            ))
+    
+    # Add colorbar
+    colorbar_vals = np.linspace(vmin, vmax, 100)
+    fig.add_trace(go.Scatter(
+        x=[None]*100,
+        y=[None]*100,
+        mode='markers',
+        marker=dict(
+            size=0.1,
+            color=colorbar_vals,
+            colorscale='rainbow',
+            colorbar=dict(title="Normal Stress (σ)", x=1.15),
+            showscale=True
+        ),
+        hoverinfo='none',
+        showlegend=False
+    ))
+    
+    # Update layout
+    fig.update_layout(
+        title=f"Normal Stress Profile - Side View at x={x:.2f}",
+        xaxis_title="Position along element (m)",
+        yaxis_title="Section height (m)",
+        width=900,
+        height=500,
+        showlegend=False,
+        hovermode='closest'
+    )
+    
+    return fig
