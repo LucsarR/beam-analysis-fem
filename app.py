@@ -475,7 +475,7 @@ with tab1:
                     
                     st.markdown("**Material Properties**")
                     E = st.number_input(
-                        "Young's Modulus E (MPa)",
+                        "Young's Modulus E",
                         value=existing_prop["material"].E if existing_prop and "material" in existing_prop else DEFAULT_E,
                         format="%.2e",
                         key=f"E_{i}",
@@ -512,14 +512,14 @@ with tab1:
                     # Section-specific inputs with validation
                     if section_type == "rectangular_bar":
                         width = st.number_input(
-                            "Width (m)",
+                            "Width",
                             value=existing_kwargs.get("width", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"width_{i}"
                         )
                         height = st.number_input(
-                            "Height (m)",
+                            "Height",
                             value=existing_kwargs.get("height", 0.10),
                             format="%.4f",
                             min_value=0.0001,
@@ -529,21 +529,21 @@ with tab1:
                     
                     elif section_type == "rectangular_tube":
                         width = st.number_input(
-                            "Width (m)",
+                            "Width",
                             value=existing_kwargs.get("width", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"width_{i}"
                         )
                         height = st.number_input(
-                            "Height (m)",
+                            "Height",
                             value=existing_kwargs.get("height", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"height_{i}"
                         )
                         thickness = st.number_input(
-                            "Wall Thickness (m)",
+                            "Wall Thickness",
                             value=existing_kwargs.get("thickness", 0.005),
                             format="%.4f",
                             min_value=0.0001,
@@ -557,7 +557,7 @@ with tab1:
                     
                     elif section_type == "circular_bar":
                         diameter = st.number_input(
-                            "Diameter (m)",
+                            "Diameter",
                             value=existing_kwargs.get("diameter", 0.05),
                             format="%.4f",
                             min_value=0.0001,
@@ -567,14 +567,14 @@ with tab1:
                     
                     elif section_type == "circular_tube":
                         outer_diameter = st.number_input(
-                            "Outer Diameter (m)",
+                            "Outer Diameter",
                             value=existing_kwargs.get("outer_diameter", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"odiam_{i}"
                         )
                         thickness = st.number_input(
-                            "Wall Thickness (m)",
+                            "Wall Thickness",
                             value=existing_kwargs.get("thickness", 0.005),
                             format="%.4f",
                             min_value=0.0001,
@@ -588,21 +588,21 @@ with tab1:
                     
                     elif section_type == "trapezoidal_bar":
                         base1 = st.number_input(
-                            "Base 1 (m)",
+                            "Base 1",
                             value=existing_kwargs.get("base1", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"base1_{i}"
                         )
                         base2 = st.number_input(
-                            "Base 2 (m)",
+                            "Base 2",
                             value=existing_kwargs.get("base2", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"base2_{i}"
                         )
                         height = st.number_input(
-                            "Height (m)",
+                            "Height",
                             value=existing_kwargs.get("height", 0.10),
                             format="%.4f",
                             min_value=0.0001,
@@ -612,28 +612,28 @@ with tab1:
                     
                     elif section_type == "trapezoidal_tube":
                         base1 = st.number_input(
-                            "Base 1 (m)",
+                            "Base 1",
                             value=existing_kwargs.get("base1", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"base1_{i}"
                         )
                         base2 = st.number_input(
-                            "Base 2 (m)",
+                            "Base 2",
                             value=existing_kwargs.get("base2", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"base2_{i}"
                         )
                         height = st.number_input(
-                            "Height (m)",
+                            "Height",
                             value=existing_kwargs.get("height", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"height_{i}"
                         )
                         thickness = st.number_input(
-                            "Wall Thickness (m)",
+                            "Wall Thickness",
                             value=existing_kwargs.get("thickness", 0.005),
                             format="%.4f",
                             min_value=0.0001,
@@ -643,7 +643,7 @@ with tab1:
                     
                     elif section_type == "hexagonal_bar":
                         side = st.number_input(
-                            "Side Length (m)",
+                            "Side Length",
                             value=existing_kwargs.get("side", 0.05),
                             format="%.4f",
                             min_value=0.0001,
@@ -653,14 +653,14 @@ with tab1:
                     
                     elif section_type == "hexagonal_tube":
                         outer_side = st.number_input(
-                            "Outer Side Length (m)",
+                            "Outer Side Length",
                             value=existing_kwargs.get("outer_side", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"oside_{i}"
                         )
                         thickness = st.number_input(
-                            "Wall Thickness (m)",
+                            "Wall Thickness",
                             value=existing_kwargs.get("thickness", 0.005),
                             format="%.4f",
                             min_value=0.0001,
@@ -670,28 +670,28 @@ with tab1:
                     
                     elif section_type == "ibeam":
                         h = st.number_input(
-                            "Height h (m)",
+                            "Height h",
                             value=existing_kwargs.get("h", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"h_{i}"
                         )
                         b = st.number_input(
-                            "Flange Width b (m)",
+                            "Flange Width b",
                             value=existing_kwargs.get("b", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"b_{i}"
                         )
                         tw = st.number_input(
-                            "Web Thickness tw (m)",
+                            "Web Thickness tw",
                             value=existing_kwargs.get("tw", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"tw_{i}"
                         )
                         tf = st.number_input(
-                            "Flange Thickness tf (m)",
+                            "Flange Thickness tf",
                             value=existing_kwargs.get("tf", 0.005),
                             format="%.4f",
                             min_value=0.0001,
@@ -701,28 +701,28 @@ with tab1:
                     
                     elif section_type == "c_section":
                         h = st.number_input(
-                            "Height h (m)",
+                            "Height h",
                             value=existing_kwargs.get("h", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"h_{i}"
                         )
                         b = st.number_input(
-                            "Flange Width b (m)",
+                            "Flange Width b",
                             value=existing_kwargs.get("b", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"b_{i}"
                         )
                         tw = st.number_input(
-                            "Web Thickness tw (m)",
+                            "Web Thickness tw",
                             value=existing_kwargs.get("tw", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"tw_{i}"
                         )
                         tf = st.number_input(
-                            "Flange Thickness tf (m)",
+                            "Flange Thickness tf",
                             value=existing_kwargs.get("tf", 0.005),
                             format="%.4f",
                             min_value=0.0001,
@@ -732,21 +732,21 @@ with tab1:
                     
                     elif section_type == "l_section":
                         b = st.number_input(
-                            "Width b (m)",
+                            "Width b",
                             value=existing_kwargs.get("b", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"b_{i}"
                         )
                         h = st.number_input(
-                            "Height h (m)",
+                            "Height h",
                             value=existing_kwargs.get("h", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"h_{i}"
                         )
                         t = st.number_input(
-                            "Thickness t (m)",
+                            "Thickness t",
                             value=existing_kwargs.get("t", 0.005),
                             format="%.4f",
                             min_value=0.0001,
@@ -756,28 +756,28 @@ with tab1:
                     
                     elif section_type == "t_section":
                         b = st.number_input(
-                            "Flange Width b (m)",
+                            "Flange Width b",
                             value=existing_kwargs.get("b", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"b_{i}"
                         )
                         h = st.number_input(
-                            "Height h (m)",
+                            "Height h",
                             value=existing_kwargs.get("h", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"h_{i}"
                         )
                         tw = st.number_input(
-                            "Web Thickness tw (m)",
+                            "Web Thickness tw",
                             value=existing_kwargs.get("tw", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"tw_{i}"
                         )
                         tf = st.number_input(
-                            "Flange Thickness tf (m)",
+                            "Flange Thickness tf",
                             value=existing_kwargs.get("tf", 0.005),
                             format="%.4f",
                             min_value=0.0001,
@@ -787,28 +787,28 @@ with tab1:
                     
                     elif section_type == "z_section":
                         h = st.number_input(
-                            "Height h (m)",
+                            "Height h",
                             value=existing_kwargs.get("h", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"h_{i}"
                         )
                         b = st.number_input(
-                            "Flange Width b (m)",
+                            "Flange Width b",
                             value=existing_kwargs.get("b", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"b_{i}"
                         )
                         tw = st.number_input(
-                            "Web Thickness tw (m)",
+                            "Web Thickness tw",
                             value=existing_kwargs.get("tw", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"tw_{i}"
                         )
                         tf = st.number_input(
-                            "Flange Thickness tf (m)",
+                            "Flange Thickness tf",
                             value=existing_kwargs.get("tf", 0.005),
                             format="%.4f",
                             min_value=0.0001,
@@ -818,28 +818,28 @@ with tab1:
                     
                     elif section_type == "hat_section":
                         h = st.number_input(
-                            "Height h (m)",
+                            "Height h",
                             value=existing_kwargs.get("h", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"h_{i}"
                         )
                         b = st.number_input(
-                            "Flange Width b (m)",
+                            "Flange Width b",
                             value=existing_kwargs.get("b", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"b_{i}"
                         )
                         tw = st.number_input(
-                            "Web Thickness tw (m)",
+                            "Web Thickness tw",
                             value=existing_kwargs.get("tw", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"tw_{i}"
                         )
                         tf = st.number_input(
-                            "Flange Thickness tf (m)",
+                            "Flange Thickness tf",
                             value=existing_kwargs.get("tf", 0.005),
                             format="%.4f",
                             min_value=0.0001,
@@ -1335,11 +1335,11 @@ with tab2:
                         theta = displacements[3*i+2]
                         disp_data.append({
                             "Node": node.id,
-                            "X (m)": f"{node.x:.4f}",
-                            "Y (m)": f"{node.y:.4f}",
-                            "U (m)": f"{u:.6e}",
-                            "V (m)": f"{v:.6e}",
-                            "θ (rad)": f"{theta:.6e}"
+                            "X": f"{node.x:.4f}",
+                            "Y": f"{node.y:.4f}",
+                            "U": f"{u:.6e}",
+                            "V": f"{v:.6e}",
+                            "θ": f"{theta:.6e}"
                         })
                     
                     df_disp = pd.DataFrame(disp_data)
@@ -1441,7 +1441,7 @@ with tab3:
                 
                 with col2:
                     x_pos = st.slider(
-                        "Position along element (m)",
+                        "Position along element",
                         min_value=0.0,
                         max_value=float(selected_element_result.length),
                         value=0.0,
