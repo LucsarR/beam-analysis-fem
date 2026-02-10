@@ -1367,9 +1367,12 @@ with tab2:
                         direction_labels = {0: "X", 1: "Y", 2: "Rotation"}
                         direction_units = {0: "N", 1: "N", 2: "N·m"}
                         
+                        # Create node lookup dictionary for O(1) access
+                        node_lookup = {n.id: n for n in mesh.nodes}
+                        
                         reaction_data = []
                         for (node_id, direction), force in reactions.items():
-                            node = next(n for n in mesh.nodes if n.id == node_id)
+                            node = node_lookup[node_id]
                             reaction_data.append({
                                 "Node": node_id,
                                 "X": f"{node.x:.4f}",
