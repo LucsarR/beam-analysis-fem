@@ -417,6 +417,11 @@ def plot_structure_diagram(structure_results, force_type="moment", n_points=50, 
         width=900,
         height=600
     )
+    
+    # Equal aspect ratio to ensure perpendicular vectors appear at true 90°
+    # This fixes the visual issue where fill areas appear at wrong angles for inclined beams
+    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    
     return fig
 
 def plot_normal_stress_distribution(element_result, x, n_points=200):

@@ -1316,12 +1316,16 @@ with tab2:
                     analysis.assemble()
                     displacements = analysis.solve()
                     
+                    # Get reactions from analysis
+                    reactions = analysis.get_reactions()
+                    
                     # Store results
                     st.session_state["mesh"] = mesh
                     st.session_state["displacements"] = displacements
+                    st.session_state["reactions"] = reactions
                     
                     # Prepare post-processing
-                    structure_results = StructureResults(mesh, displacements)
+                    structure_results = StructureResults(mesh, displacements, reactions)
                     st.session_state["structure_results"] = structure_results
                     
                     st.success("✅ Analysis completed successfully!")
@@ -1354,6 +1358,44 @@ with tab2:
                         "text/csv",
                         use_container_width=True
                     )
+                    
+                    # Display reactions at constraints
+                    if reactions:
+                        st.subheader("⚙️ Reaction Forces at Constraints")
+                        
+                        # Map direction to labels
+                        direction_labels = {0: "X", 1: "Y", 2: "Rotation"}
+                        direction_units = {0: "N", 1: "N", 2: "N·m"}
+                        
+                        # Create node lookup dictionary for O(1) access
+                        node_lookup = {n.id: n for n in mesh.nodes}
+                        
+                        reaction_data = []
+                        for (node_id, direction), force in reactions.items():
+                            node = node_lookup[node_id]
+                            reaction_data.append({
+                                "Node": node_id,
+                                "X": f"{node.x:.4f}",
+                                "Y": f"{node.y:.4f}",
+                                "Direction": direction_labels[direction],
+                                "Reaction": f"{force:.6e}",
+                                "Unit": direction_units[direction]
+                            })
+                        
+                        df_reactions = pd.DataFrame(reaction_data)
+                        st.dataframe(df_reactions, use_container_width=True)
+                        
+                        # Export reactions CSV
+                        csv_reactions = df_reactions.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            "📥 Download Reactions CSV",
+                            csv_reactions,
+                            "reactions.csv",
+                            "text/csv",
+                            use_container_width=True
+                        )
+                        
+                        st.info("ℹ️ Positive reactions indicate forces in positive coordinate directions.")
                     
                     st.info("ℹ️ Go to the 'Results' tab to view diagrams and stress distributions.")
                     
@@ -1517,8 +1559,4 @@ with tab4:
     - **Load Types**: Point loads, distributed loads (constant, linear, custom functions)
     - **Analysis**: Linear static analysis with both Euler-Bernoulli and Timoshenko beam theories
     - **Visualization**: Force diagrams (moment, shear, normal), stress distributions, and deformed shapes
-    
-    ### ⚠️ Known Limitations
-    - Custom distributed load functions use Python syntax
-    - 3-node Euler-Bernoulli elements are not yet fully implemented
     """)

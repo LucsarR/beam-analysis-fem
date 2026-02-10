@@ -15,6 +15,7 @@
 - [ ] Testar Springs com restricao rotacional tbm
 - [ ] Load Distribution escrever bonitinho em Latex do lado no app.py
 - [ ] Procurar por codigo duplicado(deixar mais clean)
+- [ ] Verificar distribuicao shear diagram esta estranho para femap_test
 
 # Ajuste do front-end
 - [ ] Na aba analyses nao diz o total de nos considerando o mesh

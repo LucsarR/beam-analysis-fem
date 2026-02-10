@@ -9,6 +9,7 @@ class Analysis(ABC):
         self.mesh = mesh
         self.K_global = None
         self.F_global = None
+        self.reactions = None  # Store reactions calculated during solve
 
     @abstractmethod
     def assemble(self):
@@ -17,6 +18,13 @@ class Analysis(ABC):
     @abstractmethod
     def solve(self):
         pass
+    
+    def get_reactions(self):
+        """
+        Get the reaction forces calculated at constraints.
+        Returns None if no reactions were calculated.
+        """
+        return self.reactions
 
 class BeamAnalysis(Analysis):
     """
@@ -97,11 +105,17 @@ class BeamAnalysis(Analysis):
                 self.F_global[dof_indices[i]] += fe_global[i]
 
     def solve(self):
-        # Apply constraints
+        # Apply constraints (modifies K_global and F_global with penalty method)
         if hasattr(self.mesh, "constraints"):
             self.mesh.constraints.apply_all(self.K_global, self.F_global)
+        
         # Solve for displacements
         displacements = np.linalg.solve(self.K_global, self.F_global)
+        
+        # Calculate reactions at constraints and store in analysis object
+        if hasattr(self.mesh, "constraints") and len(self.mesh.constraints.constraints) > 0:
+            self.reactions = self.mesh.constraints.calculate_all_reactions(displacements)
+        
         return displacements
 
 # Alias for backward compatibility - old code may still use EulerBernoulliAnalysis
