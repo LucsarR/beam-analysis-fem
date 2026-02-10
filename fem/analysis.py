@@ -45,26 +45,15 @@ class BeamAnalysis(Analysis):
             fe_local = element.force_vector()
             
             # Get global DOF indices for the element
-            # Handle 2-node (6 DOF), 3-node (8 DOF for Euler-Bernoulli), and 3-node (9 DOF for Timoshenko) elements
+            # Handle 2-node (6 DOF) and 3-node (9 DOF) elements
             if hasattr(element, 'node_center') and element.node_center is not None:
-                # Check if it's a Timoshenko 3-node element (9 DOFs) or Euler-Bernoulli 3-node element (8 DOFs)
-                from fem.element import TimoshenkoElement3Node
-                if isinstance(element, TimoshenkoElement3Node):
-                    # 3-node Timoshenko element with 9 DOFs: [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3]
-                    # Center node has rotation DOF
-                    dof_indices = [
-                        3*(element.node_start.id-1), 3*(element.node_start.id-1)+1, 3*(element.node_start.id-1)+2,  # u1, v1, θ1
-                        3*(element.node_center.id-1), 3*(element.node_center.id-1)+1, 3*(element.node_center.id-1)+2,  # u2, v2, θ2
-                        3*(element.node_end.id-1), 3*(element.node_end.id-1)+1, 3*(element.node_end.id-1)+2  # u3, v3, θ3
-                    ]
-                else:
-                    # 3-node Euler-Bernoulli element with 8 DOFs: [u1, v1, θ1, u2, v2, u3, v3, θ3]
-                    # Center node has only u and v (no rotation)
-                    dof_indices = [
-                        3*(element.node_start.id-1), 3*(element.node_start.id-1)+1, 3*(element.node_start.id-1)+2,  # u1, v1, θ1
-                        3*(element.node_center.id-1), 3*(element.node_center.id-1)+1,  # u2, v2
-                        3*(element.node_end.id-1), 3*(element.node_end.id-1)+1, 3*(element.node_end.id-1)+2  # u3, v3, θ3
-                    ]
+                # 3-node element with 9 DOFs: [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3]
+                # Both Euler-Bernoulli and Timoshenko 3-node elements now have central node rotation
+                dof_indices = [
+                    3*(element.node_start.id-1), 3*(element.node_start.id-1)+1, 3*(element.node_start.id-1)+2,  # u1, v1, θ1
+                    3*(element.node_center.id-1), 3*(element.node_center.id-1)+1, 3*(element.node_center.id-1)+2,  # u2, v2, θ2
+                    3*(element.node_end.id-1), 3*(element.node_end.id-1)+1, 3*(element.node_end.id-1)+2  # u3, v3, θ3
+                ]
             else:
                 # 2-node element with 6 DOFs
                 node_ids = [element.node_start.id, element.node_end.id]
@@ -88,23 +77,14 @@ class BeamAnalysis(Analysis):
             el = load.element
             fe_global = load.apply(el)
             
-            # Handle 2-node, 3-node Euler-Bernoulli, and 3-node Timoshenko elements
+            # Handle 2-node and 3-node elements (all 3-node elements now have 9 DOFs)
             if hasattr(el, 'node_center') and el.node_center is not None:
-                from fem.element import TimoshenkoElement3Node
-                if isinstance(el, TimoshenkoElement3Node):
-                    # 3-node Timoshenko element with 9 DOFs
-                    dof_indices = [
-                        3*(el.node_start.id-1), 3*(el.node_start.id-1)+1, 3*(el.node_start.id-1)+2,
-                        3*(el.node_center.id-1), 3*(el.node_center.id-1)+1, 3*(el.node_center.id-1)+2,
-                        3*(el.node_end.id-1), 3*(el.node_end.id-1)+1, 3*(el.node_end.id-1)+2
-                    ]
-                else:
-                    # 3-node Euler-Bernoulli element with 8 DOFs
-                    dof_indices = [
-                        3*(el.node_start.id-1), 3*(el.node_start.id-1)+1, 3*(el.node_start.id-1)+2,
-                        3*(el.node_center.id-1), 3*(el.node_center.id-1)+1,
-                        3*(el.node_end.id-1), 3*(el.node_end.id-1)+1, 3*(el.node_end.id-1)+2
-                    ]
+                # 3-node element with 9 DOFs (both Euler-Bernoulli and Timoshenko)
+                dof_indices = [
+                    3*(el.node_start.id-1), 3*(el.node_start.id-1)+1, 3*(el.node_start.id-1)+2,
+                    3*(el.node_center.id-1), 3*(el.node_center.id-1)+1, 3*(el.node_center.id-1)+2,
+                    3*(el.node_end.id-1), 3*(el.node_end.id-1)+1, 3*(el.node_end.id-1)+2
+                ]
             else:
                 # 2-node element
                 node_ids = [el.node_start.id, el.node_end.id]

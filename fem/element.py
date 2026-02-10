@@ -227,39 +227,42 @@ class EulerBernoulliElement3Node(Element):
         L = np.sqrt((x3 - x1)**2 + (y3 - y1)**2)
         c = (x3 - x1) / L
         s = (y3 - y1) / L
-        # Transformation matrix for 3-node element (8x8)
-        # DOFs: [u1, v1, θ1, u2, v2, u3, v3, θ3]
-        # Note: Central node has no rotation DOF
-        R = np.zeros((8, 8))
+        # Transformation matrix for 3-node element (9x9)
+        # DOFs: [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3]
+        # Central node now has rotation DOF
+        R = np.zeros((9, 9))
         # Node 1: u1, v1, θ1
         R[0:2, 0:2] = np.array([[c, -s], [s, c]])
         R[2, 2] = 1
-        # Node 2 (center): u2, v2 (no rotation)
+        # Node 2 (center): u2, v2, θ2
         R[3:5, 3:5] = np.array([[c, -s], [s, c]])
+        R[5, 5] = 1
         # Node 3: u3, v3, θ3
-        R[5:7, 5:7] = np.array([[c, -s], [s, c]])
-        R[7, 7] = 1
+        R[6:8, 6:8] = np.array([[c, -s], [s, c]])
+        R[8, 8] = 1
         return L, c, s, R
 
     def stiffness_matrix(self):
         """
         Stiffness matrix for 3-node Euler-Bernoulli beam element.
         
-        The element has 8 DOFs: [u1, v1, θ1, u2, v2, u3, v3, θ3]
+        The element has 9 DOFs: [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3]
         - Axial: quadratic shape functions for u
-        - Bending: Hermite cubics + central bubble function for v
-        - Central node has no rotation DOF
+        - Bending: quadratic shape functions for rotation θ
+        - Displacement v is derived from θ using the Euler-Bernoulli relation: θ = dw/dx
+        - Central node now has rotation DOF
         
-        Shape functions:
-        - H1 = 1 - 3ξ² + 2ξ³ (v1)
-        - H2 = L(ξ - 2ξ² + ξ³) (θ1)
-        - Hb = 16ξ²(1-ξ)² (v2, bubble function)
-        - H3 = 3ξ² - 2ξ³ (v3)
-        - H4 = L(-ξ² + ξ³) (θ3)
+        For Euler-Bernoulli beams: M = EI * dθ/dx
+        Strain energy: U = ∫(EI/2)*(dθ/dx)² dx
+        
+        We use quadratic shape functions for θ:
+        - θ(ξ) = N1(ξ)*θ1 + N2(ξ)*θ2 + N3(ξ)*θ3
+        Where N1 = (1-ξ)(1-2ξ), N2 = 4ξ(1-ξ), N3 = ξ(2ξ-1)
+        
+        The displacement is obtained by integrating: w = ∫θ dx + constant
         
         References:
         - Reddy, J.N. "An Introduction to the Finite Element Method" (2006)
-        - Bathe, K.J. "Finite Element Procedures" (1996)
         """
         E = self.material.E
         A = self.section.area
@@ -267,41 +270,84 @@ class EulerBernoulliElement3Node(Element):
         L = self.length
         R = self.R
         
-        # Local stiffness matrix (8x8)
-        k_local = np.zeros((8, 8))
+        # Local stiffness matrix (9x9)
+        k_local = np.zeros((9, 9))
         
         # Axial stiffness using quadratic shape functions
-        # Shape functions: N1 = (1-ξ)(1-2ξ), N2 = 4ξ(1-ξ), N3 = ξ(2ξ-1)
-        # where ξ = x/L
         k_axial = E * A / (3 * L) * np.array([
             [7, -8, 1],
             [-8, 16, -8],
             [1, -8, 7]
         ])
         
-        # Assign axial stiffness to DOFs [u1, u2, u3] = [0, 3, 5]
-        axial_dofs = [0, 3, 5]
+        # Assign axial stiffness to DOFs [u1, u2, u3] = [0, 3, 6]
+        axial_dofs = [0, 3, 6]
         for i, ii in enumerate(axial_dofs):
             for j, jj in enumerate(axial_dofs):
                 k_local[ii, jj] = k_axial[i, j]
         
-        # Bending stiffness using Hermite shape functions with central bubble node
-        # Computed numerically via integration
-        # For 3-node element with v1, θ1, v2 (bubble), v3, θ3
-        # DOFs: [v1, θ1, v2, v3, θ3] = indices [1, 2, 4, 6, 7]
-        # Note: The coefficient 51.2 for the bubble function (v2) is derived from:
-        # ∫₀¹ (d²Hb/dξ²)² dξ where Hb = 16ξ²(1-ξ)² and d²Hb/dξ² = 32(3ξ²-3ξ+0.5)
-        # This evaluates to 51.2 when integrated over [0,1]
-        k_bending = E * I / (L**3) * np.array([
-            [12.0, 6.0*L, 0.0, -12.0, 6.0*L],
-            [6.0*L, 4.0*L**2, 0.0, -6.0*L, 2.0*L**2],
-            [0.0, 0.0, 51.2, 0.0, 0.0],  # 51.2 = ∫₀¹ (d²Hb/dξ²)² dξ
-            [-12.0, -6.0*L, 0.0, 12.0, -6.0*L],
-            [6.0*L, 2.0*L**2, 0.0, -6.0*L, 4.0*L**2]
-        ])
+        # Bending stiffness for Euler-Bernoulli beam
+        # Using quadratic shape functions for rotation θ
+        # DOFs for bending: [v1, θ1, v2, θ2, v3, θ3] = indices [1, 2, 4, 5, 7, 8]
+        bending_dofs = [1, 2, 4, 5, 7, 8]
+        n_bending = len(bending_dofs)
+        k_bending = np.zeros((n_bending, n_bending))
         
-        # Assign bending stiffness to DOFs [v1, θ1, v2, v3, θ3]
-        bending_dofs = [1, 2, 4, 6, 7]
+        # Numerical integration using 3-point Gauss quadrature
+        xi_gauss = np.array([-np.sqrt(3/5), 0, np.sqrt(3/5)])
+        w_gauss = np.array([5/9, 8/9, 5/9])
+        
+        for xi_g, w_g in zip(xi_gauss, w_gauss):
+            # Map from [-1,1] to [0,1]
+            xi = (xi_g + 1) / 2
+            
+            # Quadratic shape function derivatives for θ
+            # dN/dξ
+            dN1_dxi = -3 + 4*xi
+            dN2_dxi = 4 - 8*xi
+            dN3_dxi = -1 + 4*xi
+            
+            # dθ/dx = (1/L) * dθ/dξ = (1/L) * (dN1*θ1 + dN2*θ2 + dN3*θ3)
+            # Bending strain energy density: (EI/2) * (dθ/dx)²
+            
+            # Shape function vector for dθ/dx (on rotation DOFs only)
+            # We only put derivatives on θ DOFs, not v DOFs
+            dtheta_dx_vec = np.zeros(n_bending)
+            dtheta_dx_vec[1] = dN1_dxi / L  # θ1 position
+            dtheta_dx_vec[3] = dN2_dxi / L  # θ2 position
+            dtheta_dx_vec[5] = dN3_dxi / L  # θ3 position
+            
+            # Add contribution to stiffness: ∫ EI * (dθ/dx)² dx
+            # Jacobian for transformation: dx = (L/2) dξ_gauss
+            k_bending += E * I * np.outer(dtheta_dx_vec, dtheta_dx_vec) * (L/2) * w_g
+            
+            # Now enforce compatibility: dw/dx = θ
+            # Using penalty method with carefully chosen penalty parameter
+            # Penalty should be large enough to enforce constraint but not cause ill-conditioning
+            penalty = 10000 * E * I / L  # Increased penalty parameter for better constraint enforcement
+            
+            # Quadratic shape functions for v
+            N1_v = (1 - xi) * (1 - 2*xi)
+            N2_v = 4 * xi * (1 - xi)
+            N3_v = xi * (2*xi - 1)
+            
+            # dw/dx = (1/L) * dw/dξ
+            dw_dx_vec = np.zeros(n_bending)
+            dw_dx_vec[0] = dN1_dxi / L  # v1 position
+            dw_dx_vec[2] = dN2_dxi / L  # v2 position
+            dw_dx_vec[4] = dN3_dxi / L  # v3 position
+            
+            # θ shape functions
+            theta_vec = np.zeros(n_bending)
+            theta_vec[1] = N1_v  # θ1 position
+            theta_vec[3] = N2_v  # θ2 position
+            theta_vec[5] = N3_v  # θ3 position
+            
+            # Constraint: (dw/dx - θ) = 0
+            constraint_vec = dw_dx_vec - theta_vec
+            k_bending += penalty * np.outer(constraint_vec, constraint_vec) * (L/2) * w_g
+        
+        # Assign bending stiffness to DOFs [v1, θ1, v2, θ2, v3, θ3]
         for i, ii in enumerate(bending_dofs):
             for j, jj in enumerate(bending_dofs):
                 k_local[ii, jj] = k_bending[i, j]
@@ -320,7 +366,7 @@ class EulerBernoulliElement3Node(Element):
             p_fim: Final transverse distributed load
             
         Returns:
-            8-element force vector in global coordinates [u1, v1, θ1, u2, v2, u3, v3, θ3]
+            9-element force vector in global coordinates [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3]
         """
         L = self.length
         R = self.R
@@ -334,29 +380,30 @@ class EulerBernoulliElement3Node(Element):
             q_fim / 6
         ])
         
-        # For bending with Hermite + central bubble node
-        # Coefficients are derived from consistent load distribution:
-        # ∫₀¹ Hᵢ(ξ) p(ξ) L dξ where p(ξ) is the distributed load
-        # For uniform load: [7/20, 3L/60, 16/70, 3/20, -3L/60]
+        # For bending with quadratic shape functions for displacement
+        # Using consistent load distribution for transverse load
         p_avg = (p_ini + p_fim) / 2
-        fe_bending = L * np.array([
-            (7*p_ini + 3*p_fim) / 20,       # v1 contribution
-            (3*p_ini + 2*p_fim) * L / 60,   # θ1 contribution
-            (16*p_ini + 16*p_fim) / 70,     # v2 (bubble) contribution
-            (3*p_ini + 7*p_fim) / 20,       # v3 contribution
-            -(2*p_ini + 3*p_fim) * L / 60   # θ3 contribution
+        fe_bending_v = L * np.array([
+            (7*p_ini + 3*p_fim) / 20,
+            (16*p_ini + 16*p_fim) / 70,
+            (3*p_ini + 7*p_fim) / 20
         ])
         
-        # Assemble into 8-DOF vector [u1, v1, θ1, u2, v2, u3, v3, θ3]
-        fe_local = np.zeros(8)
+        # For rotation DOFs, the consistent loads are typically zero
+        # unless there are distributed moments
+        fe_bending_theta = np.zeros(3)
+        
+        # Assemble into 9-DOF vector [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3]
+        fe_local = np.zeros(9)
         fe_local[0] = fe_axial[0]  # u1
-        fe_local[1] = fe_bending[0]  # v1
-        fe_local[2] = fe_bending[1]  # θ1
+        fe_local[1] = fe_bending_v[0]  # v1
+        fe_local[2] = fe_bending_theta[0]  # θ1
         fe_local[3] = fe_axial[1]  # u2
-        fe_local[4] = fe_bending[2]  # v2
-        fe_local[5] = fe_axial[2]  # u3
-        fe_local[6] = fe_bending[3]  # v3
-        fe_local[7] = fe_bending[4]  # θ3
+        fe_local[4] = fe_bending_v[1]  # v2
+        fe_local[5] = fe_bending_theta[1]  # θ2
+        fe_local[6] = fe_axial[2]  # u3
+        fe_local[7] = fe_bending_v[2]  # v3
+        fe_local[8] = fe_bending_theta[2]  # θ3
         
         # Transform to global coordinates
         fe_global = R @ fe_local
@@ -365,7 +412,7 @@ class EulerBernoulliElement3Node(Element):
     def compute_equivalent_nodal_loads(self, distributed_load, n_gauss=5):
         """
         Compute consistent nodal loads for a distributed load using numerical integration.
-        Returns an 8-vector in GLOBAL coordinates [u1, v1, θ1, u2, v2, u3, v3, θ3].
+        Returns a 9-vector in GLOBAL coordinates [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3].
         """
         import numpy as np
         L = self.length
@@ -420,7 +467,7 @@ class EulerBernoulliElement3Node(Element):
 
         # Initialize force components
         ia1 = ia2 = ia3 = 0.0
-        iv1 = itheta1 = iv2 = iv3 = itheta3 = 0.0
+        iv1 = itheta1 = iv2 = itheta2 = iv3 = itheta3 = 0.0
         
         for ti, wi_scaled in zip(t, wt):
             x = ti * L
@@ -434,21 +481,27 @@ class EulerBernoulliElement3Node(Element):
             ia2 += N2_ax * qx * wi_scaled * L
             ia3 += N3_ax * qx * wi_scaled * L
 
-            # Hermite shape functions for bending
-            Hv1 = 1 - 3*ti**2 + 2*ti**3
-            Ht1 = L * (ti - 2*ti**2 + ti**3)
-            Hv2 = 16 * ti**2 * (1 - ti)**2  # Central node shape function
-            Hv3 = 3*ti**2 - 2*ti**3
-            Ht3 = L * (-ti**2 + ti**3)
+            # Quadratic shape functions for bending (v and θ independent)
+            N1_v = (1 - ti) * (1 - 2*ti)
+            N2_v = 4 * ti * (1 - ti)
+            N3_v = ti * (2*ti - 1)
+            
+            # For rotation, distributed loads typically don't contribute
+            # unless there are distributed moments
+            N1_theta = 0
+            N2_theta = 0
+            N3_theta = 0
+            
             px = p_local(x)
-            iv1 += Hv1 * px * wi_scaled * L
-            itheta1 += Ht1 * px * wi_scaled * L
-            iv2 += Hv2 * px * wi_scaled * L
-            iv3 += Hv3 * px * wi_scaled * L
-            itheta3 += Ht3 * px * wi_scaled * L
+            iv1 += N1_v * px * wi_scaled * L
+            itheta1 += N1_theta * px * wi_scaled * L
+            iv2 += N2_v * px * wi_scaled * L
+            itheta2 += N2_theta * px * wi_scaled * L
+            iv3 += N3_v * px * wi_scaled * L
+            itheta3 += N3_theta * px * wi_scaled * L
 
-        # Local consistent vector [u1, v1, theta1, u2, v2, u3, v3, theta3]
-        flocal = np.array([ia1, iv1, itheta1, ia2, iv2, ia3, iv3, itheta3], dtype=float)
+        # Local consistent vector [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
+        flocal = np.array([ia1, iv1, itheta1, ia2, iv2, itheta2, ia3, iv3, itheta3], dtype=float)
         # Transform to global coordinates
         R = self.R
         fe_global = R @ flocal
@@ -457,74 +510,70 @@ class EulerBernoulliElement3Node(Element):
     def bending_moment(self, x, displacements):
         """
         Returns bending moment M(x) at position x (in local coordinates, 0 <= x <= L).
-        Displacements should be in local coordinates: [u1, v1, theta1, u2, v2, u3, v3, theta3]
+        For Euler-Bernoulli: M(x) = E*I * dθ/dx
+        Displacements should be in local coordinates: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
         """
         E = self.material.E
         I = self.section.inertia
         L = self.length
-        # Local DOFs: [u1, v1, theta1, u2, v2, u3, v3, theta3]
-        v1 = displacements[1]
+        
+        # Local DOFs: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
         theta1 = displacements[2]
-        v2 = displacements[4]
-        v3 = displacements[6]
-        theta3 = displacements[7]
+        theta2 = displacements[5]
+        theta3 = displacements[8]
         
         xi = x / L
         
-        # Second derivatives of Hermite + central node shape functions w.r.t. ξ
-        d2Hv1_dxi2 = -6 + 12*xi
-        d2Ht1_dxi2 = L * (-4 + 6*xi)
-        # Bubble function: d²Hb/dξ² (numerically validated)
-        d2Hv2_dxi2 = 96 * (xi**2 - xi + 1/6)
-        d2Hv3_dxi2 = 6 - 12*xi
-        d2Ht3_dxi2 = L * (-2 + 6*xi)
+        # Derivatives of quadratic shape functions for rotation
+        dN1_theta = (-3 + 4*xi) / L
+        dN2_theta = (4 - 8*xi) / L
+        dN3_theta = (-1 + 4*xi) / L
         
-        # w''(x) = d2w/dx2 = (1/L^2) * d2w/dxi2
-        w_dd = (1/L**2) * (d2Hv1_dxi2 * v1 + d2Ht1_dxi2 * theta1 + 
-                           d2Hv2_dxi2 * v2 + d2Hv3_dxi2 * v3 + d2Ht3_dxi2 * theta3)
+        # dθ/dx
+        dtheta_dx = dN1_theta * theta1 + dN2_theta * theta2 + dN3_theta * theta3
         
-        return E * I * w_dd
+        return E * I * dtheta_dx
 
     def shear_force(self, x, displacements):
         """
         Returns shear force V(x) at position x (in local coordinates, 0 <= x <= L).
-        Displacements should be in local coordinates: [u1, v1, theta1, u2, v2, u3, v3, theta3]
+        For Euler-Bernoulli: V(x) = E*I * d²θ/dx² = E*I * d³w/dx³
+        Displacements should be in local coordinates: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
         """
         E = self.material.E
         I = self.section.inertia
         L = self.length
-        v1 = displacements[1]
+        
+        # Local DOFs: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
         theta1 = displacements[2]
-        v2 = displacements[4]
-        v3 = displacements[6]
-        theta3 = displacements[7]
+        theta2 = displacements[5]
+        theta3 = displacements[8]
         
         xi = x / L
         
-        # Third derivatives of Hermite + central node shape functions
-        d3Hv1_dxi3 = 12
-        d3Ht1_dxi3 = L * 6
-        d3Hv2_dxi3 = 192 * (xi - 0.5)  # Simplified from 32*6*(xi-0.5)
-        d3Hv3_dxi3 = -12
-        d3Ht3_dxi3 = L * 6
+        # Second derivatives of quadratic shape functions for rotation
+        # d²θ/dx² = (1/L²) * d²θ/dξ²
+        # For quadratic: dN/dξ = a + bξ, so d²N/dξ² = b (constant)
+        d2N1_theta_dxi2 = 4
+        d2N2_theta_dxi2 = -8
+        d2N3_theta_dxi2 = 4
         
-        # w'''(x) = d3w/dx3 = (1/L^3) * d3w/dxi3
-        w_ddd = (1/L**3) * (d3Hv1_dxi3 * v1 + d3Ht1_dxi3 * theta1 + 
-                            d3Hv2_dxi3 * v2 + d3Hv3_dxi3 * v3 + d3Ht3_dxi3 * theta3)
+        d2theta_dx2 = (1/L**2) * (d2N1_theta_dxi2 * theta1 + d2N2_theta_dxi2 * theta2 + d2N3_theta_dxi2 * theta3)
         
-        return E * I * w_ddd
+        # Shear force: V = -EI * d²θ/dx²
+        return -E * I * d2theta_dx2
 
     def normal_force(self, x, displacements):
         """
         Returns normal (axial) force N(x) at position x (in local coordinates, 0 <= x <= L).
-        Displacements should be in local coordinates: [u1, v1, theta1, u2, v2, u3, v3, theta3]
+        Displacements should be in local coordinates: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
         """
         E = self.material.E
         A = self.section.area
         L = self.length
         u1 = displacements[0]
         u2 = displacements[3]
-        u3 = displacements[5]
+        u3 = displacements[6]
         
         xi = x / L
         
