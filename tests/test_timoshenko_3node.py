@@ -355,9 +355,13 @@ def test_convergence_with_mesh_refinement():
         
         print(f"  {n_elem} element(s): v_L = {v_L_fem:.6e} m, Error = {error:.3f}%")
     
-    # Check that error decreases with mesh refinement
+    # Check that error decreases with mesh refinement (monotonic convergence)
+    # Allow a small tolerance for numerical noise in very accurate solutions
     for i in range(len(errors) - 1):
-        assert errors[i] >= errors[i+1] or errors[i] < 1.0, \
+        # If both errors are already very small (< 0.1%), we've achieved convergence
+        if errors[i] < 0.1 and errors[i+1] < 0.1:
+            continue
+        assert errors[i] >= errors[i+1], \
             f"Error should decrease with refinement: {errors[i]:.3f}% -> {errors[i+1]:.3f}%"
     
     print(f"✓ Solution converges with mesh refinement")

@@ -884,6 +884,7 @@ class TimoshenkoElement3Node(Element):
         k_bending_shear = np.zeros((n_bending, n_bending))
         
         # Full integration (3-point) for bending stiffness
+        # 3-point Gauss-Legendre quadrature points and weights for interval [-1,1]
         xi_gauss_full = np.array([-np.sqrt(3/5), 0, np.sqrt(3/5)])
         w_gauss_full = np.array([5/9, 8/9, 5/9])
         
@@ -900,7 +901,8 @@ class TimoshenkoElement3Node(Element):
             dtheta_vec = np.array([0, dN1_theta, 0, dN2_theta, 0, dN3_theta])
             k_bending_shear += E * I * np.outer(dtheta_vec, dtheta_vec) * (L/2) * w_g
         
-        # Reduced integration (2-point) for shear stiffness
+        # Reduced integration (2-point) for shear stiffness to avoid shear locking
+        # 2-point Gauss-Legendre quadrature points and weights for interval [-1,1]
         xi_gauss_reduced = np.array([-1/np.sqrt(3), 1/np.sqrt(3)])
         w_gauss_reduced = np.array([1.0, 1.0])
         
