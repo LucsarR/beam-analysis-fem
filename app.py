@@ -1517,8 +1517,4 @@ with tab4:
     - **Load Types**: Point loads, distributed loads (constant, linear, custom functions)
     - **Analysis**: Linear static analysis with both Euler-Bernoulli and Timoshenko beam theories
     - **Visualization**: Force diagrams (moment, shear, normal), stress distributions, and deformed shapes
-    
-    ### ⚠️ Known Limitations
-    - Custom distributed load functions use Python syntax
-    - 3-node Euler-Bernoulli elements are not yet fully implemented
     """)
