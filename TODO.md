@@ -30,7 +30,7 @@
 - [ ] Verificar Timoshenko com os exemplos do livro (Logan e o Reddy) e colocar mais tipos de carga (carga distribuida.etc).
 - [ ] Procurar artigos de Reddy-Bickford (prioridade de pesquisa)
 - [ ] Implementar euler-bernoulli 3node.
-- [ ] Implementar distribuição de sigma normal visao de lado
+- [x] Implementar distribuição de sigma normal visao de lado
 - [ ] Arrumar cor das areas acima do elemento (colocar cores claras)
 - [ ] Arrumar direção do vetor de area
 - [ ] Checar função no load distribuido
