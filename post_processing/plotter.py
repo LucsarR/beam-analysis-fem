@@ -330,10 +330,7 @@ def plot_structure_diagram(structure_results, force_type="moment", n_points=50, 
 
         dx = x2 - x1
         dy = y2 - y1
-        # Perpendicular vector: rotate 90° clockwise to place diagrams on right side
-        # This ensures fill area appears "above" the element in global coordinates
-        # Changed from [-dy, dx] to [dy, -dx] to fix TODO item: "Arrumar direção do vetor de area"
-        perp = np.array([dy, -dx])
+        perp = np.array([-dy, dx])
         norm_perp = np.linalg.norm(perp)
         if norm_perp > 0:
             perp = perp / norm_perp
@@ -389,7 +386,7 @@ def plot_structure_diagram(structure_results, force_type="moment", n_points=50, 
                 x=x_poly,
                 y=y_poly,
                 fill='toself',
-                fillcolor='rgba(0,128,0,0.2)',
+                fillcolor='rgba(0,0,255,0.2)' if force_type == "moment" else 'rgba(255,140,0,0.2)' if force_type == "shear" else 'rgba(0,128,0,0.2)',
                 line=dict(color='rgba(0,0,0,0)', width=0),
                 hoverinfo='skip',
                 showlegend=False,
@@ -420,6 +417,11 @@ def plot_structure_diagram(structure_results, force_type="moment", n_points=50, 
         width=900,
         height=600
     )
+    
+    # Equal aspect ratio to ensure perpendicular vectors appear at true 90°
+    # This fixes the visual issue where fill areas appear at wrong angles for inclined beams
+    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    
     return fig
 
 def plot_normal_stress_distribution(element_result, x, n_points=200):
