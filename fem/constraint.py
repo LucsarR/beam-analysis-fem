@@ -21,7 +21,7 @@ class Constraint:
         K_global[idx, idx] += penalty
         F_global[idx] += penalty * self.value
     
-    def calculate_reaction(self, displacement_vector, K_global=None, F_external=None):
+    def calculate_reaction(self, displacement_vector):
         """
         Calculate reaction force at this constraint using penalty method.
         
@@ -34,8 +34,6 @@ class Constraint:
         
         Args:
             displacement_vector: Global displacement vector
-            K_global: Not used (kept for compatibility)
-            F_external: Not used (kept for compatibility)
             
         Returns:
             Reaction force value (positive means force in positive direction)
@@ -72,14 +70,12 @@ class ConstraintSet:
     def get_penalty(self):
         return self.penalty
     
-    def calculate_all_reactions(self, displacement_vector, K_global=None, F_external=None):
+    def calculate_all_reactions(self, displacement_vector):
         """
         Calculate reaction forces at all constraints using penalty method.
         
         Args:
             displacement_vector: Global displacement vector
-            K_global: Not used (kept for compatibility)
-            F_external: Not used (kept for compatibility)
         
         Returns:
             Dictionary mapping (node_id, direction) to reaction force value
