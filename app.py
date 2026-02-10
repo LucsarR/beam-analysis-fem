@@ -2,6 +2,7 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import json
+import traceback
 from datetime import datetime
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -1234,7 +1235,6 @@ with tab2:
                     st.success("✅ Structure preview generated successfully! Review your setup before running the analysis.")
                 except Exception as e:
                     st.error(f"Error generating preview: {str(e)}")
-                    import traceback
                     st.code(traceback.format_exc())
         
         st.divider()
@@ -1359,7 +1359,6 @@ with tab2:
                     
                 except Exception as e:
                     st.error(f"❌ Analysis failed: {str(e)}")
-                    import traceback
                     with st.expander("View Error Details"):
                         st.code(traceback.format_exc())
     else:
@@ -1471,7 +1470,6 @@ with tab3:
                         )
                     except Exception as e:
                         st.error(f"Error: {e}")
-                        import traceback
                         with st.expander("View Error Details"):
                             st.code(traceback.format_exc())
             else:
