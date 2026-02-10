@@ -65,6 +65,7 @@ class Mesh:
                 - "euler_bernoulli_2node": 2-node Euler-Bernoulli beam (default)
                 - "euler_bernoulli_3node": 3-node Euler-Bernoulli beam
                 - "timoshenko_2node": 2-node Timoshenko beam
+                - "timoshenko_3node": 3-node Timoshenko beam
                 
         Returns:
             Element: The created element object with assigned ID
@@ -72,7 +73,7 @@ class Mesh:
         Raises:
             NotImplementedError: If element_type is not supported
         """
-        from fem.element import EulerBernoulliElement2Node, EulerBernoulliElement3Node,TimoshenkoElement2Node
+        from fem.element import EulerBernoulliElement2Node, EulerBernoulliElement3Node, TimoshenkoElement2Node, TimoshenkoElement3Node
         if element_type == "euler_bernoulli_2node":
             element = EulerBernoulliElement2Node(self.element_id_counter, node_start, node_end, material, section)
         elif element_type == "euler_bernoulli_3node":
@@ -90,6 +91,19 @@ class Mesh:
             element = EulerBernoulliElement3Node(self.element_id_counter, node_start, node_end, material, section, node_center)
         elif element_type == "timoshenko_2node":
             element = TimoshenkoElement2Node(self.element_id_counter, node_start, node_end, material, section)
+        elif element_type == "timoshenko_3node":
+            # For 3-node element, create or find the central node
+            x_center = (node_start.x + node_end.x) / 2
+            y_center = (node_start.y + node_end.y) / 2
+            # Check if central node already exists
+            node_center = None
+            for node in self.nodes:
+                if np.isclose(node.x, x_center) and np.isclose(node.y, y_center):
+                    node_center = node
+                    break
+            if node_center is None:
+                node_center = self.add_node(x_center, y_center)
+            element = TimoshenkoElement3Node(self.element_id_counter, node_start, node_end, material, section, node_center)
         else:
             raise NotImplementedError(f"Element type '{element_type}' not implemented.")
         self.elements.append(element)

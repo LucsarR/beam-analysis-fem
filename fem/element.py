@@ -788,6 +788,388 @@ class TimoshenkoElement2Node(Element):
         epsilon = dN1 * u1 + dN2 * u2
         return E * A * epsilon
 
+class TimoshenkoElement3Node(Element):
+    """
+    3-node Timoshenko beam element with quadratic shape functions.
+    
+    The element has 9 DOFs: [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3]
+    - All three nodes have rotation DOFs (unlike Euler-Bernoulli 3-node)
+    - Axial: quadratic shape functions for u
+    - Bending: quadratic shape functions for both v and θ (independent)
+    - Includes shear deformation effects
+    
+    Shape functions (ξ = x/L):
+    - N1 = (1-ξ)(1-2ξ)  (node 1)
+    - N2 = 4ξ(1-ξ)      (node 2, center)
+    - N3 = ξ(2ξ-1)      (node 3)
+    """
+    def __init__(self, id, node_start, node_end, material, section, node_center=None):
+        super().__init__(id, node_start, node_end, material, section)
+        self.node_center = node_center
+        self.length, self.c, self.s, self.R = self._compute_geometry()
+    
+    def _compute_geometry(self):
+        x1, y1 = self.node_start.x, self.node_start.y
+        x3, y3 = self.node_end.x, self.node_end.y
+        L = np.sqrt((x3 - x1)**2 + (y3 - y1)**2)
+        c = (x3 - x1) / L
+        s = (y3 - y1) / L
+        
+        # Transformation matrix for 3-node element (9x9)
+        # DOFs: [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3]
+        # All nodes have rotation DOF
+        R = np.zeros((9, 9))
+        # Node 1: u1, v1, θ1
+        R[0:2, 0:2] = np.array([[c, -s], [s, c]])
+        R[2, 2] = 1
+        # Node 2 (center): u2, v2, θ2
+        R[3:5, 3:5] = np.array([[c, -s], [s, c]])
+        R[5, 5] = 1
+        # Node 3: u3, v3, θ3
+        R[6:8, 6:8] = np.array([[c, -s], [s, c]])
+        R[8, 8] = 1
+        return L, c, s, R
+    
+    def stiffness_matrix(self):
+        """
+        Stiffness matrix for 3-node Timoshenko beam element.
+        
+        Uses quadratic shape functions for both displacement and rotation.
+        Includes shear deformation effects through the shear coefficient.
+        
+        The stiffness matrix is computed using numerical integration (Gauss quadrature)
+        of the strain energy contributions from:
+        - Axial deformation: E*A*∫(du/dx)² dx
+        - Bending: E*I*∫(dθ/dx)² dx
+        - Shear: κ*G*A*∫(dv/dx - θ)² dx
+        """
+        E = self.material.E
+        G = self.material.G
+        A = self.section.area
+        I = self.section.inertia
+        kappa = self.section.shear_coefficient
+        L = self.length
+        R = self.R
+        
+        # Shear area
+        As = kappa * A
+        
+        # Local stiffness matrix (9x9)
+        k_local = np.zeros((9, 9))
+        
+        # Axial stiffness using quadratic shape functions
+        # Shape functions: N1 = (1-ξ)(1-2ξ), N2 = 4ξ(1-ξ), N3 = ξ(2ξ-1)
+        # where ξ = x/L
+        k_axial = E * A / (3 * L) * np.array([
+            [7, -8, 1],
+            [-8, 16, -8],
+            [1, -8, 7]
+        ])
+        
+        # Assign axial stiffness to DOFs [u1, u2, u3] = [0, 3, 6]
+        axial_dofs = [0, 3, 6]
+        for i, ii in enumerate(axial_dofs):
+            for j, jj in enumerate(axial_dofs):
+                k_local[ii, jj] = k_axial[i, j]
+        
+        # For Timoshenko beam, we need to compute bending and shear stiffness
+        # using numerical integration
+        # Gauss quadrature with 3 points for quadratic functions
+        xi_gauss = np.array([-np.sqrt(3/5), 0, np.sqrt(3/5)])
+        w_gauss = np.array([5/9, 8/9, 5/9])
+        
+        # DOFs for bending: [v1, θ1, v2, θ2, v3, θ3] = indices [1, 2, 4, 5, 7, 8]
+        bending_dofs = [1, 2, 4, 5, 7, 8]
+        n_bending = len(bending_dofs)
+        k_bending_shear = np.zeros((n_bending, n_bending))
+        
+        for xi_g, w_g in zip(xi_gauss, w_gauss):
+            # Map from [-1,1] to [0,1]
+            xi = (xi_g + 1) / 2
+            
+            # Quadratic shape functions and derivatives for v
+            N1_v = (1 - xi) * (1 - 2*xi)
+            N2_v = 4 * xi * (1 - xi)
+            N3_v = xi * (2*xi - 1)
+            
+            dN1_v = (-3 + 4*xi) / L
+            dN2_v = (4 - 8*xi) / L
+            dN3_v = (-1 + 4*xi) / L
+            
+            # Quadratic shape functions for θ
+            N1_theta = (1 - xi) * (1 - 2*xi)
+            N2_theta = 4 * xi * (1 - xi)
+            N3_theta = xi * (2*xi - 1)
+            
+            dN1_theta = (-3 + 4*xi) / L
+            dN2_theta = (4 - 8*xi) / L
+            dN3_theta = (-1 + 4*xi) / L
+            
+            # Shape function vectors for v and θ
+            # v = [N1_v, 0, N2_v, 0, N3_v, 0]
+            # θ = [0, N1_theta, 0, N2_theta, 0, N3_theta]
+            # dv/dx = [dN1_v, 0, dN2_v, 0, dN3_v, 0]
+            # dθ/dx = [0, dN1_theta, 0, dN2_theta, 0, dN3_theta]
+            
+            # Bending stiffness: E*I*(dθ/dx)²
+            dtheta_vec = np.array([0, dN1_theta, 0, dN2_theta, 0, dN3_theta])
+            k_bending_shear += E * I * np.outer(dtheta_vec, dtheta_vec) * (L/2) * w_g
+            
+            # Shear stiffness: κ*G*A*(dv/dx - θ)²
+            dv_vec = np.array([dN1_v, 0, dN2_v, 0, dN3_v, 0])
+            theta_vec = np.array([0, -N1_theta, 0, -N2_theta, 0, -N3_theta])
+            gamma_vec = dv_vec + theta_vec  # dv/dx - θ
+            k_bending_shear += As * G * np.outer(gamma_vec, gamma_vec) * (L/2) * w_g
+        
+        # Assign bending and shear stiffness
+        for i, ii in enumerate(bending_dofs):
+            for j, jj in enumerate(bending_dofs):
+                k_local[ii, jj] = k_bending_shear[i, j]
+        
+        # Transform to global coordinates
+        return R @ k_local @ R.T
+    
+    def force_vector(self, q_ini=0, q_fim=0, p_ini=0, p_fim=0):
+        """
+        Consistent nodal load vector for 3-node Timoshenko element.
+        
+        Args:
+            q_ini: Initial axial distributed load (force per unit length)
+            q_fim: Final axial distributed load
+            p_ini: Initial transverse distributed load
+            p_fim: Final transverse distributed load
+            
+        Returns:
+            9-element force vector in global coordinates [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3]
+        """
+        L = self.length
+        R = self.R
+        
+        # Consistent load vector for linearly varying distributed loads
+        # For quadratic axial shape functions
+        q_avg = (q_ini + q_fim) / 2
+        fe_axial = L * np.array([
+            q_ini / 6,
+            2 * q_avg / 3,
+            q_fim / 6
+        ])
+        
+        # For bending with quadratic shape functions
+        # Using consistent load distribution for transverse load
+        p_avg = (p_ini + p_fim) / 2
+        fe_bending_v = L * np.array([
+            (7*p_ini + 3*p_fim) / 20,
+            (16*p_ini + 16*p_fim) / 70,
+            (3*p_ini + 7*p_fim) / 20
+        ])
+        
+        # For rotation DOFs, the consistent loads are typically zero
+        # unless there are distributed moments
+        fe_bending_theta = np.zeros(3)
+        
+        # Assemble into 9-DOF vector [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3]
+        fe_local = np.zeros(9)
+        fe_local[0] = fe_axial[0]  # u1
+        fe_local[1] = fe_bending_v[0]  # v1
+        fe_local[2] = fe_bending_theta[0]  # θ1
+        fe_local[3] = fe_axial[1]  # u2
+        fe_local[4] = fe_bending_v[1]  # v2
+        fe_local[5] = fe_bending_theta[1]  # θ2
+        fe_local[6] = fe_axial[2]  # u3
+        fe_local[7] = fe_bending_v[2]  # v3
+        fe_local[8] = fe_bending_theta[2]  # θ3
+        
+        # Transform to global coordinates
+        fe_global = R @ fe_local
+        return fe_global.flatten()
+    
+    def compute_equivalent_nodal_loads(self, distributed_load, n_gauss=5):
+        """
+        Compute consistent nodal loads for a distributed load using numerical integration.
+        Returns a 9-vector in GLOBAL coordinates [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3].
+        """
+        import numpy as np
+        L = self.length
+        c = self.c
+        s = self.s
+
+        # Build load function f(x) from distributed_load
+        if distributed_load.func:
+            def f(x):
+                try:
+                    return float(eval(distributed_load.func, {"np": np, "x": x, "L": L}))
+                except Exception as e:
+                    print(f"Error evaluating custom function '{distributed_load.func}': {e}")
+                    return 0.0
+        elif distributed_load.magnitude_start is not None and distributed_load.magnitude_end is not None:
+            a = float(distributed_load.magnitude_start)
+            b = float(distributed_load.magnitude_end)
+            def f(x):
+                return a + (b - a) * (x / L)
+        elif distributed_load.magnitude_start is not None:
+            a = float(distributed_load.magnitude_start)
+            def f(x):
+                return a
+        else:
+            def f(x):
+                return 0.0
+
+        # Project direction to local axes
+        if distributed_load.direction == 'x':
+            def q_local(x): return f(x) * c
+            def p_local(x): return -f(x) * s
+        elif distributed_load.direction == 'y':
+            def q_local(x): return f(x) * s
+            def p_local(x): return f(x) * c
+        elif distributed_load.direction == 'l':
+            def q_local(x): return f(x)
+            def p_local(x): return 0.0
+        elif distributed_load.direction == 't':
+            def q_local(x): return 0.0
+            def p_local(x): return f(x)
+        else:
+            def q_local(x): return 0.0
+            def p_local(x): return 0.0
+
+        # Gauss-Legendre quadrature
+        xi, wi = np.polynomial.legendre.leggauss(n_gauss)
+        t = 0.5 * (xi + 1.0)
+        wt = 0.5 * wi
+
+        # Initialize force components
+        ia1 = ia2 = ia3 = 0.0
+        iv1 = itheta1 = iv2 = itheta2 = iv3 = itheta3 = 0.0
+        
+        for ti, wi_scaled in zip(t, wt):
+            x = ti * L
+            
+            # Quadratic shape functions for axial
+            N1_ax = (1 - ti) * (1 - 2*ti)
+            N2_ax = 4 * ti * (1 - ti)
+            N3_ax = ti * (2*ti - 1)
+            qx = q_local(x)
+            ia1 += N1_ax * qx * wi_scaled * L
+            ia2 += N2_ax * qx * wi_scaled * L
+            ia3 += N3_ax * qx * wi_scaled * L
+
+            # Quadratic shape functions for bending (v and θ independent)
+            N1_v = (1 - ti) * (1 - 2*ti)
+            N2_v = 4 * ti * (1 - ti)
+            N3_v = ti * (2*ti - 1)
+            
+            # For rotation, distributed loads typically don't contribute
+            # unless there are distributed moments
+            N1_theta = 0
+            N2_theta = 0
+            N3_theta = 0
+            
+            px = p_local(x)
+            iv1 += N1_v * px * wi_scaled * L
+            itheta1 += N1_theta * px * wi_scaled * L
+            iv2 += N2_v * px * wi_scaled * L
+            itheta2 += N2_theta * px * wi_scaled * L
+            iv3 += N3_v * px * wi_scaled * L
+            itheta3 += N3_theta * px * wi_scaled * L
+
+        # Local consistent vector [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
+        flocal = np.array([ia1, iv1, itheta1, ia2, iv2, itheta2, ia3, iv3, itheta3], dtype=float)
+        # Transform to global coordinates
+        R = self.R
+        fe_global = R @ flocal
+        return fe_global.flatten()
+    
+    def bending_moment(self, x, displacements):
+        """
+        Returns bending moment M(x) at position x (in local coordinates, 0 <= x <= L).
+        For Timoshenko beam theory: M(x) = E*I * dθ/dx
+        """
+        E = self.material.E
+        I = self.section.inertia
+        L = self.length
+        
+        # Local DOFs: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
+        theta1 = displacements[2]
+        theta2 = displacements[5]
+        theta3 = displacements[8]
+        
+        xi = x / L
+        
+        # Derivatives of quadratic shape functions
+        dN1_theta = (-3 + 4*xi) / L
+        dN2_theta = (4 - 8*xi) / L
+        dN3_theta = (-1 + 4*xi) / L
+        
+        # dθ/dx
+        dtheta_dx = dN1_theta * theta1 + dN2_theta * theta2 + dN3_theta * theta3
+        
+        return E * I * dtheta_dx
+    
+    def shear_force(self, x, displacements):
+        """
+        Returns shear force V(x) at position x (in local coordinates, 0 <= x <= L).
+        For Timoshenko beam theory: V = κ*G*A*(dv/dx - θ)
+        """
+        G = self.material.G
+        A = self.section.area
+        kappa = self.section.shear_coefficient
+        L = self.length
+        
+        # Local DOFs: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
+        v1 = displacements[1]
+        theta1 = displacements[2]
+        v2 = displacements[4]
+        theta2 = displacements[5]
+        v3 = displacements[7]
+        theta3 = displacements[8]
+        
+        xi = x / L
+        
+        # Derivatives of quadratic shape functions for v
+        dN1_v = (-3 + 4*xi) / L
+        dN2_v = (4 - 8*xi) / L
+        dN3_v = (-1 + 4*xi) / L
+        
+        # Quadratic shape functions for θ
+        N1_theta = (1 - xi) * (1 - 2*xi)
+        N2_theta = 4 * xi * (1 - xi)
+        N3_theta = xi * (2*xi - 1)
+        
+        # dv/dx
+        dv_dx = dN1_v * v1 + dN2_v * v2 + dN3_v * v3
+        
+        # θ
+        theta = N1_theta * theta1 + N2_theta * theta2 + N3_theta * theta3
+        
+        # Shear force
+        V = kappa * G * A * (dv_dx - theta)
+        
+        return V
+    
+    def normal_force(self, x, displacements):
+        """
+        Returns normal (axial) force N(x) at position x (in local coordinates, 0 <= x <= L).
+        """
+        E = self.material.E
+        A = self.section.area
+        L = self.length
+        
+        # Local DOFs: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
+        u1 = displacements[0]
+        u2 = displacements[3]
+        u3 = displacements[6]
+        
+        xi = x / L
+        
+        # Derivatives of quadratic shape functions
+        dN1 = (-3 + 4*xi) / L
+        dN2 = (4 - 8*xi) / L
+        dN3 = (-1 + 4*xi) / L
+        
+        # du/dx
+        epsilon = dN1 * u1 + dN2 * u2 + dN3 * u3
+        
+        return E * A * epsilon
+
 class ElementResults:
     ...
     def bending_moment(self, x):
