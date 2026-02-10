@@ -2,6 +2,7 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import json
+import traceback
 from datetime import datetime
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -16,7 +17,7 @@ from config import DEFAULT_E, DEFAULT_NU, SECTION_TYPES, ELEMENT_TYPES
 
 # --- Post-processing and Plotting ---
 from post_processing.forces import StructureResults
-from post_processing.plotter import plot_structure_diagram, plot_normal_stress_distribution, plot_structure_preview
+from post_processing.plotter import plot_structure_diagram, plot_normal_stress_distribution, plot_normal_stress_side_view, plot_structure_preview
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -1234,7 +1235,6 @@ with tab2:
                     st.success("✅ Structure preview generated successfully! Review your setup before running the analysis.")
                 except Exception as e:
                     st.error(f"Error generating preview: {str(e)}")
-                    import traceback
                     st.code(traceback.format_exc())
         
         st.divider()
@@ -1359,7 +1359,6 @@ with tab2:
                     
                 except Exception as e:
                     st.error(f"❌ Analysis failed: {str(e)}")
-                    import traceback
                     with st.expander("View Error Details"):
                         st.code(traceback.format_exc())
     else:
@@ -1420,10 +1419,8 @@ with tab3:
                 except Exception as e:
                     st.error(f"Error generating diagram: {e}")
         
-        # TODO: Implementar distribuição de sigma normal visao de lado.
-
-        # Normal Stress Distribution
-        with st.expander("🔍 Normal Stress Distribution in Cross Section", expanded=False):
+        # Normal Stress Distribution - Cross Section and Side View
+        with st.expander("🔍 Normal Stress Distribution - Cross Section & Side View", expanded=False):
             element_ids = [el.id for el in st.session_state["mesh"].elements]
             
             if element_ids:
@@ -1433,7 +1430,8 @@ with tab3:
                     selected_element_id = st.selectbox(
                         "Select element",
                         element_ids,
-                        help="Choose element to analyze"
+                        help="Choose element to analyze",
+                        key="stress_element_selector"
                     )
                 
                 selected_element_result = next(
@@ -1448,15 +1446,32 @@ with tab3:
                         max_value=float(selected_element_result.length),
                         value=0.0,
                         step=0.01,
-                        help="Select position along element to view stress"
+                        help="Select position along element to view stress",
+                        key="stress_position_slider"
                     )
                 
-                if st.button("🔍 Show Stress Distribution", use_container_width=True):
+                if st.button("🔍 Show Stress Distribution (Both Views)", use_container_width=True):
                     try:
-                        fig = plot_normal_stress_distribution(selected_element_result, x_pos)
-                        st.plotly_chart(fig, use_container_width=True)
+                        # Display cross-section view (front view)
+                        st.subheader("📐 Cross-Section View (Front)")
+                        fig_cross = plot_normal_stress_distribution(selected_element_result, x_pos)
+                        st.plotly_chart(fig_cross, use_container_width=True)
+                        
+                        # Display side view
+                        st.subheader("↔️ Side View")
+                        fig_side = plot_normal_stress_side_view(selected_element_result, x_pos)
+                        st.plotly_chart(fig_side, use_container_width=True)
+                        
+                        # Add information box
+                        st.info(
+                            "💡 **How to interpret the views:**\n"
+                            "- **Cross-Section View (Front)**: Shows stress distribution across the section at the cut position\n"
+                            "- **Side View**: Shows stress profile along the beam height with arrows indicating magnitude and direction"
+                        )
                     except Exception as e:
                         st.error(f"Error: {e}")
+                        with st.expander("View Error Details"):
+                            st.code(traceback.format_exc())
             else:
                 st.warning("No elements available for stress analysis.")
     else:
