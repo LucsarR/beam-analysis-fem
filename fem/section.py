@@ -30,6 +30,23 @@ class Section(ABC):
         Default: None (not implemented).
         """
         return None, None, None
+    
+    def get_y_bounds(self):
+        """
+        Returns (y_min, y_max) for the section.
+        Default implementation tries to use xy_grid, subclasses can override.
+        """
+        X, Y, mask = self.xy_grid(100)
+        if X is None:
+            # For general sections without geometry, estimate from inertia
+            if self.area and self.inertia:
+                # Rough estimate: I = A * k^2, so k = sqrt(I/A)
+                k = (self.inertia / self.area) ** 0.5
+                return -k, k
+            return -1.0, 1.0  # Default fallback
+        # Get bounds from masked grid
+        y_values = Y[mask]
+        return np.min(y_values), np.max(y_values)
 
 class RectangularBar(Section):
     def __init__(self, id, width, height):

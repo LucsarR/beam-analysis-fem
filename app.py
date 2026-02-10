@@ -16,7 +16,7 @@ from config import DEFAULT_E, DEFAULT_NU, SECTION_TYPES, ELEMENT_TYPES
 
 # --- Post-processing and Plotting ---
 from post_processing.forces import StructureResults
-from post_processing.plotter import plot_structure_diagram, plot_normal_stress_distribution, plot_structure_preview
+from post_processing.plotter import plot_structure_diagram, plot_normal_stress_distribution, plot_structure_preview, plot_normal_stress_side_view
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -1420,9 +1420,7 @@ with tab3:
                 except Exception as e:
                     st.error(f"Error generating diagram: {e}")
         
-        # TODO: Implementar distribuição de sigma normal visao de lado.
-
-        # Normal Stress Distribution
+        # Normal Stress Distribution - Cross Section and Side View
         with st.expander("🔍 Normal Stress Distribution in Cross Section", expanded=False):
             element_ids = [el.id for el in st.session_state["mesh"].elements]
             
@@ -1451,12 +1449,26 @@ with tab3:
                         help="Select position along element to view stress"
                     )
                 
-                if st.button("🔍 Show Stress Distribution", use_container_width=True):
-                    try:
-                        fig = plot_normal_stress_distribution(selected_element_result, x_pos)
-                        st.plotly_chart(fig, use_container_width=True)
-                    except Exception as e:
-                        st.error(f"Error: {e}")
+                # Create tabs for different views
+                view_tab1, view_tab2 = st.tabs(["📐 Cross Section View (Front)", "📏 Side View (Along Length)"])
+                
+                with view_tab1:
+                    st.markdown("**Cross-sectional stress distribution at selected position**")
+                    if st.button("🔍 Show Cross Section Stress", use_container_width=True, key="btn_cross_section"):
+                        try:
+                            fig = plot_normal_stress_distribution(selected_element_result, x_pos)
+                            st.plotly_chart(fig, use_container_width=True)
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+                
+                with view_tab2:
+                    st.markdown("**Normal stress variation along the entire element length**")
+                    if st.button("🔍 Show Side View Stress", use_container_width=True, key="btn_side_view"):
+                        try:
+                            fig = plot_normal_stress_side_view(selected_element_result)
+                            st.plotly_chart(fig, use_container_width=True)
+                        except Exception as e:
+                            st.error(f"Error: {e}")
             else:
                 st.warning("No elements available for stress analysis.")
     else:

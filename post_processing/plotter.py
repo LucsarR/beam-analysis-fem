@@ -495,3 +495,126 @@ def plot_normal_stress_distribution(element_result, x, n_points=200):
     )
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     return fig
+
+def plot_normal_stress_side_view(element_result, n_points=50):
+    """
+    Interactive Plotly plot: Side view of normal stress distribution along the beam element.
+    Shows stress at top fiber, bottom fiber, and neutral axis along the element length.
+    
+    Args:
+        element_result: ElementResult object containing the element and stress functions
+        n_points: Number of points along the element length
+    
+    Returns:
+        Plotly figure object
+    """
+    section = element_result.element.section
+    L = element_result.length
+    
+    # Get section bounds
+    y_min, y_max = section.get_y_bounds()
+    
+    # Sample positions along element
+    xs = np.linspace(0, L, n_points)
+    
+    # Calculate stresses at each position
+    stress_top = []
+    stress_bottom = []
+    stress_neutral = []
+    
+    for x in xs:
+        N = element_result.normal_force(x)
+        M = element_result.bending_moment(x)
+        
+        # Stress at top fiber (y_max)
+        sigma_top = section.normal_stress(N, M, y_max)
+        stress_top.append(sigma_top)
+        
+        # Stress at bottom fiber (y_min)
+        sigma_bottom = section.normal_stress(N, M, y_min)
+        stress_bottom.append(sigma_bottom)
+        
+        # Stress at neutral axis (y=0 for symmetric sections, or centroid)
+        sigma_neutral = section.normal_stress(N, M, 0.0)
+        stress_neutral.append(sigma_neutral)
+    
+    # Convert to numpy arrays
+    stress_top = np.array(stress_top)
+    stress_bottom = np.array(stress_bottom)
+    stress_neutral = np.array(stress_neutral)
+    
+    # Create figure
+    fig = go.Figure()
+    
+    # Add beam element baseline (x-axis represents element, y-axis represents stress)
+    fig.add_trace(go.Scatter(
+        x=xs,
+        y=np.zeros_like(xs),
+        mode='lines',
+        line=dict(color='black', width=2),
+        name='Element axis',
+        hoverinfo='skip'
+    ))
+    
+    # Add stress at top fiber
+    fig.add_trace(go.Scatter(
+        x=xs,
+        y=stress_top,
+        mode='lines+markers',
+        line=dict(color='red', width=2),
+        marker=dict(size=4),
+        name=f'Top fiber (y={y_max:.3f})',
+        hovertemplate='x=%{x:.3f} m<br>σ=%{y:.3f} MPa<extra></extra>'
+    ))
+    
+    # Add stress at bottom fiber
+    fig.add_trace(go.Scatter(
+        x=xs,
+        y=stress_bottom,
+        mode='lines+markers',
+        line=dict(color='blue', width=2),
+        marker=dict(size=4),
+        name=f'Bottom fiber (y={y_min:.3f})',
+        hovertemplate='x=%{x:.3f} m<br>σ=%{y:.3f} MPa<extra></extra>'
+    ))
+    
+    # Add stress at neutral axis (if it varies)
+    if not np.allclose(stress_neutral, 0.0, atol=1e-6):
+        fig.add_trace(go.Scatter(
+            x=xs,
+            y=stress_neutral,
+            mode='lines',
+            line=dict(color='green', width=2, dash='dash'),
+            name='Centroid (y=0)',
+            hovertemplate='x=%{x:.3f} m<br>σ=%{y:.3f} MPa<extra></extra>'
+        ))
+    
+    # Fill area between top and bottom stress
+    fig.add_trace(go.Scatter(
+        x=np.concatenate([xs, xs[::-1]]),
+        y=np.concatenate([stress_top, stress_bottom[::-1]]),
+        fill='toself',
+        fillcolor='rgba(128, 128, 128, 0.2)',
+        line=dict(color='rgba(255,255,255,0)'),
+        hoverinfo='skip',
+        name='Stress envelope',
+        showlegend=False
+    ))
+    
+    fig.update_layout(
+        title="Normal Stress Distribution - Side View",
+        xaxis_title="Position along element (m)",
+        yaxis_title="Normal Stress σ (MPa)",
+        width=900,
+        height=500,
+        showlegend=True,
+        hovermode='closest',
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="right",
+            x=0.99
+        )
+    )
+    
+    return fig
