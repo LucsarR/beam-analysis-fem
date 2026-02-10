@@ -105,7 +105,7 @@ class BeamAnalysis(Analysis):
                 self.F_global[dof_indices[i]] += fe_global[i]
 
     def solve(self):
-        # Apply constraints
+        # Apply constraints (modifies K_global and F_global with penalty method)
         if hasattr(self.mesh, "constraints"):
             self.mesh.constraints.apply_all(self.K_global, self.F_global)
         

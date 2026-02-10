@@ -21,15 +21,21 @@ class Constraint:
         K_global[idx, idx] += penalty
         F_global[idx] += penalty * self.value
     
-    def calculate_reaction(self, displacement_vector):
+    def calculate_reaction(self, displacement_vector, K_global=None, F_external=None):
         """
         Calculate reaction force at this constraint using penalty method.
         
-        The reaction force is the force required to maintain the constraint:
-        R = penalty * (u_actual - u_prescribed)
+        The reaction force is the force that the support applies to the structure:
+        R = penalty * (u_prescribed - u_actual)
+        
+        This represents the restoring force from the penalty spring. When the actual
+        displacement deviates from the prescribed value, the spring applies a force
+        to restore it, which is the reaction force.
         
         Args:
             displacement_vector: Global displacement vector
+            K_global: Not used (kept for compatibility)
+            F_external: Not used (kept for compatibility)
             
         Returns:
             Reaction force value (positive means force in positive direction)
@@ -39,7 +45,11 @@ class Constraint:
         
         idx = 3 * (self.node.id - 1) + self.direction
         actual_displacement = displacement_vector[idx]
-        reaction = self.penalty * (actual_displacement - self.value)
+        
+        # Reaction is the force that maintains the constraint
+        # Spring force: F = k * delta = penalty * (prescribed - actual)
+        reaction = self.penalty * (self.value - actual_displacement)
+        
         return reaction
 
 class ConstraintSet:
@@ -62,9 +72,14 @@ class ConstraintSet:
     def get_penalty(self):
         return self.penalty
     
-    def calculate_all_reactions(self, displacement_vector):
+    def calculate_all_reactions(self, displacement_vector, K_global=None, F_external=None):
         """
         Calculate reaction forces at all constraints using penalty method.
+        
+        Args:
+            displacement_vector: Global displacement vector
+            K_global: Not used (kept for compatibility)
+            F_external: Not used (kept for compatibility)
         
         Returns:
             Dictionary mapping (node_id, direction) to reaction force value
