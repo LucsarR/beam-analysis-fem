@@ -41,7 +41,7 @@ Enhanced 3-node element with shear deformation effects:
 - Provides better representation of distributed loads
 - Includes shear deformation for thick beams
 - Uses selective reduced integration to avoid shear locking
-- Central node has displacement DOFs only (no rotation)
+- All three nodes have rotation DOFs (unlike Euler-Bernoulli 3-node)
 
 ## 🚀 How to Run
 
