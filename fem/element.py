@@ -874,16 +874,37 @@ class TimoshenkoElement3Node(Element):
         
         # For Timoshenko beam, we need to compute bending and shear stiffness
         # using numerical integration
-        # Gauss quadrature with 3 points for quadratic functions
-        xi_gauss = np.array([-np.sqrt(3/5), 0, np.sqrt(3/5)])
-        w_gauss = np.array([5/9, 8/9, 5/9])
+        # Use selective reduced integration to avoid shear locking:
+        # - Full integration (3-point Gauss) for bending stiffness
+        # - Reduced integration (2-point Gauss) for shear stiffness
         
         # DOFs for bending: [v1, θ1, v2, θ2, v3, θ3] = indices [1, 2, 4, 5, 7, 8]
         bending_dofs = [1, 2, 4, 5, 7, 8]
         n_bending = len(bending_dofs)
         k_bending_shear = np.zeros((n_bending, n_bending))
         
-        for xi_g, w_g in zip(xi_gauss, w_gauss):
+        # Full integration (3-point) for bending stiffness
+        xi_gauss_full = np.array([-np.sqrt(3/5), 0, np.sqrt(3/5)])
+        w_gauss_full = np.array([5/9, 8/9, 5/9])
+        
+        for xi_g, w_g in zip(xi_gauss_full, w_gauss_full):
+            # Map from [-1,1] to [0,1]
+            xi = (xi_g + 1) / 2
+            
+            # Quadratic shape functions for θ
+            dN1_theta = (-3 + 4*xi) / L
+            dN2_theta = (4 - 8*xi) / L
+            dN3_theta = (-1 + 4*xi) / L
+            
+            # Bending stiffness: E*I*(dθ/dx)²
+            dtheta_vec = np.array([0, dN1_theta, 0, dN2_theta, 0, dN3_theta])
+            k_bending_shear += E * I * np.outer(dtheta_vec, dtheta_vec) * (L/2) * w_g
+        
+        # Reduced integration (2-point) for shear stiffness
+        xi_gauss_reduced = np.array([-1/np.sqrt(3), 1/np.sqrt(3)])
+        w_gauss_reduced = np.array([1.0, 1.0])
+        
+        for xi_g, w_g in zip(xi_gauss_reduced, w_gauss_reduced):
             # Map from [-1,1] to [0,1]
             xi = (xi_g + 1) / 2
             
@@ -901,19 +922,10 @@ class TimoshenkoElement3Node(Element):
             N2_theta = 4 * xi * (1 - xi)
             N3_theta = xi * (2*xi - 1)
             
-            dN1_theta = (-3 + 4*xi) / L
-            dN2_theta = (4 - 8*xi) / L
-            dN3_theta = (-1 + 4*xi) / L
-            
             # Shape function vectors for v and θ
             # v = [N1_v, 0, N2_v, 0, N3_v, 0]
             # θ = [0, N1_theta, 0, N2_theta, 0, N3_theta]
             # dv/dx = [dN1_v, 0, dN2_v, 0, dN3_v, 0]
-            # dθ/dx = [0, dN1_theta, 0, dN2_theta, 0, dN3_theta]
-            
-            # Bending stiffness: E*I*(dθ/dx)²
-            dtheta_vec = np.array([0, dN1_theta, 0, dN2_theta, 0, dN3_theta])
-            k_bending_shear += E * I * np.outer(dtheta_vec, dtheta_vec) * (L/2) * w_g
             
             # Shear stiffness: κ*G*A*(dv/dx - θ)²
             dv_vec = np.array([dN1_v, 0, dN2_v, 0, dN3_v, 0])
