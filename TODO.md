@@ -24,6 +24,7 @@
 - [ ] Point Loads inicia em Y force arrumar
 - [ ] Arrumar Load de arquivo para rodar deve-se deletar o arquivo
 - [ ] Arrumar botar valores as vezes tem que clicar no enter para aceitar o valor
+- [ ] No grafico do preview da estrutura fazer com que a escala seja fixa
 
 # Ajustes Professor
 - [ ] Verificar Timoshenko com os exemplos do livro (Logan e o Reddy) e colocar mais tipos de carga (carga distribuida.etc).
