@@ -731,15 +731,15 @@ def plot_normal_stress_side_view(element_result, n_points=20):
         showlegend=False
     ))
     
-    # Add colorbar using a minimal scatter trace
-    colorbar_vals = np.linspace(-stress_max, stress_max, 2)
+    # Add colorbar using a minimal invisible scatter trace
     fig.add_trace(go.Scatter(
-        x=[0],
-        y=[0],
+        x=[None],
+        y=[None],
         mode='markers',
         marker=dict(
-            size=0.1,
-            color=colorbar_vals,
+            size=0,
+            opacity=0,
+            color=[-stress_max, stress_max],  # Min and max stress values for colorbar range
             colorscale='rainbow',
             colorbar=dict(title='Normal Stress (MPa)'),
             showscale=True,
