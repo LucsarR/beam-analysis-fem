@@ -17,6 +17,8 @@
 - [ ] Procurar por codigo duplicado(deixar mais clean)
 
 # Ajuste do front-end
+- [ ] Preview da secao problemas de tamanho
+- [ ] Ajustar no app   - 🔴 Red triangle: X-direction fixed - 🟢 Green triangle: Y-direction fixed - 🟣 Purple circle: Rotation fixed
 - [ ] Na aba analyses nao diz o total de nos considerando o mesh
 - [ ] Tirar +- dos itens que exigem um valor especifico para rodar(posicoes dos nos, E, G, poisson,etc)
 - [ ] Verificar unidades no app (retirar todas), e numero de casa depois da virgula deixar usuario escolher
