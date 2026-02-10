@@ -495,3 +495,232 @@ def plot_normal_stress_distribution(element_result, x, n_points=200):
     )
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     return fig
+
+def plot_normal_stress_side_view(element_result, n_points=20):
+    """
+    Interactive Plotly plot: Side view of normal stress distribution along the element length.
+    Shows arrows representing stress at top and bottom fibers at multiple positions along the element.
+    Uses arrows to represent sigma (normal stress) magnitude and direction.
+    
+    Args:
+        element_result: ElementResults object containing element and displacement information
+        n_points: Number of positions along the element to sample (default: 20)
+    
+    Returns:
+        Plotly figure object showing side view with stress arrows
+    """
+    section = element_result.element.section
+    
+    # Get element geometry
+    n1 = element_result.element.node_start
+    n2 = element_result.element.node_end
+    x1, y1 = n1.x, n1.y
+    x2, y2 = n2.x, n2.y
+    L = element_result.length
+    
+    # Element direction vector
+    dx = (x2 - x1) / L
+    dy = (y2 - y1) / L
+    
+    # Perpendicular direction (for plotting fibers)
+    perp_x = -dy
+    perp_y = dx
+    
+    # Determine section height for visualization
+    # Extract height from different section types
+    if hasattr(section, 'height'):
+        section_height = section.height
+    elif hasattr(section, 'diameter'):
+        section_height = section.diameter
+    elif hasattr(section, 'outer_diameter'):
+        section_height = section.outer_diameter
+    else:
+        # Fallback: estimate from inertia
+        section_height = 2.0 * np.sqrt(12.0 * section.inertia / section.area)
+    
+    # Sample positions along element
+    xs_local = np.linspace(0, L, n_points)
+    
+    # Calculate stresses at top and bottom fibers
+    y_top = section_height / 2
+    y_bottom = -section_height / 2
+    
+    stress_top = []
+    stress_bottom = []
+    for x_local in xs_local:
+        N = element_result.normal_force(x_local)
+        M = element_result.bending_moment(x_local)
+        stress_top.append(section.normal_stress(N, M, y_top))
+        stress_bottom.append(section.normal_stress(N, M, y_bottom))
+    
+    stress_top = np.array(stress_top)
+    stress_bottom = np.array(stress_bottom)
+    
+    # Determine stress range for scaling arrows
+    all_stresses = np.concatenate([stress_top, stress_bottom])
+    stress_max = np.max(np.abs(all_stresses)) if np.max(np.abs(all_stresses)) > 0 else 1.0
+    
+    # Arrow scale factor (relative to section height)
+    arrow_scale = section_height * 0.8
+    
+    fig = go.Figure()
+    
+    # Plot element centerline
+    fig.add_trace(go.Scatter(
+        x=[x1, x2],
+        y=[y1, y2],
+        mode='lines',
+        line=dict(color='black', width=3),
+        name='Element Centerline',
+        hoverinfo='skip'
+    ))
+    
+    # Plot top and bottom fiber lines
+    top_xs = []
+    top_ys = []
+    bottom_xs = []
+    bottom_ys = []
+    
+    for i, x_local in enumerate(xs_local):
+        t = x_local / L
+        px = x1 + t * (x2 - x1)
+        py = y1 + t * (y2 - y1)
+        
+        # Top fiber position
+        top_x = px + perp_x * section_height / 2
+        top_y = py + perp_y * section_height / 2
+        top_xs.append(top_x)
+        top_ys.append(top_y)
+        
+        # Bottom fiber position
+        bottom_x = px - perp_x * section_height / 2
+        bottom_y = py - perp_y * section_height / 2
+        bottom_xs.append(bottom_x)
+        bottom_ys.append(bottom_y)
+    
+    fig.add_trace(go.Scatter(
+        x=top_xs,
+        y=top_ys,
+        mode='lines',
+        line=dict(color='gray', width=1, dash='dot'),
+        name='Top Fiber',
+        hoverinfo='skip'
+    ))
+    
+    fig.add_trace(go.Scatter(
+        x=bottom_xs,
+        y=bottom_ys,
+        mode='lines',
+        line=dict(color='gray', width=1, dash='dot'),
+        name='Bottom Fiber',
+        hoverinfo='skip'
+    ))
+    
+    # Create colormap for stress values
+    norm = mcolors.Normalize(vmin=-stress_max, vmax=stress_max)
+    cmap = cm.get_cmap('rainbow')
+    
+    # Plot stress arrows at top fiber
+    for i, x_local in enumerate(xs_local):
+        t = x_local / L
+        px = x1 + t * (x2 - x1)
+        py = y1 + t * (y2 - y1)
+        
+        # Top fiber arrow
+        top_x = px + perp_x * section_height / 2
+        top_y = py + perp_y * section_height / 2
+        
+        stress_val = stress_top[i]
+        arrow_length = (stress_val / stress_max) * arrow_scale if stress_max > 0 else 0
+        
+        # Arrow direction: perpendicular to element, pointing outward for positive stress (tension)
+        arrow_dx = perp_x * arrow_length
+        arrow_dy = perp_y * arrow_length
+        
+        # Color based on stress value
+        color_rgba = cmap(norm(stress_val))
+        color_hex = mcolors.to_hex(color_rgba)
+        
+        # Add arrow annotation
+        fig.add_annotation(
+            x=top_x + arrow_dx,
+            y=top_y + arrow_dy,
+            ax=top_x,
+            ay=top_y,
+            xref='x',
+            yref='y',
+            axref='x',
+            ayref='y',
+            showarrow=True,
+            arrowhead=2,
+            arrowsize=1,
+            arrowwidth=2,
+            arrowcolor=color_hex,
+            text='',
+            hovertext=f'x={x_local:.3f}<br>σ_top={stress_val:.3f} MPa'
+        )
+        
+        # Bottom fiber arrow
+        bottom_x = px - perp_x * section_height / 2
+        bottom_y = py - perp_y * section_height / 2
+        
+        stress_val = stress_bottom[i]
+        arrow_length = (stress_val / stress_max) * arrow_scale if stress_max > 0 else 0
+        
+        # Arrow direction: perpendicular to element, pointing outward for positive stress (tension)
+        arrow_dx = -perp_x * arrow_length
+        arrow_dy = -perp_y * arrow_length
+        
+        # Color based on stress value
+        color_rgba = cmap(norm(stress_val))
+        color_hex = mcolors.to_hex(color_rgba)
+        
+        # Add arrow annotation
+        fig.add_annotation(
+            x=bottom_x + arrow_dx,
+            y=bottom_y + arrow_dy,
+            ax=bottom_x,
+            ay=bottom_y,
+            xref='x',
+            yref='y',
+            axref='x',
+            ayref='y',
+            showarrow=True,
+            arrowhead=2,
+            arrowsize=1,
+            arrowwidth=2,
+            arrowcolor=color_hex,
+            text='',
+            hovertext=f'x={x_local:.3f}<br>σ_bottom={stress_val:.3f} MPa'
+        )
+    
+    # Add colorbar using a dummy scatter trace
+    colorbar_vals = np.linspace(-stress_max, stress_max, 100)
+    fig.add_trace(go.Scatter(
+        x=[None] * 100,
+        y=[None] * 100,
+        mode='markers',
+        marker=dict(
+            size=0.1,
+            color=colorbar_vals,
+            colorscale='rainbow',
+            colorbar=dict(title='Normal Stress (MPa)'),
+            showscale=True
+        ),
+        hoverinfo='none',
+        showlegend=False
+    ))
+    
+    fig.update_layout(
+        title=f"Normal Stress Distribution - Side View (Element {element_result.element.id})",
+        xaxis_title="x (m)",
+        yaxis_title="y (m)",
+        width=900,
+        height=600,
+        showlegend=True,
+        hovermode='closest'
+    )
+    
+    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    
+    return fig

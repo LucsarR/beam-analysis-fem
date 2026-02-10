@@ -16,7 +16,7 @@ from config import DEFAULT_E, DEFAULT_NU, SECTION_TYPES, ELEMENT_TYPES
 
 # --- Post-processing and Plotting ---
 from post_processing.forces import StructureResults
-from post_processing.plotter import plot_structure_diagram, plot_normal_stress_distribution, plot_structure_preview
+from post_processing.plotter import plot_structure_diagram, plot_normal_stress_distribution, plot_normal_stress_side_view, plot_structure_preview
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -1420,9 +1420,54 @@ with tab3:
                 except Exception as e:
                     st.error(f"Error generating diagram: {e}")
         
-        # TODO: Implementar distribuição de sigma normal visao de lado. em conjunto com a distribuição de sigma normal na seção transversal, para comparação entre elas.
+        # Normal Stress Distribution - Side View with Arrows
+        with st.expander("🔍 Normal Stress Distribution - Side View (with Arrows)", expanded=False):
+            st.markdown("""
+            This visualization shows the normal stress distribution along the element length using arrows.
+            Arrows at the top and bottom fibers indicate stress magnitude and direction:
+            - **Arrow length**: Proportional to stress magnitude
+            - **Arrow direction**: Points outward for tension (positive), inward for compression (negative)
+            - **Arrow color**: Rainbow scale from compression (blue) to tension (red)
+            """)
+            
+            element_ids = [el.id for el in st.session_state["mesh"].elements]
+            
+            if element_ids:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    selected_element_id_side = st.selectbox(
+                        "Select element",
+                        element_ids,
+                        key="element_side_view",
+                        help="Choose element to analyze"
+                    )
+                
+                selected_element_result_side = next(
+                    er for er in structure_results.element_results
+                    if er.element.id == selected_element_id_side
+                )
+                
+                with col2:
+                    n_arrows = st.slider(
+                        "Number of arrows",
+                        min_value=5,
+                        max_value=50,
+                        value=20,
+                        step=5,
+                        help="Number of positions to sample along element"
+                    )
+                
+                if st.button("🔍 Show Side View Stress Distribution", key="btn_side_view", use_container_width=True):
+                    try:
+                        fig = plot_normal_stress_side_view(selected_element_result_side, n_points=n_arrows)
+                        st.plotly_chart(fig, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+            else:
+                st.warning("No elements available for stress analysis.")
 
-        # Normal Stress Distribution
+        # Normal Stress Distribution - Cross Section View
         with st.expander("🔍 Normal Stress Distribution in Cross Section", expanded=False):
             element_ids = [el.id for el in st.session_state["mesh"].elements]
             
@@ -1455,6 +1500,71 @@ with tab3:
                     try:
                         fig = plot_normal_stress_distribution(selected_element_result, x_pos)
                         st.plotly_chart(fig, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+            else:
+                st.warning("No elements available for stress analysis.")
+        
+        # Comparison View - Side by Side
+        with st.expander("📊 Comparison: Side View & Cross Section", expanded=False):
+            st.markdown("""
+            Compare the side view stress distribution (along element) with the cross-section stress distribution (at a specific position).
+            This allows you to understand how stress varies both along the element length and across the section height.
+            """)
+            
+            element_ids = [el.id for el in st.session_state["mesh"].elements]
+            
+            if element_ids:
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    selected_element_id_comp = st.selectbox(
+                        "Select element",
+                        element_ids,
+                        key="element_comparison",
+                        help="Choose element to compare"
+                    )
+                
+                selected_element_result_comp = next(
+                    er for er in structure_results.element_results
+                    if er.element.id == selected_element_id_comp
+                )
+                
+                with col2:
+                    x_pos_comp = st.slider(
+                        "Position for cross-section (m)",
+                        min_value=0.0,
+                        max_value=float(selected_element_result_comp.length),
+                        value=0.0,
+                        step=0.01,
+                        key="x_pos_comparison",
+                        help="Position along element for cross-section view"
+                    )
+                
+                with col3:
+                    n_arrows_comp = st.slider(
+                        "Number of arrows",
+                        min_value=5,
+                        max_value=50,
+                        value=20,
+                        step=5,
+                        key="n_arrows_comparison",
+                        help="Number of arrows for side view"
+                    )
+                
+                if st.button("📊 Show Comparison", key="btn_comparison", use_container_width=True):
+                    try:
+                        col_left, col_right = st.columns(2)
+                        
+                        with col_left:
+                            st.subheader("Side View (Along Element)")
+                            fig_side = plot_normal_stress_side_view(selected_element_result_comp, n_points=n_arrows_comp)
+                            st.plotly_chart(fig_side, use_container_width=True)
+                        
+                        with col_right:
+                            st.subheader(f"Cross Section at x={x_pos_comp:.2f} m")
+                            fig_cross = plot_normal_stress_distribution(selected_element_result_comp, x_pos_comp)
+                            st.plotly_chart(fig_cross, use_container_width=True)
                     except Exception as e:
                         st.error(f"Error: {e}")
             else:
