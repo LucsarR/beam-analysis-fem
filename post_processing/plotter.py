@@ -495,3 +495,215 @@ def plot_normal_stress_distribution(element_result, x, n_points=200):
     )
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     return fig
+
+def plot_normal_stress_side_view(structure_results, fiber_positions=None, n_points=50, scale=0.2):
+    """
+    Interactive Plotly plot: side view of normal stress distribution along the beam length.
+    Shows how normal stress varies along the beam at different fiber positions (e.g., top, bottom, neutral axis).
+    
+    Args:
+        structure_results: StructureResults object containing element results
+        fiber_positions: List of y-coordinates in the cross-section to plot stress for.
+                        If None, defaults to [y_max, 0, y_min] (top fiber, neutral axis, bottom fiber)
+        n_points: Number of points to sample along each element
+        scale: Visual scale for the stress diagram offset from the beam centerline
+    
+    Returns:
+        Plotly figure object showing the beam with stress distribution
+    """
+    fig = go.Figure()
+    
+    # Plot nodes
+    for node in structure_results.mesh.nodes:
+        fig.add_trace(go.Scatter(
+            x=[node.x], y=[node.y],
+            mode='markers',
+            marker=dict(color='black', size=8),
+            text=[str(node.id)],
+            textposition='top right',
+            name=f'Node {node.id}',
+            hoverinfo='skip',
+            showlegend=False
+        ))
+    
+    # Gather all stress values for normalization across all elements and fibers
+    all_stress_vals = []
+    element_data = []
+    
+    for el_result in structure_results.element_results:
+        # Determine fiber positions if not specified
+        section = el_result.element.section
+        if fiber_positions is None:
+            # Use section dimensions to determine top and bottom fibers
+            if hasattr(section, 'height'):
+                y_max = section.height / 2
+                y_min = -section.height / 2
+                fibers = [y_max, 0, y_min]  # top, neutral axis, bottom
+            elif hasattr(section, 'diameter'):
+                y_max = section.diameter / 2
+                y_min = -section.diameter / 2
+                fibers = [y_max, 0, y_min]
+            else:
+                # Default to a generic range
+                fibers = [0.05, 0, -0.05]
+        else:
+            fibers = fiber_positions
+        
+        # Calculate stress at each position along element
+        L = el_result.length
+        xs = np.linspace(0, L, n_points)
+        
+        fiber_stress_data = {}
+        for y_fiber in fibers:
+            stresses = []
+            for x in xs:
+                N = el_result.normal_force(x)
+                M = el_result.bending_moment(x)
+                sigma = section.normal_stress(N, M, y_fiber)
+                stresses.append(sigma)
+                all_stress_vals.append(sigma)
+            fiber_stress_data[y_fiber] = np.array(stresses)
+        
+        element_data.append({
+            'element': el_result,
+            'xs': xs,
+            'fibers': fibers,
+            'fiber_stress_data': fiber_stress_data
+        })
+    
+    # Normalize stresses for color mapping
+    all_stress_vals = np.array(all_stress_vals)
+    vmin = np.min(all_stress_vals) if len(all_stress_vals) > 0 else -1.0
+    vmax = np.max(all_stress_vals) if len(all_stress_vals) > 0 else 1.0
+    vmax_abs = max(abs(vmin), abs(vmax))
+    if vmax_abs == 0:
+        vmax_abs = 1.0
+    
+    # Color normalization
+    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+    cmap = cm.get_cmap('RdBu_r')  # Red for tension, blue for compression
+    
+    # Plot elements and stress distributions
+    for el_data in element_data:
+        el_result = el_data['element']
+        n1 = el_result.element.node_start
+        n2 = el_result.element.node_end
+        x1, y1 = n1.x, n1.y
+        x2, y2 = n2.x, n2.y
+        
+        # Plot element centerline
+        fig.add_trace(go.Scatter(
+            x=[x1, x2], y=[y1, y2],
+            mode='lines',
+            line=dict(color='black', width=2),
+            name=f'Element {el_result.element.id}',
+            hoverinfo='skip',
+            showlegend=False
+        ))
+        
+        L = el_result.length
+        xs = el_data['xs']
+        dx = x2 - x1
+        dy = y2 - y1
+        
+        # Element direction unit vector
+        elem_dir = np.array([dx, dy]) / L if L > 0 else np.array([1, 0])
+        
+        # Perpendicular direction for offset (upward)
+        perp = np.array([-dy, dx]) / L if L > 0 else np.array([0, 1])
+        
+        # Plot stress distribution for each fiber position
+        fiber_colors = ['red', 'green', 'blue']  # Different colors for different fibers
+        fiber_names = ['Top Fiber', 'Neutral Axis', 'Bottom Fiber']
+        
+        for idx, y_fiber in enumerate(el_data['fibers']):
+            stresses = el_data['fiber_stress_data'][y_fiber]
+            
+            # Calculate positions along element for this stress line
+            pxs = []
+            pys = []
+            stress_normalized = stresses / vmax_abs
+            diagram_scale = scale * L
+            
+            for i in range(n_points):
+                t = xs[i] / L
+                # Base position on element
+                px_base = x1 + t * dx
+                py_base = y1 + t * dy
+                
+                # Offset perpendicular to element based on fiber position and stress
+                # Fiber position offset (to separate different fiber lines visually)
+                fiber_offset_scale = 0.3 * (idx - 1)  # -0.3, 0, 0.3 for 3 fibers
+                
+                # Stress magnitude offset
+                stress_offset = stress_normalized[i] * diagram_scale
+                total_offset = (fiber_offset_scale + stress_offset)
+                
+                px = px_base + total_offset * perp[0]
+                py = py_base + total_offset * perp[1]
+                
+                pxs.append(px)
+                pys.append(py)
+            
+            # Plot stress line with gradient coloring
+            for i in range(n_points - 1):
+                color_rgba = cmap(norm(stresses[i]))
+                color_hex = mcolors.to_hex(color_rgba)
+                
+                fiber_label = f"y={y_fiber:.4f}m" if idx < len(fiber_names) else f"Fiber {idx+1}"
+                if idx < len(fiber_names):
+                    fiber_label = fiber_names[idx]
+                
+                fig.add_trace(go.Scatter(
+                    x=[pxs[i], pxs[i+1]],
+                    y=[pys[i], pys[i+1]],
+                    mode='lines',
+                    line=dict(color=color_hex, width=3),
+                    hoverinfo='text',
+                    text=f"Element {el_result.element.id}<br>{fiber_label}<br>x={xs[i]:.3f}m<br>σ={stresses[i]:.2f} Pa",
+                    showlegend=False
+                ))
+            
+            # Add a single legend entry for this fiber (using the first segment)
+            if el_result == element_data[0]['element']:  # Only add legend for first element
+                fig.add_trace(go.Scatter(
+                    x=[None], y=[None],
+                    mode='lines',
+                    line=dict(color=fiber_colors[idx] if idx < len(fiber_colors) else 'gray', width=3),
+                    name=f'{fiber_names[idx] if idx < len(fiber_names) else f"Fiber {idx+1}"} (y={y_fiber:.4f}m)',
+                    showlegend=True
+                ))
+    
+    # Add a colorbar using a dummy invisible scatter
+    colorbar_vals = np.linspace(vmin, vmax, 100)
+    fig.add_trace(go.Scatter(
+        x=[None]*100, y=[None]*100,
+        mode='markers',
+        marker=dict(
+            size=0.1,
+            color=colorbar_vals,
+            colorscale='RdBu_r',
+            colorbar=dict(title="Normal Stress (Pa)"),
+            showscale=True
+        ),
+        hoverinfo='none',
+        showlegend=False
+    ))
+    
+    fig.update_layout(
+        title="Normal Stress Distribution - Side View",
+        xaxis_title="x (m)",
+        yaxis_title="y (m)",
+        showlegend=True,
+        width=1000,
+        height=600,
+        hovermode='closest',
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.01
+        )
+    )
+    
+    return fig

@@ -16,7 +16,7 @@ from config import DEFAULT_E, DEFAULT_NU, SECTION_TYPES, ELEMENT_TYPES
 
 # --- Post-processing and Plotting ---
 from post_processing.forces import StructureResults
-from post_processing.plotter import plot_structure_diagram, plot_normal_stress_distribution, plot_structure_preview
+from post_processing.plotter import plot_structure_diagram, plot_normal_stress_distribution, plot_structure_preview, plot_normal_stress_side_view
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -1420,7 +1420,80 @@ with tab3:
                 except Exception as e:
                     st.error(f"Error generating diagram: {e}")
         
-        # TODO: Implementar distribuição de sigma normal visao de lado.
+        # Normal Stress Distribution - Side View
+        with st.expander("📊 Normal Stress Distribution - Side View", expanded=False):
+            st.markdown("""
+            **Side view** of normal stress distribution along the beam length.
+            Shows stress variation at different fiber positions (top, bottom, neutral axis).
+            - 🔴 Red: Tension (positive stress)
+            - 🔵 Blue: Compression (negative stress)
+            """)
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                stress_scale = st.slider(
+                    "Diagram Scale",
+                    min_value=0.05,
+                    max_value=1.0,
+                    value=0.2,
+                    step=0.05,
+                    help="Adjust the visual scale of the stress diagram"
+                )
+            
+            with col2:
+                # Check if we can determine fiber positions from first element
+                first_element = structure_results.mesh.elements[0] if structure_results.mesh.elements else None
+                if first_element and hasattr(first_element.section, 'height'):
+                    section_height = first_element.section.height
+                    default_fibers = [section_height/2, 0, -section_height/2]
+                    fiber_help = f"Default: Top ({section_height/2:.4f}m), Neutral (0m), Bottom ({-section_height/2:.4f}m)"
+                elif first_element and hasattr(first_element.section, 'diameter'):
+                    section_diameter = first_element.section.diameter
+                    default_fibers = [section_diameter/2, 0, -section_diameter/2]
+                    fiber_help = f"Default: Top ({section_diameter/2:.4f}m), Neutral (0m), Bottom ({-section_diameter/2:.4f}m)"
+                else:
+                    default_fibers = None
+                    fiber_help = "Leave empty to use default fiber positions"
+                
+                custom_fibers_input = st.text_input(
+                    "Custom Fiber Positions (optional)",
+                    value="",
+                    help=f"Comma-separated y-coordinates (e.g., '0.05, 0, -0.05'). {fiber_help}",
+                    placeholder="e.g., 0.05, 0, -0.05"
+                )
+            
+            if st.button("📊 Generate Side View Stress Distribution", use_container_width=True):
+                try:
+                    # Parse custom fiber positions if provided
+                    fiber_positions = None
+                    if custom_fibers_input.strip():
+                        try:
+                            fiber_positions = [float(x.strip()) for x in custom_fibers_input.split(',')]
+                        except ValueError:
+                            st.error("Invalid fiber positions. Please enter comma-separated numbers.")
+                            fiber_positions = None
+                    
+                    fig = plot_normal_stress_side_view(
+                        structure_results,
+                        fiber_positions=fiber_positions,
+                        scale=stress_scale
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Show legend explanation
+                    st.info("""
+                    **How to interpret:**
+                    - Each colored line represents stress at a specific fiber position (y-coordinate in cross-section)
+                    - Lines offset from the beam centerline show stress magnitude
+                    - Hover over lines to see exact stress values
+                    - Top fiber (y > 0): typically under tension for downward loads
+                    - Bottom fiber (y < 0): typically under compression for downward loads
+                    """)
+                except Exception as e:
+                    st.error(f"Error generating side view stress distribution: {e}")
+                    import traceback
+                    st.code(traceback.format_exc())
 
         # Normal Stress Distribution
         with st.expander("🔍 Normal Stress Distribution in Cross Section", expanded=False):
