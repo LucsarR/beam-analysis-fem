@@ -163,8 +163,8 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
             arrowwidth=4,
             arrowcolor='orange',
             text=f'{magnitude:.1f}N',
-            font=dict(size=13, color='orange'),
-            bgcolor='rgba(255,255,255,0.7)'
+            font=dict(size=13, color='#000000'),
+            bgcolor='rgba(255,165,0,0.85)'
         )
     
     # Plot distributed loads
