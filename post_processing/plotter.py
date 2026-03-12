@@ -39,6 +39,7 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
         marker=dict(color='blue', size=12, symbol='circle'),
         text=node_ids,
         textposition='top center',
+        textfont=dict(size=14, color='black'),
         name='Nodes',
         hovertemplate='Node %{text}<br>x=%{x:.3f}<br>y=%{y:.3f}<extra></extra>'
     ))
@@ -162,7 +163,7 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
             arrowwidth=4,
             arrowcolor='orange',
             text=f'{magnitude:.1f}N',
-            font=dict(size=10, color='orange'),
+            font=dict(size=13, color='orange'),
             bgcolor='rgba(255,255,255,0.7)'
         )
     
@@ -641,7 +642,7 @@ def plot_normal_stress_side_view(element_result, x, n_points=30):
             y=y_max,
             text=f"Top: σ={top_stress:.2f}",
             showarrow=False,
-            font=dict(size=10),
+            font=dict(size=13, color='black'),
             bgcolor="rgba(255,255,255,0.8)"
         )
         
@@ -652,7 +653,7 @@ def plot_normal_stress_side_view(element_result, x, n_points=30):
             y=y_min,
             text=f"Bottom: σ={bottom_stress:.2f}",
             showarrow=False,
-            font=dict(size=10),
+            font=dict(size=13, color='black'),
             bgcolor="rgba(255,255,255,0.8)"
         )
     
