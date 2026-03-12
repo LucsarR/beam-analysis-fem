@@ -30,6 +30,16 @@ st.set_page_config(
 st.title("🔧 FEM Beam Analysis Tool")
 st.markdown("_A finite element analysis tool for beam structures_")
 
+# --- Hide number-input step buttons (the +/- controls don't make sense for coordinates
+#     and other fields where arbitrary values are entered) ---
+st.markdown("""
+<style>
+div[data-testid="stNumberInput"] button {
+    display: none !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # --- Helper Functions for Project Management ---
 def save_project_to_dict():
     """Save current project state to dictionary."""
@@ -408,16 +418,22 @@ with st.sidebar:
     
     # Load Project
     st.subheader("📂 Load Project")
+    # Use a dynamic key so the file uploader resets after a successful load
+    # (prevents requiring the user to click "x" to fully apply the loaded project)
+    file_loader_key = f"project_loader_{st.session_state.get('file_loader_key', 0)}"
     uploaded_file = st.file_uploader(
         "Choose a project file",
         type=["json"],
-        help="Upload a previously saved project JSON file"
+        help="Upload a previously saved project JSON file",
+        key=file_loader_key
     )
     if uploaded_file is not None:
         try:
             project_data = json.loads(uploaded_file.read())
             if load_project_from_dict(project_data):
                 st.success("✅ Project loaded successfully!")
+                # Increment key so the file uploader resets on the next run
+                st.session_state["file_loader_key"] = st.session_state.get("file_loader_key", 0) + 1
                 st.rerun()
             else:
                 st.error("❌ Failed to load project.")
@@ -1262,7 +1278,22 @@ with tab2:
         col4.metric("Constraints", len(st.session_state.get("constraints", [])))
         col5.metric("Point Loads", len(st.session_state.get("point_loads", [])))
         col6.metric("Distributed Loads", len(st.session_state.get("distributed_loads", [])))
-    
+
+        # Show total number of mesh nodal points (including subdivision nodes)
+        mesh_obj = st.session_state.get("mesh", None)
+        if mesh_obj is not None:
+            mesh_node_count = len(mesh_obj.nodes)
+        else:
+            # Estimate: user-defined nodes + interior subdivision nodes per element
+            # Element tuple structure: (n1, n2, etype, prop_name, n_subdiv)
+            mesh_node_count = len(nodes)
+            for elem in st.session_state.get("elements", []):
+                n1, n2, etype, prop_name, n_subdiv = elem if len(elem) == 5 else (*elem, 1)
+                if n_subdiv > 1:
+                    mesh_node_count += n_subdiv - 1
+        mesh_label = "Mesh Nodal Points" if mesh_obj is not None else "Mesh Nodal Points (est.)"
+        st.metric(mesh_label, mesh_node_count)
+
     # Validation before analysis
     can_analyze = True
     validation_messages = []
