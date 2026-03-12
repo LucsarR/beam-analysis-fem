@@ -151,7 +151,7 @@ def create_section_preview(section_type, **kwargs):
             label_sign = -1 if shape_ref is None or y1 <= shape_ref else 1
             va = 'top' if label_sign < 0 else 'bottom'
             ax.text((x1 + x2) / 2, y1 + label_sign * text_gap, label,
-                    ha='center', va=va, fontsize=8, color='royalblue')
+                    ha='center', va=va, fontsize=10, color='royalblue')
         else:  # Vertical dimension
             if shape_ref is not None:
                 sign = 1 if x1 > shape_ref else -1
@@ -163,7 +163,7 @@ def create_section_preview(section_type, **kwargs):
             label_sign = -1 if shape_ref is None or x1 <= shape_ref else 1
             ha = 'right' if label_sign < 0 else 'left'
             ax.text(x1 + label_sign * text_gap, (y1 + y2) / 2, label,
-                    ha=ha, va='center', fontsize=8, color='royalblue')
+                    ha=ha, va='center', fontsize=10, color='royalblue')
 
     if section_type == "rectangular_bar":
         width = kwargs.get("width", 0.05)
