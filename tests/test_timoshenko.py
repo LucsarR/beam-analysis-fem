@@ -37,6 +37,7 @@ q(x) = q0·sin(π·x/L):
 import sys
 import os
 import numpy as np
+from scipy.integrate import quad
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -193,7 +194,6 @@ def test_exponential_load_func_single_element_slender():
     q0 = -500.0   # N/m
     # Analytical: total load and reactions from moment equilibrium.
     # R_left*L = -∫ q(x)*(L−x) dx  (moment about right support; load is downward)
-    from scipy.integrate import quad  # noqa: PLC0415
     total_ana, _ = quad(lambda x: q0 * (np.exp(x) - 1.0), 0, L_BEAM)
     moment_right, _ = quad(lambda x: q0 * (np.exp(x) - 1.0) * (L_BEAM - x), 0, L_BEAM)
     R_left_ana  = -moment_right / L_BEAM        # upward (positive)

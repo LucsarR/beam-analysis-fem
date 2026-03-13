@@ -36,6 +36,7 @@ Notes on single-element accuracy:
 import sys
 import os
 import numpy as np
+from scipy.integrate import quad
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -217,8 +218,6 @@ def test_exponential_load_single_element_eb():
     print("\n" + "=" * 60)
     print("Test 3: Exponential Load – Single Element – EB  (equilibrium)")
     print("=" * 60)
-
-    from scipy.integrate import quad
 
     q0 = -500.0
     alpha = 1.0
@@ -507,8 +506,6 @@ def test_cantilever_sinusoidal_load_eb():
     print("\n" + "=" * 60)
     print("Test 8: Cantilever – Sinusoidal Load – EB")
     print("=" * 60)
-
-    from scipy.integrate import quad
 
     q0 = -1000.0   # N/m downward
 
