@@ -799,7 +799,18 @@ class TimoshenkoElement2Node(Element):
     def shear_force(self, x, displacements):
         """
         Returns shear force V(x) at position x (in local coordinates, 0 <= x <= L).
-        For Timoshenko beam theory.
+        For the field-consistent 2-node Timoshenko beam element.
+
+        The raw kinematic formula V = kGA*(dw/dx - θ) is not used here because
+        the 2-node element uses linear interpolation for both w and θ, making the
+        shear strain artificially large (shear locking in the post-processing sense).
+        Instead the shear force is recovered from the element stiffness equilibrium:
+
+            V = 12·EI/(L³·(1+φ)) · (v₁ − v₂)  +  6·EI/(L²·(1+φ)) · (θ₁ + θ₂)
+
+        where  φ = 12·EI / (κGA·L²)  is the shear-flexibility parameter of the
+        element.  This equals the y-direction nodal force from K·u at node 1, and
+        is constant along the element (consistent with linear shear interpolation).
         """
         E = self.material.E
         G = self.material.G
@@ -807,25 +818,20 @@ class TimoshenkoElement2Node(Element):
         A = self.section.area
         kappa = self.section.shear_coefficient
         L = self.length
-        
+
         v1 = displacements[1]
         theta1 = displacements[2]
         v2 = displacements[4]
         theta2 = displacements[5]
-        xi = x / L
-        
-        # Shear force: V = kappa*G*A*(dv/dx - theta)
-        # Linear interpolation for rotation
-        theta = (1 - xi) * theta1 + xi * theta2
-        
-        # Derivative of transverse displacement
-        dv_dx = (-v1 + v2) / L
-        
-        # Shear force
-        V = kappa * G * A * (dv_dx - theta)
-        
+
+        # Shear-flexibility parameter (same as in stiffness_matrix)
+        phi = 12.0 * E * I / (G * kappa * A * L ** 2)
+
+        # Field-consistent shear force (constant along element)
+        V = (12.0 * E * I / (L ** 3 * (1.0 + phi))) * (v1 - v2) \
+            + (6.0 * E * I / (L ** 2 * (1.0 + phi))) * (theta1 + theta2)
         return V
-    
+
     def normal_force(self, x, displacements):
         """
         Returns normal (axial) force N(x) at position x (in local coordinates, 0 <= x <= L).
