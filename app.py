@@ -96,6 +96,18 @@ def load_project_from_dict(project_data):
         st.session_state["point_loads"] = project_data.get("point_loads", [])
         st.session_state["distributed_loads"] = project_data.get("distributed_loads", [])
         st.session_state["project_description"] = project_data.get("metadata", {}).get("description", "")
+
+        # Explicitly reset the count widget keys so the correct number of input
+        # rows is rendered on the next rerun.  Widgets without an explicit key
+        # store their value in Streamlit's internal state which is NOT cleared by
+        # the deletion loop above; giving them explicit keys (see widget
+        # definitions below) and setting those keys here is the reliable fix.
+        st.session_state["n_nodes_input"] = max(2, len(project_data.get("nodes", [])))
+        st.session_state["n_properties_input"] = max(1, len(project_data.get("properties", [])))
+        st.session_state["n_elements_input"] = max(1, len(project_data.get("elements", [])))
+        st.session_state["n_constraints_input"] = len(project_data.get("constraints", []))
+        st.session_state["n_loads_input"] = len(project_data.get("point_loads", []))
+        st.session_state["n_dist_loads_input"] = len(project_data.get("distributed_loads", []))
         
         # Reconstruct properties
         properties = []
@@ -495,6 +507,7 @@ with tab1:
             min_value=2,
             max_value=20,
             value=len(st.session_state.get("nodes", [])) if len(st.session_state.get("nodes", [])) >= 2 else 2,
+            key="n_nodes_input",
             help="Number of nodes in the structure (minimum 2)"
         )
         
@@ -550,6 +563,7 @@ with tab1:
             min_value=1,
             max_value=10,
             value=len(st.session_state.get("properties", [])) if len(st.session_state.get("properties", [])) >= 1 else 1,
+            key="n_properties_input",
             help="Different property sets for different element types"
         )
         
@@ -1000,6 +1014,7 @@ with tab1:
                 min_value=1,
                 max_value=n_nodes-1,
                 value=len(st.session_state.get("elements", [])) if len(st.session_state.get("elements", [])) >= 1 else min(n_nodes-1, 1),
+                key="n_elements_input",
                 help="Number of beam elements"
             )
             
@@ -1071,6 +1086,7 @@ with tab1:
             min_value=0,
             max_value=n_nodes*3,
             value=len(st.session_state.get("constraints", [])),
+            key="n_constraints_input",
             help="Define boundary conditions (e.g., fixed supports)"
         )
         
@@ -1125,6 +1141,7 @@ with tab1:
             min_value=0,
             max_value=n_nodes*3,
             value=len(st.session_state.get("point_loads", [])),
+            key="n_loads_input",
             help="Define point loads applied at nodes"
         )
         
@@ -1178,6 +1195,7 @@ with tab1:
             "Number of distributed loads",
             min_value=0,
             value=len(st.session_state.get("distributed_loads", [])),
+            key="n_dist_loads_input",
             help="Define distributed loads on elements"
         )
         
