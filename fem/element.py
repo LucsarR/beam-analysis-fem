@@ -77,34 +77,47 @@ class EulerBernoulliElement2Node(Element):
         """
         Compute consistent nodal loads for a distributed load (constant, linear, or custom function).
         Returns a 6-vector in GLOBAL coordinates.
+
+        For custom functions (func), the variable ``x`` passed to the expression
+        is the **global** position along the beam (i.e. the x-coordinate of the
+        point on the element in the global frame).  This allows a single
+        expression such as ``60000*(3*(x/4)**2 - 2*(x/4)**3)`` to describe a
+        load that varies over the full beam length even when the mesh has
+        multiple elements.  ``L`` in the expression refers to the length of
+        the current element.
         """
         import numpy as np
         L = self.length
         c = self.c
         s = self.s
 
-        # Build load function f(x) from distributed_load
+        # Build load function f(x_local) from distributed_load.
+        # x_local is the local coordinate within the element (0 to L).
         if distributed_load.func:
-            # Custom function
-            def f(x):
+            # Custom function: evaluate using the global x position so that
+            # load expressions written in terms of the full-beam coordinate
+            # work correctly for any element in a multi-element mesh.
+            x_start = self.node_start.x
+            def f(x_local):
+                x_global = x_start + x_local * c
                 try:
-                    return float(eval(distributed_load.func, {"np": np, "x": x, "L": L}))
+                    return float(eval(distributed_load.func, {"np": np, "x": x_global, "L": L}))
                 except Exception as e:
                     print(f"Error evaluating custom function '{distributed_load.func}': {e}")
-                    return 0.0  # or raise ValueError("Invalid custom function for distributed load")
+                    return 0.0
         elif distributed_load.magnitude_start is not None and distributed_load.magnitude_end is not None:
             # Linear
             a = float(distributed_load.magnitude_start)
             b = float(distributed_load.magnitude_end)
-            def f(x):
-                return a + (b - a) * (x / L)
+            def f(x_local):
+                return a + (b - a) * (x_local / L)
         elif distributed_load.magnitude_start is not None:
             # Constant
             a = float(distributed_load.magnitude_start)
-            def f(x):
+            def f(x_local):
                 return a
         else:
-            def f(x):
+            def f(x_local):
                 return 0.0
 
         # Project direction to local axes
@@ -423,12 +436,17 @@ class EulerBernoulliElement3Node(Element):
         c = self.c
         s = self.s
 
-        # Build load function f(x) from distributed_load
+        # Build load function f(x_local) from distributed_load.
+        # x_local is the local coordinate within the element (0 to L).
         if distributed_load.func:
-            # Custom function
-            def f(x):
+            # Custom function: evaluate using the global x position so that
+            # load expressions written in terms of the full-beam coordinate
+            # work correctly for any element in a multi-element mesh.
+            x_start = self.node_start.x
+            def f(x_local):
+                x_global = x_start + x_local * c
                 try:
-                    return float(eval(distributed_load.func, {"np": np, "x": x, "L": L}))
+                    return float(eval(distributed_load.func, {"np": np, "x": x_global, "L": L}))
                 except Exception as e:
                     print(f"Error evaluating custom function '{distributed_load.func}': {e}")
                     return 0.0
@@ -436,15 +454,15 @@ class EulerBernoulliElement3Node(Element):
             # Linear
             a = float(distributed_load.magnitude_start)
             b = float(distributed_load.magnitude_end)
-            def f(x):
-                return a + (b - a) * (x / L)
+            def f(x_local):
+                return a + (b - a) * (x_local / L)
         elif distributed_load.magnitude_start is not None:
             # Constant
             a = float(distributed_load.magnitude_start)
-            def f(x):
+            def f(x_local):
                 return a
         else:
-            def f(x):
+            def f(x_local):
                 return 0.0
 
         # Project direction to local axes
@@ -687,18 +705,28 @@ class TimoshenkoElement2Node(Element):
         Compute consistent nodal loads for a distributed load (constant, linear, or custom function).
         Returns a 6-vector in GLOBAL coordinates.
         For Timoshenko beam elements, uses the same approach as Euler-Bernoulli.
+
+        For custom functions (func), the variable ``x`` passed to the expression
+        is the **global** position along the beam (i.e. the x-coordinate of the
+        point on the element in the global frame).  ``L`` in the expression
+        refers to the length of the current element.
         """
         import numpy as np
         L = self.length
         c = self.c
         s = self.s
 
-        # Build load function f(x) from distributed_load
+        # Build load function f(x_local) from distributed_load.
+        # x_local is the local coordinate within the element (0 to L).
         if distributed_load.func:
-            # Custom function
-            def f(x):
+            # Custom function: evaluate using the global x position so that
+            # load expressions written in terms of the full-beam coordinate
+            # work correctly for any element in a multi-element mesh.
+            x_start = self.node_start.x
+            def f(x_local):
+                x_global = x_start + x_local * c
                 try:
-                    return float(eval(distributed_load.func, {"np": np, "x": x, "L": L}))
+                    return float(eval(distributed_load.func, {"np": np, "x": x_global, "L": L}))
                 except Exception as e:
                     print(f"Error evaluating custom function '{distributed_load.func}': {e}")
                     return 0.0
@@ -706,15 +734,15 @@ class TimoshenkoElement2Node(Element):
             # Linear
             a = float(distributed_load.magnitude_start)
             b = float(distributed_load.magnitude_end)
-            def f(x):
-                return a + (b - a) * (x / L)
+            def f(x_local):
+                return a + (b - a) * (x_local / L)
         elif distributed_load.magnitude_start is not None:
             # Constant
             a = float(distributed_load.magnitude_start)
-            def f(x):
+            def f(x_local):
                 return a
         else:
-            def f(x):
+            def f(x_local):
                 return 0.0
 
         # Project direction to local axes

@@ -608,6 +608,102 @@ def test_mesh_convergence_sinusoidal_eb():
 
 
 # ===========================================================================
+# Test 10 – Propped cantilever with cubic custom load (global-x func)
+# ===========================================================================
+def test_propped_cantilever_cubic_load_global_x():
+    """
+    Propped cantilever beam (clamped at x=0, simply supported at x=L) with a
+    cubic distributed load expressed using the **global** x coordinate:
+
+        q(x) = 60000*(3*(x/4)**2 - 2*(x/4)**3),  L = 4,  EI = 25800
+
+    Boundary conditions:
+        v(0) = 0,  theta(0) = 0  (clamped left end)
+        v(L) = 0                 (pinned right end)
+
+    Analytical bending moment at x = 3:
+        M(3) ≈ -41129.46  (hogging)
+
+    This test verifies that custom load functions using global x coordinates
+    work correctly for multi-element meshes.  The bug addressed here was that
+    the variable ``x`` in custom func expressions was previously evaluated
+    using the *local* element coordinate (0 … element_length) rather than the
+    *global* beam coordinate, which caused the load to be computed incorrectly
+    on all elements except the first, leading to results that did not converge.
+
+    Checks:
+    - |M(3)| converges to the analytical value with mesh refinement.
+    - Error < 5% with 16 elements.
+    - Error < 1% with 64 elements.
+    """
+    print("\n" + "=" * 60)
+    print("Test 10: Propped Cantilever – Cubic Load (global-x func) – EB")
+    print("=" * 60)
+
+    L = 4.0
+    EI_beam = 25800.0
+    # Use E=1 so that I == EI_beam for simplicity
+    E_test = 1.0
+    I_test = EI_beam
+
+    # Analytical moment at x=3 (from force-method / exact numerical integration)
+    # This value is converged to 6 significant figures.
+    M_ana = -41129.4643
+
+    from fem.section import create_section
+
+    def _run(n):
+        mesh = Mesh()
+        mat = Material(1, E_test, 0.3)
+        sec = create_section('general', 1, area=1.0, inertia=I_test)
+        nodes = mesh.generate_1d_mesh(0, 0, L, 0, n, mat, sec,
+                                      'euler_bernoulli_2node')
+
+        # Propped cantilever: clamp at x=0, pin at x=L
+        mesh.constraints.add(Constraint(nodes[0], 0, 0.0))   # u(0)=0
+        mesh.constraints.add(Constraint(nodes[0], 1, 0.0))   # v(0)=0
+        mesh.constraints.add(Constraint(nodes[0], 2, 0.0))   # theta(0)=0
+        mesh.constraints.add(Constraint(nodes[-1], 1, 0.0))  # v(L)=0
+
+        func = '60000*(3*(x/4)**2-2*(x/4)**3)'
+        for element in mesh.elements:
+            ld = DistributedLoad(direction='y', func=func)
+            ld.element = element
+            mesh.distributed_loads.append(ld)
+
+        analysis = BeamAnalysis(mesh)
+        analysis.assemble()
+        displacements = analysis.solve()
+        results = StructureResults(mesh, displacements)
+
+        # Locate element containing x=3 and evaluate moment there
+        elem_len = L / n
+        elem_idx = min(int(3.0 / elem_len), n - 1)
+        local_x = 3.0 - elem_idx * elem_len
+        return results.element_results[elem_idx].bending_moment(local_x)
+
+    prev_err = None
+    for n in [4, 8, 16, 32, 64]:
+        M_fem = _run(n)
+        err = abs((M_fem - M_ana) / M_ana) * 100
+        print(f"  n={n:3d}: M(3)={M_fem:.4f}, ana={M_ana:.4f}, err={err:.3f}%")
+
+        if prev_err is not None:
+            assert err <= prev_err * 1.1, (
+                f"Non-monotonic convergence at n={n}: err={err:.3f}% > prev {prev_err:.3f}%"
+            )
+        prev_err = err
+
+        if n == 16:
+            assert err < 5.0, f"n=16: |M(3)| error {err:.3f}% > 5%"
+        if n == 64:
+            assert err < 1.0, f"n=64: |M(3)| error {err:.3f}% > 1%"
+
+    print("OK Propped cantilever with cubic load: moment converges correctly")
+    return True
+
+
+# ===========================================================================
 # Main runner
 # ===========================================================================
 if __name__ == "__main__":
@@ -625,6 +721,7 @@ if __name__ == "__main__":
         ("Test 7: Cantilever – Uniform Load",               test_cantilever_uniform_load_eb),
         ("Test 8: Cantilever – Sinusoidal Load",            test_cantilever_sinusoidal_load_eb),
         ("Test 9: Mesh Convergence – Sinusoidal",           test_mesh_convergence_sinusoidal_eb),
+        ("Test 10: Propped Cantilever – Cubic Load (global-x)", test_propped_cantilever_cubic_load_global_x),
     ]
 
     passed = 0
