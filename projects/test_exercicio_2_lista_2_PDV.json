@@ -1,0 +1,75 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "created": "2026-03-13T00:03:19.108197",
+    "description": ""
+  },
+  "nodes": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      4.0,
+      0.0
+    ]
+  ],
+  "properties": [
+    {
+      "name": "Property_1",
+      "material": {
+        "E": 25800000.0,
+        "nu": 0.3
+      },
+      "section": {
+        "type": "general",
+        "kwargs": {
+          "area": 1.0,
+          "inertia": 1.0
+        }
+      }
+    }
+  ],
+  "elements": [
+    [
+      1,
+      2,
+      "timoshenko_2node",
+      "Property_1",
+      20
+    ]
+  ],
+  "constraints": [
+    [
+      1,
+      0,
+      0.0
+    ],
+    [
+      1,
+      1,
+      0.0
+    ],
+    [
+      1,
+      2,
+      0.0
+    ],
+    [
+      2,
+      1,
+      0.0
+    ]
+  ],
+  "point_loads": [],
+  "distributed_loads": [
+    [
+      1,
+      null,
+      null,
+      "y",
+      "60000*(3*(x/4)**2-2*(x/L)**3)",
+      "custom"
+    ]
+  ]
+}
