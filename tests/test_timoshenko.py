@@ -489,34 +489,31 @@ def test_mesh_convergence_thick_sinusoidal():
 # ===========================================================================
 def test_sinusoidal_func_multi_element_thick():
     """
-    Sinusoidal load applied via the func feature on each element independently.
+    Global sinusoidal load applied via the func feature on a multi-element
+    Timoshenko beam.
 
-    For a multi-element mesh the 'func' variable x spans [0, L_elem] (the LOCAL
-    element coordinate).  Therefore func='{q0}*sin(pi*x/L)' applies a full
-    half-cycle over each element's length.  This is NOT the same as the global
-    sinusoidal pattern q0*sin(pi*x_global/L_beam), but it is a valid, physically
-    meaningful load that exercises the func evaluation and Gauss quadrature.
+    With the fix, the variable ``x`` in a custom func expression is evaluated
+    at the **global** position along the beam (not the local element coordinate).
+    This test verifies that a globally-correct sinusoidal load applied via
+    ``func=f'{q0}*np.sin(np.pi*x/{L_BEAM})'`` produces the right total load
+    and satisfies vertical equilibrium on a thick (shear-deformable) beam.
 
-    The test checks vertical equilibrium only, since there is no simple analytical
-    closed form for the accumulated multi-element pattern.
+    Analytical total load:
+        integral_0^L q0*sin(pi*x/L) dx = q0 * 2*L/pi
     """
     print("\n" + "=" * 60)
-    print("Test 9: Sinusoidal func on Multi-Element Thick Beam – Equilibrium Check")
+    print("Test 9: Global Sinusoidal func on Multi-Element Thick Beam – Equilibrium Check")
     print("=" * 60)
 
     q0 = -1000.0
     n = 8
 
-    # Each element has the same func; the magnitude at the end-points (x=0 and
-    # x=L_elem) is zero, so the load on each element integrates to
-    # q0 * 2*L_elem/pi.  Total = q0 * 2*L_beam/pi.
-    le = L_BEAM / n
-    total_per_elem_ana = q0 * 2.0 * le / np.pi    # integral of q0*sin(pi*x/le) over [0,le]
-    total_ana = n * total_per_elem_ana
+    # Analytical total load: integral of q0*sin(pi*x/L_BEAM) from 0 to L_BEAM
+    total_ana = q0 * 2.0 * L_BEAM / np.pi
 
     mesh, nodes = _make_simply_supported(n, H_THICK)
     for element in mesh.elements:
-        ld = DistributedLoad(direction="t", func=f"{q0}*np.sin(np.pi*x/L)")
+        ld = DistributedLoad(direction="t", func=f"{q0}*np.sin(np.pi*x/{L_BEAM})")
         ld.element = element
         mesh.distributed_loads.append(ld)
 
@@ -524,12 +521,14 @@ def test_sinusoidal_func_multi_element_thick():
     Ry_left, Ry_right = _get_reactions(mesh, nodes, displacements)
     equil_err = abs((Ry_left + Ry_right) + total_ana) / abs(total_ana) * 100
 
-    print(f"  Total analytical load:  {total_ana:.4e} N  (n·∫q over each element)")
+    print(f"  Total analytical load:  {total_ana:.4e} N")
     print(f"  Sum of reactions:       {Ry_left + Ry_right:.4e} N")
     print(f"  Equilibrium error:      {equil_err:.4f}%")
+    # Consistent nodal loads via Gauss quadrature reproduce the total load
+    # exactly for smooth functions; a tight tolerance is appropriate here.
     assert equil_err < 0.1, f"Equilibrium error > 0.1%: {equil_err:.4f}%"
 
-    print("OK Multi-element sinusoidal func: equilibrium satisfied")
+    print("OK Multi-element sinusoidal func (global x): equilibrium satisfied")
     return True
 
 
