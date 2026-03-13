@@ -17,6 +17,7 @@
 
 # Ajuste do front-end
 - [ ] Point Loads inicia em Y force arrumar
+- [ ] Load project buga ao tentar usar duas vezes ou modificar uma valor na mao
 
 # Ajustes Professor
 - [ ] Verificar Timoshenko com os exemplos do livro (Logan e o Reddy) e colocar mais tipos de carga (carga distribuida.etc).
