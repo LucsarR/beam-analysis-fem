@@ -35,6 +35,7 @@ Notes on single-element accuracy:
 
 import sys
 import os
+import json
 import numpy as np
 from scipy.integrate import quad
 
@@ -704,6 +705,84 @@ def test_propped_cantilever_cubic_load_global_x():
 
 
 # ===========================================================================
+# Test 11 – JSON project file matches Test 10 parameters
+# ===========================================================================
+def test_json_project_matches_test10():
+    """
+    Verifies that projects/test_exercicio_2_lista_2_PDV.json encodes the same
+    problem as Test 10 (propped cantilever, cubic load, Euler-Bernoulli, EI=25800).
+
+    Checks:
+    - Element type is euler_bernoulli_2node
+    - EI = E * inertia = 25800.0
+    - Analysis with n_subdiv=20 produces |M(3)| error < 5% vs analytical
+    """
+    print("\n" + "=" * 60)
+    print("Test 11: JSON project file matches Test 10 parameters")
+    print("=" * 60)
+
+    project_path = os.path.join(os.path.dirname(__file__), "..", "projects",
+                                "test_exercicio_2_lista_2_PDV.json")
+    with open(project_path) as f:
+        data = json.load(f)
+
+    # --- Parameter checks ---
+    elem_type = data["elements"][0][2]
+    assert elem_type == "euler_bernoulli_2node", (
+        f"Expected element type 'euler_bernoulli_2node', got '{elem_type}'"
+    )
+
+    E_json = data["properties"][0]["material"]["E"]
+    I_json = data["properties"][0]["section"]["kwargs"]["inertia"]
+    EI_json = E_json * I_json
+    EI_expected = 25800.0
+    assert abs(EI_json - EI_expected) / EI_expected < 1e-6, (
+        f"Expected EI={EI_expected}, got EI={EI_json} (E={E_json}, I={I_json})"
+    )
+
+    # --- Analysis result check ---
+    from fem.section import create_section
+
+    n_subdiv = data["elements"][0][4]
+    L = 4.0
+    M_ana = -41129.4643
+
+    mesh = Mesh()
+    mat = Material(1, E_json, data["properties"][0]["material"]["nu"])
+    sec = create_section("general", 1, area=1.0, inertia=I_json)
+    nodes = mesh.generate_1d_mesh(0, 0, L, 0, n_subdiv, mat, sec, elem_type)
+
+    mesh.constraints.add(Constraint(nodes[0], 0, 0.0))
+    mesh.constraints.add(Constraint(nodes[0], 1, 0.0))
+    mesh.constraints.add(Constraint(nodes[0], 2, 0.0))
+    mesh.constraints.add(Constraint(nodes[-1], 1, 0.0))
+
+    dl = data["distributed_loads"][0]
+    func = dl[4]
+    for element in mesh.elements:
+        ld = DistributedLoad(direction="y", func=func)
+        ld.element = element
+        mesh.distributed_loads.append(ld)
+
+    analysis = BeamAnalysis(mesh)
+    analysis.assemble()
+    displacements = analysis.solve()
+    results = StructureResults(mesh, displacements)
+
+    elem_len = L / n_subdiv
+    elem_idx = min(int(3.0 / elem_len), n_subdiv - 1)
+    local_x = 3.0 - elem_idx * elem_len
+    M_fem = results.element_results[elem_idx].bending_moment(local_x)
+    err = abs((M_fem - M_ana) / M_ana) * 100
+
+    print(f"  M(3) FEM={M_fem:.4f}, ana={M_ana:.4f}, err={err:.3f}%")
+    assert err < 5.0, f"M(3) error {err:.3f}% > 5%"
+
+    print("OK JSON project file matches Test 10 parameters and results")
+    return True
+
+
+# ===========================================================================
 # Main runner
 # ===========================================================================
 if __name__ == "__main__":
@@ -722,6 +801,7 @@ if __name__ == "__main__":
         ("Test 8: Cantilever – Sinusoidal Load",            test_cantilever_sinusoidal_load_eb),
         ("Test 9: Mesh Convergence – Sinusoidal",           test_mesh_convergence_sinusoidal_eb),
         ("Test 10: Propped Cantilever – Cubic Load (global-x)", test_propped_cantilever_cubic_load_global_x),
+        ("Test 11: JSON project file matches Test 10",          test_json_project_matches_test10),
     ]
 
     passed = 0
