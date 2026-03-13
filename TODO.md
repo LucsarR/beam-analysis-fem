@@ -14,6 +14,7 @@
 - [ ] Load Distribution escrever bonitinho em Latex do lado no app.py
 - [ ] Procurar por codigo duplicado(deixar mais clean)
 - [ ] Verificar distribuicao shear diagram esta estranho para femap_test
+- [ ] Verificar erro de 3 casa no timoshenko
 
 # Ajuste do front-end
 - [ ] Point Loads inicia em Y force arrumar
