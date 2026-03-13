@@ -361,13 +361,24 @@ def plot_structure_diagram(structure_results, force_type="moment", n_points=50, 
                 y=[pys[i], pys[i+1]],
                 mode='lines',
                 line=dict(color=color_hex, width=4),
-                hoverinfo='text',
-                text=[
-                    f"x={pxs[i]:.3f}, y={pys[i]:.3f}<br>{label}={vals[i]:.3f}",
-                    f"x={pxs[i+1]:.3f}, y={pys[i+1]:.3f}<br>{label}={vals[i+1]:.3f}"
-                ],
+                hoverinfo='skip',
                 showlegend=False
             ))
+
+        # Invisible hover markers along the element for reliable tooltip display
+        fig.add_trace(go.Scatter(
+            x=pxs,
+            y=pys,
+            mode='markers',
+            marker=dict(size=8, opacity=0, color='rgba(0,0,0,0)'),
+            customdata=np.column_stack([vals]),
+            hovertemplate=(
+                f'x=%{{x:.3f}}, y=%{{y:.3f}}<br>'
+                f'{label}=%{{customdata[0]:.3f}}'
+                f'<extra></extra>'
+            ),
+            showlegend=False
+        ))
 
         # 2. If fill_diagram, plot the area above the element (offset)
         if fill_diagram:
@@ -393,6 +404,21 @@ def plot_structure_diagram(structure_results, force_type="moment", n_points=50, 
                 hoverinfo='skip',
                 showlegend=False,
                 name=f'{label} Area'
+            ))
+            # Invisible hover markers on the offset curve so users can read
+            # force values by mousing over the diagram outline
+            fig.add_trace(go.Scatter(
+                x=pxs_off,
+                y=pys_off,
+                mode='markers',
+                marker=dict(size=8, opacity=0, color='rgba(0,0,0,0)'),
+                customdata=np.column_stack([vals, pxs, pys]),
+                hovertemplate=(
+                    f'x=%{{customdata[1]:.3f}}, y=%{{customdata[2]:.3f}}<br>'
+                    f'{label}=%{{customdata[0]:.3f}}'
+                    f'<extra></extra>'
+                ),
+                showlegend=False
             ))
 
     # Add a colorbar using a dummy invisible scatter

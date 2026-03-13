@@ -18,14 +18,14 @@
     {
       "name": "Property_1",
       "material": {
-        "E": 25800000.0,
+        "E": 1.0,
         "nu": 0.3
       },
       "section": {
         "type": "general",
         "kwargs": {
           "area": 1.0,
-          "inertia": 1.0
+          "inertia": 25800.0
         }
       }
     }
@@ -34,7 +34,7 @@
     [
       1,
       2,
-      "timoshenko_2node",
+      "euler_bernoulli_2node",
       "Property_1",
       20
     ]
