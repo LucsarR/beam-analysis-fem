@@ -141,6 +141,34 @@ def test_invalid_node_ids():
     print(f"  ✓ Number of traces: {len(fig.data)}")
     return True
 
+def test_arrow_scaling():
+    """Test that arrow scale is at least 15% of the largest structural dimension"""
+    print("\n[TEST 6] Arrow Scaling Visibility")
+    print("-" * 70)
+
+    test_cases = [
+        # (nodes, description, expected_scale)
+        ([(0.0, 0.0), (10.0, 0.0)], "horizontal beam L=10", 10.0 * 0.15),
+        ([(0.0, 0.0), (0.0, 5.0)], "vertical beam H=5", 5.0 * 0.15),
+        ([(0.0, 0.0), (0.5, 0.0)], "tiny beam L=0.5 (minimum kicks in)", 1.0 * 0.15),
+        ([(0.0, 0.0), (100.0, 0.0)], "large beam L=100", 100.0 * 0.15),
+    ]
+
+    for nodes, desc, expected_scale in test_cases:
+        node_xs = [n[0] for n in nodes]
+        node_ys = [n[1] for n in nodes]
+        x_range = max(node_xs) - min(node_xs)
+        y_range = max(node_ys) - min(node_ys)
+        scale = max(x_range, y_range, 1.0) * 0.15
+
+        assert abs(scale - expected_scale) < 1e-9, (
+            f"{desc}: expected scale {expected_scale:.4f}, got {scale:.4f}"
+        )
+        print(f"  ✓ {desc}: scale={scale:.4f}")
+
+    return True
+
+
 def run_all_tests():
     """Run all tests for the preview function"""
     print("=" * 70)
@@ -153,6 +181,7 @@ def run_all_tests():
         test_empty_loads,
         test_angled_structure,
         test_invalid_node_ids,
+        test_arrow_scaling,
     ]
     
     passed = 0

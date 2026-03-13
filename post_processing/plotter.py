@@ -47,8 +47,9 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
     # Calculate structure bounds for scaling
     x_range = max(node_xs) - min(node_xs)
     y_range = max(node_ys) - min(node_ys)
-    # Use a minimum scale of 1.0 to handle structures with zero range (e.g., vertical/horizontal beams)
-    scale = max(x_range, y_range, 1.0) * 0.1  # Scale for arrows and symbols
+    # Use a minimum scale of 1.0 to handle structures with zero range (e.g., vertical/horizontal beams).
+    # A factor of 0.15 (15% of the largest dimension) keeps arrows clearly visible across all structure sizes.
+    scale = max(x_range, y_range, 1.0) * 0.15  # Scale for arrows and symbols
     
     # Plot elements
     for i, (n1, n2, etype, prop_name, n_subdiv) in enumerate(elements):
@@ -118,7 +119,7 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
         else:  # Moment (direction == 2)
             # Draw a small arc for moment
             theta = np.linspace(0, 1.5*np.pi, 20)
-            arc_r = scale * 0.4
+            arc_r = scale * 0.5
             arc_x = x + arc_r * np.cos(theta)
             arc_y = y + arc_r * np.sin(theta)
             
@@ -223,7 +224,7 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
                 mag = 1.0  # placeholder
             
             # Arrow length proportional to magnitude
-            arrow_scale = scale * 0.5 * np.sign(mag) if mag != 0 else scale * 0.5
+            arrow_scale = scale * 0.7 * np.sign(mag) if mag != 0 else scale * 0.7
             arrow_dx = load_dir_x * arrow_scale
             arrow_dy = load_dir_y * arrow_scale
             
