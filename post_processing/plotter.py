@@ -266,6 +266,8 @@ def plot_structure_diagram(structure_results, force_type="moment", n_points=50, 
     """
     Interactive Plotly plot: structure in 2D with force diagram (moment, shear, normal) along each element.
     The diagram is projected along the element's physical path, colored by force value using a true gradient line.
+    The fill diagram height is scaled relative to the overall structure bounds so it remains visible
+    regardless of how many subdivisions are used.
     """
     force_labels = {
         "moment": "Bending Moment",
@@ -304,6 +306,15 @@ def plot_structure_diagram(structure_results, force_type="moment", n_points=50, 
     all_vals = np.array(all_vals)
     vmax_abs = np.max(np.abs(all_vals)) if np.max(np.abs(all_vals)) > 0 else 1.0
 
+    # Compute overall structure bounds to derive a consistent diagram scale that is
+    # independent of individual element lengths (important when many subdivisions are used).
+    all_node_xs = [n.x for n in structure_results.mesh.nodes]
+    all_node_ys = [n.y for n in structure_results.mesh.nodes]
+    x_range = max(all_node_xs) - min(all_node_xs)
+    y_range = max(all_node_ys) - min(all_node_ys)
+    structure_scale = max(x_range, y_range, 1.0)
+    diagram_scale = scale * structure_scale
+
     # Plot elements and force diagrams
     for el_result in structure_results.element_results:
         n1 = el_result.element.node_start
@@ -328,7 +339,6 @@ def plot_structure_diagram(structure_results, force_type="moment", n_points=50, 
         elif force_type == "normal":
             vals = np.array([el_result.normal_force(x) for x in xs])
         vals_normalized = vals / vmax_abs
-        diagram_scale = scale * L
 
         dx = x2 - x1
         dy = y2 - y1
