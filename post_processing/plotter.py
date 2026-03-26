@@ -595,12 +595,15 @@ def plot_structure_diagram(
 
     return fig
 
-def plot_normal_stress_distribution(element_result, x, n_points=100):
+def plot_normal_stress_distribution(element_result, x, n_points=100, query_y=None):
     """
     Interactive Plotly plot: 2D contour of normal stress over the section shape at position x along the element.
 
     n_points is reduced from the previous default of 200 to 100 for faster rendering;
     the stress formula is also vectorised to avoid the slow nested Python loop.
+
+    query_y: optional float – if provided, a horizontal marker line is drawn at that
+             section-y position to highlight the queried point.
     """
     section = element_result.element.section
     if not hasattr(section, "xy_grid"):
@@ -636,11 +639,12 @@ def plot_normal_stress_distribution(element_result, x, n_points=100):
         hoverinfo='text'
     ))
 
+    x_min, x_max = np.min(X_plot), np.max(X_plot)
+    x_margin = 0.1 * (x_max - x_min)
+
     # Calculate neutral axis position
     if abs(M) > 1e-12:  # Avoid division by zero
         y_neutral = N * section.inertia / (M * section.area)
-        x_min, x_max = np.min(X_plot), np.max(X_plot)
-        x_margin = 0.1 * (x_max - x_min)
         # Dashed line
         fig.add_trace(go.Scatter(
             x=[x_min - x_margin, x_max + x_margin],
@@ -659,6 +663,27 @@ def plot_normal_stress_distribution(element_result, x, n_points=100):
             textposition="middle right",
             showlegend=False,
             hoverinfo='skip'
+        ))
+
+    # Draw query-y marker line if provided
+    if query_y is not None:
+        sigma_at_query = N / section.area - M * query_y / section.inertia
+        fig.add_trace(go.Scatter(
+            x=[x_min - x_margin, x_max + x_margin],
+            y=[query_y, query_y],
+            mode='lines',
+            line=dict(color='red', dash='dot', width=2),
+            hoverinfo='skip',
+            showlegend=False,
+        ))
+        fig.add_trace(go.Scatter(
+            x=[x_max + x_margin],
+            y=[query_y],
+            mode='text',
+            text=[f"σ={sigma_at_query:.4f}"],
+            textposition="middle right",
+            showlegend=False,
+            hoverinfo='skip',
         ))
 
     fig.update_layout(
