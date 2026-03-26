@@ -232,11 +232,13 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
 
         norm_factor = scale * 0.7 / max_abs_mag
 
-        # Draw filled load-distribution contour (envelope of the distributed load)
+        # Draw filled load-distribution contour (envelope of the distributed load).
+        # Tips are placed on the side FROM which the force acts (opposite to force direction),
+        # so that arrows point FROM the envelope toward the beam element.
         axis_xs = x1 + contour_ts * (x2 - x1)
         axis_ys = y1 + contour_ts * (y2 - y1)
-        tip_xs = axis_xs + load_dir_x * contour_mags * norm_factor
-        tip_ys = axis_ys + load_dir_y * contour_mags * norm_factor
+        tip_xs = axis_xs - load_dir_x * contour_mags * norm_factor
+        tip_ys = axis_ys - load_dir_y * contour_mags * norm_factor
 
         # Filled polygon: axis → tips (forward) → axis (backward)
         poly_xs = list(axis_xs) + list(tip_xs[::-1])
@@ -286,23 +288,28 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
             name=f'Dist. Load {element_id}',
         ))
 
-        # Draw multiple arrows along the element to represent distributed load
+        # Draw multiple arrows along the element to represent distributed load.
+        # Each arrow has its head (arrowhead) at the beam and its tail at the envelope
+        # tip, so the arrow points in the direction the force acts on the beam.
         n_arrows = 5
         for i in range(n_arrows):
             t = (i + 0.5) / n_arrows
             px = x1 + t * (x2 - x1)
             py = y1 + t * (y2 - y1)
-            
+
             mag = _mag_at(t)
-            
+            if abs(mag) < 1e-10:
+                continue
+
             # Arrow length proportional to actual magnitude (normalised)
             arrow_len = mag * norm_factor
             arrow_dx = load_dir_x * arrow_len
             arrow_dy = load_dir_y * arrow_len
-            
+
+            # tail is on the load-from side (opposite to force direction from beam)
             fig.add_annotation(
                 x=px, y=py,
-                ax=px + arrow_dx, ay=py + arrow_dy,
+                ax=px - arrow_dx, ay=py - arrow_dy,
                 xref='x', yref='y',
                 axref='x', ayref='y',
                 showarrow=True,
@@ -310,10 +317,31 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
                 arrowsize=1,
                 arrowwidth=2,
                 arrowcolor='darkorange',
-                text=f'{mag:.1f}',
+                text='',
+            )
+
+        # Add magnitude labels at the contour tip (away from the beam) for the
+        # start, middle, and end of the element so labels never overlap the beam.
+        label_positions = [0.05, 0.5, 0.95] if load_type != "constant" else [0.5]
+        for t_label in label_positions:
+            px_l = x1 + t_label * (x2 - x1)
+            py_l = y1 + t_label * (y2 - y1)
+            mag_l = _mag_at(t_label)
+            if abs(mag_l) < 1e-10:
+                continue
+            arrow_len_l = mag_l * norm_factor
+            # Position the label at the envelope tip, slightly beyond it
+            label_x = px_l - load_dir_x * arrow_len_l
+            label_y = py_l - load_dir_y * arrow_len_l
+            fig.add_annotation(
+                x=label_x, y=label_y,
+                showarrow=False,
+                text=f'{mag_l:.1f}',
                 font=dict(size=10, color='darkorange'),
-                bgcolor='rgba(255,165,0,0.0)',
-                borderwidth=0,
+                bgcolor='rgba(255,255,255,0.75)',
+                bordercolor='rgba(255,140,0,0.6)',
+                borderwidth=1,
+                borderpad=2,
             )
     
     # Update layout
