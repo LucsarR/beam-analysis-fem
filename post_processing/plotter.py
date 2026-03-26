@@ -257,8 +257,8 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
 
         # Contour outline along the tips
         fig.add_trace(go.Scatter(
-            x=list(tip_xs) + [tip_xs[0]],
-            y=list(tip_ys) + [tip_ys[0]],
+            x=list(tip_xs),
+            y=list(tip_ys),
             mode='lines',
             line=dict(color='darkorange', width=2),
             showlegend=False,
@@ -302,7 +302,7 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
             
             fig.add_annotation(
                 x=px, y=py,
-                ax=px - arrow_dx, ay=py - arrow_dy,
+                ax=px + arrow_dx, ay=py + arrow_dy,
                 xref='x', yref='y',
                 axref='x', ayref='y',
                 showarrow=True,
