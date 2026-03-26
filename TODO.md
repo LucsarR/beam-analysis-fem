@@ -16,6 +16,3 @@
 # Ajuste do front-end
 - [ ] Point Loads inicia em Y force arrumar
 - [ ] Load project buga ao tentar usar duas vezes ou modificar uma valor na mao
-- [ ] custom function do test_exercicio_2_lista_2_PDV aparece duas curvas verificar porque
-- [ ] tentar deixar as setas dentro das curvas
-- [ ] remover do codigo os testes de _SYMPY_AVAILABLE 
