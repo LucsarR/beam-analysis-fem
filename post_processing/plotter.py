@@ -233,12 +233,12 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
         norm_factor = scale * 0.7 / max_abs_mag
 
         # Draw filled load-distribution contour (envelope of the distributed load).
-        # Tips are placed on the side FROM which the force acts (opposite to force direction),
-        # so that arrows point FROM the envelope toward the beam element.
+        # Tips are placed in the load direction from the beam axis,
+        # so that arrows point FROM the beam element toward the envelope.
         axis_xs = x1 + contour_ts * (x2 - x1)
         axis_ys = y1 + contour_ts * (y2 - y1)
-        tip_xs = axis_xs - load_dir_x * contour_mags * norm_factor
-        tip_ys = axis_ys - load_dir_y * contour_mags * norm_factor
+        tip_xs = axis_xs + load_dir_x * contour_mags * norm_factor
+        tip_ys = axis_ys + load_dir_y * contour_mags * norm_factor
 
         # Filled polygon: axis → tips (forward) → axis (backward)
         poly_xs = list(axis_xs) + list(tip_xs[::-1])
@@ -289,8 +289,8 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
         ))
 
         # Draw multiple arrows along the element to represent distributed load.
-        # Each arrow has its head (arrowhead) at the beam and its tail at the envelope
-        # tip, so the arrow points in the direction the force acts on the beam.
+        # Each arrow has its head (arrowhead) at the envelope tip and its tail at the beam,
+        # so the arrow points FROM the beam element toward the envelope (in the load direction).
         n_arrows = 5
         for i in range(n_arrows):
             t = (i + 0.5) / n_arrows
@@ -306,10 +306,10 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
             arrow_dx = load_dir_x * arrow_len
             arrow_dy = load_dir_y * arrow_len
 
-            # tail is on the load-from side (opposite to force direction from beam)
+            # head is at the envelope tip; tail is on the beam axis
             fig.add_annotation(
-                x=px, y=py,
-                ax=px - arrow_dx, ay=py - arrow_dy,
+                x=px + arrow_dx, y=py + arrow_dy,
+                ax=px, ay=py,
                 xref='x', yref='y',
                 axref='x', ayref='y',
                 showarrow=True,
@@ -331,8 +331,8 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
                 continue
             arrow_len_l = mag_l * norm_factor
             # Position the label at the envelope tip, slightly beyond it
-            label_x = px_l - load_dir_x * arrow_len_l
-            label_y = py_l - load_dir_y * arrow_len_l
+            label_x = px_l + load_dir_x * arrow_len_l
+            label_y = py_l + load_dir_y * arrow_len_l
             fig.add_annotation(
                 x=label_x, y=label_y,
                 showarrow=False,
