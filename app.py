@@ -17,7 +17,13 @@ from config import DEFAULT_E, DEFAULT_NU, SECTION_TYPES, ELEMENT_TYPES
 
 # --- Post-processing and Plotting ---
 from post_processing.forces import StructureResults
-from post_processing.plotter import plot_structure_diagram, plot_normal_stress_distribution, plot_normal_stress_side_view, plot_structure_preview
+from post_processing.plotter import (
+    plot_structure_diagram,
+    plot_normal_stress_distribution,
+    plot_normal_stress_side_view,
+    plot_structure_preview,
+    find_position_on_structure,
+)
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -1460,6 +1466,7 @@ with tab2:
                     st.session_state["mesh"] = mesh
                     st.session_state["displacements"] = displacements
                     st.session_state["reactions"] = reactions
+                    st.session_state["n_original_nodes"] = len(nodes)
                     
                     # Prepare post-processing
                     structure_results = StructureResults(mesh, displacements, reactions)
@@ -1597,6 +1604,61 @@ with tab3:
                         help="Adjust the transparency of the fill area"
                     )
             
+            # --- Performance & display options ----------------------------
+            col_pts, col_hide = st.columns(2)
+            with col_pts:
+                diag_n_points = st.slider(
+                    "Diagram resolution (points per element)",
+                    min_value=10,
+                    max_value=100,
+                    value=30,
+                    step=5,
+                    help=(
+                        "Number of sample points per element. "
+                        "Lower values render faster; higher values give a smoother curve."
+                    ),
+                    key="diag_n_points",
+                )
+            with col_hide:
+                hide_subdiv_nodes = st.checkbox(
+                    "Hide subdivision nodes",
+                    value=False,
+                    help=(
+                        "When elements are subdivided, many intermediate nodes are added. "
+                        "Enable this to show only the original user-defined nodes."
+                    ),
+                    key="hide_subdiv_nodes",
+                )
+            
+            # --- Extract force value at an exact global position ----------
+            st.markdown("##### 📍 Extract value at exact position")
+            use_query = st.checkbox(
+                "Query a specific (x, y) position",
+                value=False,
+                help="Mark a specific global coordinate on the diagram and read the force value there.",
+                key="diag_use_query",
+            )
+            query_xy = None
+            if use_query:
+                col_qx, col_qy = st.columns(2)
+                with col_qx:
+                    q_x = st.number_input(
+                        "x coordinate",
+                        value=0.0,
+                        format="%.4f",
+                        help="Global x of the point to query",
+                        key="diag_query_x",
+                    )
+                with col_qy:
+                    q_y = st.number_input(
+                        "y coordinate",
+                        value=0.0,
+                        format="%.4f",
+                        help="Global y of the point to query",
+                        key="diag_query_y",
+                    )
+                query_xy = (q_x, q_y)
+            
             diagram_map = {
                 "Moment": "moment",
                 "Shear": "shear",
@@ -1605,12 +1667,42 @@ with tab3:
             
             if st.button("📊 Generate Diagram", use_container_width=True):
                 try:
+                    n_orig = st.session_state.get("n_original_nodes", None)
+                    
+                    # Pre-flight check for query position
+                    if query_xy is not None:
+                        hit = find_position_on_structure(structure_results, query_xy[0], query_xy[1])
+                        if hit is None or not hit["is_on_structure"]:
+                            st.warning(
+                                f"⚠️ The queried position ({query_xy[0]:.4f}, {query_xy[1]:.4f}) "
+                                "is outside the structure (or too far from any element). "
+                                "The nearest point on the structure will be used."
+                            )
+                        elif hit is not None:
+                            ft = diagram_map[diagram_type]
+                            if ft == "moment":
+                                force_val_preview = hit["element_result"].bending_moment(hit["local_x"])
+                            elif ft == "shear":
+                                force_val_preview = hit["element_result"].shear_force(hit["local_x"])
+                            else:
+                                force_val_preview = hit["element_result"].normal_force(hit["local_x"])
+                            st.info(
+                                f"📍 Nearest point on structure: "
+                                f"({hit['proj_x']:.4f}, {hit['proj_y']:.4f})  |  "
+                                f"{diagram_type} = **{force_val_preview:.4f}**  |  "
+                                f"Distance from query: {hit['distance']:.4f}"
+                            )
+                    
                     fig = plot_structure_diagram(
                         structure_results,
                         force_type=diagram_map[diagram_type],
+                        n_points=diag_n_points,
                         fill_diagram=fill_diagram,
                         fill_color=fill_color,
                         fill_opacity=fill_opacity,
+                        show_subdivision_nodes=not hide_subdiv_nodes,
+                        n_original_nodes=n_orig,
+                        query_xy=query_xy,
                     )
                     st.plotly_chart(fig, use_container_width=True)
                 except Exception as e:
@@ -1621,33 +1713,92 @@ with tab3:
             element_ids = [el.id for el in st.session_state["mesh"].elements]
             
             if element_ids:
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    selected_element_id = st.selectbox(
-                        "Select element",
-                        element_ids,
-                        help="Choose element to analyze",
-                        key="stress_element_selector"
-                    )
-                
-                selected_element_result = next(
-                    er for er in structure_results.element_results
-                    if er.element.id == selected_element_id
+                # ---- Position selection mode --------------------------------
+                use_global_pos = st.checkbox(
+                    "Use global (x, y) position to select element automatically",
+                    value=False,
+                    help=(
+                        "Enter a global coordinate and the tool will find the nearest "
+                        "element and its local position automatically."
+                    ),
+                    key="section_use_global_pos",
                 )
                 
-                with col2:
-                    x_pos = st.slider(
-                        "Position along element",
-                        min_value=0.0,
-                        max_value=float(selected_element_result.length),
-                        value=0.0,
-                        step=0.01,
-                        help="Select position along element to view stress",
-                        key="stress_position_slider"
+                if use_global_pos:
+                    col_gx, col_gy = st.columns(2)
+                    with col_gx:
+                        sec_gx = st.number_input(
+                            "x coordinate",
+                            value=0.0,
+                            format="%.4f",
+                            help="Global x of the cut position",
+                            key="section_global_x",
+                        )
+                    with col_gy:
+                        sec_gy = st.number_input(
+                            "y coordinate",
+                            value=0.0,
+                            format="%.4f",
+                            help="Global y of the cut position",
+                            key="section_global_y",
+                        )
+                    
+                    hit = find_position_on_structure(structure_results, sec_gx, sec_gy)
+                    if hit is None:
+                        st.warning("⚠️ No elements found in the mesh.")
+                        selected_element_result = None
+                        x_pos = 0.0
+                    elif not hit["is_on_structure"]:
+                        st.warning(
+                            f"⚠️ The position ({sec_gx:.4f}, {sec_gy:.4f}) is outside the "
+                            "structure. The nearest point on the structure will be used."
+                        )
+                        selected_element_result = hit["element_result"]
+                        x_pos = hit["local_x"]
+                        st.info(
+                            f"Snapped to element {selected_element_result.element.id} "
+                            f"at local x = {x_pos:.4f}  "
+                            f"(global: {hit['proj_x']:.4f}, {hit['proj_y']:.4f})  |  "
+                            f"Distance: {hit['distance']:.4f}"
+                        )
+                    else:
+                        selected_element_result = hit["element_result"]
+                        x_pos = hit["local_x"]
+                        st.success(
+                            f"📍 Element {selected_element_result.element.id}  |  "
+                            f"Local x = {x_pos:.4f}  |  "
+                            f"Projected point: ({hit['proj_x']:.4f}, {hit['proj_y']:.4f})"
+                        )
+                else:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        selected_element_id = st.selectbox(
+                            "Select element",
+                            element_ids,
+                            help="Choose element to analyze",
+                            key="stress_element_selector"
+                        )
+                    
+                    selected_element_result = next(
+                        er for er in structure_results.element_results
+                        if er.element.id == selected_element_id
                     )
+                    
+                    with col2:
+                        x_pos = st.slider(
+                            "Position along element",
+                            min_value=0.0,
+                            max_value=float(selected_element_result.length),
+                            value=0.0,
+                            step=0.01,
+                            help="Select position along element to view stress",
+                            key="stress_position_slider"
+                        )
                 
-                if st.button("🔍 Show Stress Distribution (Both Views)", use_container_width=True):
+                if selected_element_result is not None and st.button(
+                    "🔍 Show Stress Distribution (Both Views)", use_container_width=True
+                ):
                     try:
                         # Display cross-section view (front view)
                         st.subheader("📐 Cross-Section View (Front)")
