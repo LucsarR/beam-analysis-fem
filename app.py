@@ -7,11 +7,12 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
-try:
-    import sympy as _sp
-    _SYMPY_AVAILABLE = True
-except ImportError:
-    _SYMPY_AVAILABLE = False
+import sympy as _sp
+from sympy.parsing.sympy_parser import (
+    parse_expr,
+    standard_transformations,
+    implicit_multiplication_application,
+)
 
 from fem.mesh import Mesh
 from fem.material import Material
@@ -35,50 +36,20 @@ from post_processing.plotter import (
 def _func_str_to_latex(func_str: str) -> str:
     """Convert a Python math expression string (using numpy syntax) to a LaTeX string.
 
-    Uses sympy when available for accurate conversion; otherwise falls back to
-    a simple regex-based substitution that handles the most common patterns.
+    Uses sympy for accurate conversion.
     """
     if not func_str:
         return ""
 
-    if _SYMPY_AVAILABLE:
-        try:
-            from sympy.parsing.sympy_parser import (
-                parse_expr,
-                standard_transformations,
-                implicit_multiplication_application,
-            )
-            # Replace numpy prefixed names with bare names that sympy understands
-            clean = func_str.replace("np.", "")
-            x, L = _sp.symbols("x L", positive=True)
-            transformations = standard_transformations + (implicit_multiplication_application,)
-            expr = parse_expr(clean, local_dict={"x": x, "L": L}, transformations=transformations)
-            return _sp.latex(expr)
-        except Exception:
-            pass  # fall through to regex fallback
-
-    # --- Regex-based fallback ---
-    import re
-    s = func_str
-    # numpy → LaTeX function names (order matters: log10 before log)
-    s = re.sub(r'np\.log10\b', r'\\log_{10}', s)
-    s = re.sub(r'np\.sin\b', r'\\sin', s)
-    s = re.sub(r'np\.cos\b', r'\\cos', s)
-    s = re.sub(r'np\.tan\b', r'\\tan', s)
-    s = re.sub(r'np\.arcsin\b', r'\\arcsin', s)
-    s = re.sub(r'np\.arccos\b', r'\\arccos', s)
-    s = re.sub(r'np\.arctan\b', r'\\arctan', s)
-    s = re.sub(r'np\.log\b', r'\\ln', s)
-    s = re.sub(r'np\.sqrt\b', r'\\sqrt', s)
-    s = re.sub(r'np\.exp\b', r'\\exp', s)
-    s = re.sub(r'np\.pi\b', r'\\pi', s)
-    # np.abs(expr) → |expr|
-    s = re.sub(r'np\.abs\(([^)]*)\)', r'\\left|\1\\right|', s)
-    # Power operator
-    s = re.sub(r'\*\*(\w+)', r'^{\1}', s)
-    # Multiplication operator (only where unambiguous)
-    s = s.replace('*', r' \cdot ')
-    return s
+    try:
+        # Replace numpy prefixed names with bare names that sympy understands
+        clean = func_str.replace("np.", "")
+        x, L = _sp.symbols("x L", positive=True)
+        transformations = standard_transformations + (implicit_multiplication_application,)
+        expr = parse_expr(clean, local_dict={"x": x, "L": L}, transformations=transformations)
+        return _sp.latex(expr)
+    except Exception:
+        return func_str
 
 
 # --- Page Configuration ---
