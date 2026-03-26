@@ -111,11 +111,11 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
         
         # Determine arrow direction
         if direction == 0:  # X direction
-            dx = scale * np.sign(magnitude)
+            dx = scale * 2 * np.sign(magnitude)
             dy = 0
         elif direction == 1:  # Y direction
             dx = 0
-            dy = scale * np.sign(magnitude)
+            dy = scale * 2 * np.sign(magnitude)
         else:  # Moment (direction == 2)
             # Draw a small arc for moment
             theta = np.linspace(0, 1.5*np.pi, 20)
@@ -160,7 +160,7 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
             axref='x', ayref='y',
             showarrow=True,
             arrowhead=2,
-            arrowsize=1.5,
+            arrowsize=1.0,
             arrowwidth=4,
             arrowcolor='orange',
             text=f'{magnitude:.1f}N',
