@@ -1363,20 +1363,25 @@ with tab2:
                     for x, y in nodes:
                         node_objs.append(mesh.add_node(x, y))
                     
-                    # Add elements with selected property
-                    for n1, n2, etype, prop_name, n_subdiv in st.session_state["elements"]:
+                    # Add elements with selected property.
+                    # Track the mapping from original element index (1-based) to all
+                    # mesh element IDs created for it (may be multiple when n_subdiv > 1).
+                    original_to_mesh_elements = {}  # {orig_idx (1-based): [mesh_element_id, ...]}
+                    for orig_idx, (n1, n2, etype, prop_name, n_subdiv) in enumerate(
+                            st.session_state["elements"], start=1):
                         prop = next(p for p in st.session_state["properties"] if p["name"] == prop_name)
                         node_start = mesh.get_node_by_id(n1)
                         node_end = mesh.get_node_by_id(n2)
                         
                         if n_subdiv == 1:
-                            mesh.add_element(
+                            el = mesh.add_element(
                                 node_start,
                                 node_end,
                                 prop["material"],
                                 prop["section"],
                                 element_type=etype
                             )
+                            original_to_mesh_elements[orig_idx] = [el.id]
                         else:
                             # Subdivide element
                             x_start, y_start = node_start.x, node_start.y
@@ -1395,14 +1400,17 @@ with tab2:
                             
                             subdiv_nodes.append(node_end)
                             
+                            subdiv_ids = []
                             for i in range(n_subdiv):
-                                mesh.add_element(
+                                el = mesh.add_element(
                                     subdiv_nodes[i],
                                     subdiv_nodes[i+1],
                                     prop["material"],
                                     prop["section"],
                                     element_type=etype
                                 )
+                                subdiv_ids.append(el.id)
+                            original_to_mesh_elements[orig_idx] = subdiv_ids
                     
                     # Add constraints
                     for node_id, direction, value in st.session_state["constraints"]:
@@ -1413,12 +1421,24 @@ with tab2:
                         mesh.point_loads.append(PointLoad(magnitude, direction))
                         mesh.point_loads[-1].node = mesh.get_node_by_id(node_id)
                     
-                    # Add distributed loads
+                    # Add distributed loads.
+                    # element_id in the distributed_loads list is the 1-based index of the
+                    # original element as defined by the user (before subdivision).  Apply
+                    # the load to every mesh element that was created for that original element
+                    # so that subdivided elements all carry the correct distributed load.
                     for element_id, magnitude_start, magnitude_end, direction, func_str, _ in st.session_state["distributed_loads"]:
-                        el = mesh.get_element_by_id(element_id)
-                        load = DistributedLoad(magnitude_start, magnitude_end, direction, func=func_str)
-                        load.element = el
-                        mesh.distributed_loads.append(load)
+                        mesh_el_ids = original_to_mesh_elements.get(element_id)
+                        if mesh_el_ids is None:
+                            raise ValueError(
+                                f"Distributed load references element {element_id}, "
+                                f"which was not found in the mesh. "
+                                f"Valid element indices are: {list(original_to_mesh_elements.keys())}"
+                            )
+                        for mesh_el_id in mesh_el_ids:
+                            el = mesh.get_element_by_id(mesh_el_id)
+                            load = DistributedLoad(magnitude_start, magnitude_end, direction, func=func_str)
+                            load.element = el
+                            mesh.distributed_loads.append(load)
                     
                     # Run analysis
                     # Note: EulerBernoulliAnalysis (or its alias BeamAnalysis) is a generic
