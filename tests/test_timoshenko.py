@@ -533,6 +533,82 @@ def test_sinusoidal_func_multi_element_thick():
 
 
 # ===========================================================================
+# Test 10 – Bending moment varies linearly within element (no distributed load)
+# ===========================================================================
+def test_bending_moment_linear_variation():
+    """
+    For a cantilever Timoshenko beam under a tip point load (no distributed
+    loads), the bending moment must vary linearly from M=P*L at the fixed end
+    to M=0 at the free tip.
+
+    Using n=4 elements, verify that:
+      1. The moment at element endpoints (x=0 and x=L_el) is NOT the same
+         constant, i.e. the moment varies linearly within each element.
+      2. The moment at each element's start node matches the analytical value
+         M_ana(x) = P * (L_beam - x) to within 0.5%.
+
+    This test guards against the former constant-moment bug in the
+    TimoshenkoElement2Node.bending_moment() implementation.
+    """
+    from fem.mesh import Mesh
+    from fem.material import Material
+    from fem.section import RectangularBar
+    from fem.constraint import Constraint
+    from fem.load import PointLoad
+    from fem.analysis import BeamAnalysis
+    from post_processing.forces import StructureResults
+
+    print("\n" + "=" * 60)
+    print("Test 10: Bending moment linear variation – cantilever tip load")
+    print("=" * 60)
+
+    P = -1000.0    # N (downward tip load)
+    L_total = 2.0  # m
+    n = 4
+
+    mesh = Mesh()
+    mat = Material(1, E, NU)
+    sec = RectangularBar(1, B, H_THICK)
+    nodes = mesh.generate_1d_mesh(0, 0, L_total, 0, n, mat, sec, "timoshenko_2node")
+
+    # Cantilever: fix all DOFs at the left end
+    mesh.constraints.add(Constraint(nodes[0], 0, 0.0))
+    mesh.constraints.add(Constraint(nodes[0], 1, 0.0))
+    mesh.constraints.add(Constraint(nodes[0], 2, 0.0))
+
+    # Tip point load
+    load = PointLoad(P, 1)  # direction 1 = y
+    load.node = nodes[-1]
+    mesh.point_loads.append(load)
+
+    analysis = BeamAnalysis(mesh)
+    analysis.assemble()
+    displacements = analysis.solve()
+    results = StructureResults(mesh, displacements)
+
+    le = L_total / n
+    print(f"  {'elem':>5}  {'M(0)':>12}  {'M(L)':>12}  {'M_ana(0)':>12}  {'Linear?':>8}")
+    for i, er in enumerate(results.element_results):
+        x_start = i * le
+        M_start = er.bending_moment(0.0)
+        M_end = er.bending_moment(le)
+        M_ana_start = P * (L_total - x_start)
+        varies = abs(M_end - M_start) > abs(M_ana_start) * 0.001
+        print(f"  {i:>5}  {M_start:>12.4e}  {M_end:>12.4e}  {M_ana_start:>12.4e}  {'YES' if varies else 'NO':>8}")
+        assert varies, (
+            f"Element {i}: bending moment is constant ({M_start:.4e} == {M_end:.4e}); "
+            "expected linearly varying moment."
+        )
+        err = abs(M_start - M_ana_start) / abs(M_ana_start) * 100
+        assert err < 0.5, (
+            f"Element {i}: moment at start node error {err:.3f}% > 0.5%"
+        )
+
+    print("OK Bending moments vary linearly and match analytical values")
+    return True
+
+
+# ===========================================================================
 # Main runner
 # ===========================================================================
 if __name__ == "__main__":
@@ -546,6 +622,7 @@ if __name__ == "__main__":
         ("Test 7: Exponential load – slender – piecewise",   test_exponential_load_multi_element_slender),
         ("Test 8: Mesh convergence – thick – sinusoidal",    test_mesh_convergence_thick_sinusoidal),
         ("Test 9: Sinusoidal func – multi-element – thick",  test_sinusoidal_func_multi_element_thick),
+        ("Test 10: Bending moment linear variation",          test_bending_moment_linear_variation),
     ]
 
     print("=" * 60)

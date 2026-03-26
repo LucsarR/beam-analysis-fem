@@ -796,33 +796,48 @@ class TimoshenkoElement2Node(Element):
     def bending_moment(self, x, displacements):
         """
         Returns bending moment M(x) at position x (in local coordinates, 0 <= x <= L).
-        For Timoshenko beam theory.
+        For the 2-node Timoshenko beam element.
+
+        The nodal bending moments are recovered from the element equilibrium
+        (K_local · d_local) and then linearly interpolated:
+
+            M(0) = −f[2]  (start-node moment from stiffness row 2)
+            M(L) =  f[5]  (end-node moment from stiffness row 5)
+            M(x) = M(0)·(1−ξ) + M(L)·ξ,   ξ = x/L
+
+        This is consistent with the constant field-consistent shear force
+        (dM/dx = V = const) and reproduces the correct linear variation for
+        beams without distributed loads.  The midpoint value equals EI·dθ/dx,
+        so existing midpoint-based checks are unaffected.
         """
         E = self.material.E
+        G = self.material.G
         I = self.section.inertia
+        A = self.section.area
+        kappa = self.section.shear_coefficient
         L = self.length
         # Local DOFs: [u1, v1, theta1, u2, v2, theta2]
         v1 = displacements[1]
         theta1 = displacements[2]
         v2 = displacements[4]
         theta2 = displacements[5]
+
+        # Shear-flexibility parameter (same as in stiffness_matrix)
+        phi = 12.0 * E * I / (G * kappa * A * L**2)
+
+        # Nodal moments from K_local · d_local (rows 2 and 5):
+        #   f[2] = EI/(L(1+φ)) · [6/L·(v1−v2) + (4+φ)·θ1 + (2−φ)·θ2]
+        #   f[5] = EI/(L(1+φ)) · [6/L·(v1−v2) + (2−φ)·θ1 + (4+φ)·θ2]
+        # Sign convention (same as Euler-Bernoulli): M(0) = −f[2], M(L) = f[5]
+        coeff = E * I / (L * (1.0 + phi))
+        f2 = coeff * (6.0 / L * (v1 - v2) + (4.0 + phi) * theta1 + (2.0 - phi) * theta2)
+        f5 = coeff * (6.0 / L * (v1 - v2) + (2.0 - phi) * theta1 + (4.0 + phi) * theta2)
+
+        M0 = -f2   # internal moment at x = 0
+        ML = f5    # internal moment at x = L
+
         xi = x / L
-        
-        # Linear interpolation for rotation (theta)
-        theta = (1 - xi) * theta1 + xi * theta2
-        
-        # Shape functions for transverse displacement
-        N1 = 1 - xi
-        N2 = xi
-        
-        # Derivative of transverse displacement
-        dv_dx = (-v1 + v2) / L
-        
-        # Bending moment: M(x) = E*I * d(theta)/dx for Timoshenko
-        # For linear shape functions: dtheta/dx = (theta2 - theta1) / L
-        dtheta_dx = (theta2 - theta1) / L
-        
-        return E * I * dtheta_dx
+        return M0 * (1.0 - xi) + ML * xi
     
     def shear_force(self, x, displacements):
         """
