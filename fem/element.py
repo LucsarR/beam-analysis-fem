@@ -704,7 +704,11 @@ class TimoshenkoElement2Node(Element):
         """
         Compute consistent nodal loads for a distributed load (constant, linear, or custom function).
         Returns a 6-vector in GLOBAL coordinates.
-        For Timoshenko beam elements, uses the same approach as Euler-Bernoulli.
+
+        Uses the field-consistent (phi-corrected) Timoshenko shape functions so that
+        the load vector is consistent with the stiffness matrix for all values of the
+        shear-flexibility parameter phi = 12·EI / (κGA·L²).  When phi → 0 (slender
+        beam) these reduce to the Hermite (Euler-Bernoulli) shape functions.
 
         For custom functions (func), the variable ``x`` passed to the expression
         is the **global** position along the beam (i.e. the x-coordinate of the
@@ -715,6 +719,14 @@ class TimoshenkoElement2Node(Element):
         L = self.length
         c = self.c
         s = self.s
+
+        # Compute shear-flexibility parameter (same as used in stiffness_matrix)
+        E = self.material.E
+        G = self.material.G
+        I = self.section.inertia
+        A = self.section.area
+        kappa = self.section.shear_coefficient
+        phi = 12.0 * E * I / (G * kappa * A * L ** 2)
 
         # Build load function f(x_local) from distributed_load.
         # x_local is the local coordinate within the element (0 to L).
@@ -768,6 +780,7 @@ class TimoshenkoElement2Node(Element):
         wt = 0.5 * wi
 
         ia1 = ia2 = iv1 = itheta1 = iv2 = itheta2 = 0.0
+        one_plus_phi = 1.0 + phi
         for ti, wi_scaled in zip(t, wt):
             x = ti * L
             N1_ax = 1.0 - ti
@@ -776,11 +789,14 @@ class TimoshenkoElement2Node(Element):
             ia1 += N1_ax * qx * wi_scaled * L
             ia2 += N2_ax * qx * wi_scaled * L
 
-            # Use Hermite shape functions for transverse loads
-            Hv1 = 1 - 3*ti**2 + 2*ti**3
-            Ht1 = L * (ti - 2*ti**2 + ti**3)
-            Hv2 = 3*ti**2 - 2*ti**3
-            Ht2 = L * (-ti**2 + ti**3)
+            # Field-consistent Timoshenko shape functions for transverse loads.
+            # These are the exact interpolation functions that correspond to the
+            # phi-corrected stiffness matrix (Prathap & Bhashyam 1982 / Reddy 2006).
+            # They reduce to the Hermite functions when phi = 0.
+            Hv1 = (1.0 - 3.0*ti**2 + 2.0*ti**3 + phi*(1.0 - ti)) / one_plus_phi
+            Ht1 = L * (ti - 2.0*ti**2 + ti**3 + (phi/2.0)*(ti - ti**2)) / one_plus_phi
+            Hv2 = (3.0*ti**2 - 2.0*ti**3 + phi*ti) / one_plus_phi
+            Ht2 = L * (-ti**2 + ti**3 + (phi/2.0)*(ti**2 - ti)) / one_plus_phi
             px = p_local(x)
             iv1 += Hv1 * px * wi_scaled * L
             itheta1 += Ht1 * px * wi_scaled * L

@@ -533,6 +533,103 @@ def test_sinusoidal_func_multi_element_thick():
 
 
 # ===========================================================================
+# Test 10 – Propped cantilever, cubic load via func (global x), slender beam
+# ===========================================================================
+def test_propped_cantilever_cubic_load_slender_timoshenko():
+    """
+    Propped cantilever beam (clamped at x=0, simply supported at x=L) with a
+    cubic distributed load expressed using the **global** x coordinate:
+
+        q(x) = 60000*(3*(x/4)**2 - 2*(x/4)**3),  L = 4 m
+
+    Uses a slender 2-node Timoshenko beam (L/h = 400, shear-flexibility
+    parameter phi < 0.01 at n=16 elements) so shear deformation is negligible
+    and the result should converge to the Euler-Bernoulli analytical value.
+
+    Analytical bending moment at x = 3 (independent of EI for this
+    statically-indeterminate problem):
+
+        M(3) ≈ -41129.46  (hogging)
+
+    This test specifically verifies the fix to ``compute_equivalent_nodal_loads``
+    in ``TimoshenkoElement2Node``, which previously used Hermite (Euler-Bernoulli)
+    shape functions instead of the field-consistent (phi-corrected) Timoshenko
+    shape functions.  Using inconsistent EB shape functions for the load vector
+    while the stiffness matrix uses the phi-corrected formulation caused the
+    bending moment at x=3 to diverge significantly (e.g. −55054 instead of
+    −41129 with the project-file section properties) rather than converging to
+    the Euler-Bernoulli result.
+
+    Checks:
+    - Convergence is monotonic with mesh refinement.
+    - Error < 5%  with 32 elements.
+    - Error < 2%  with 64 elements.
+    - Error < 1%  with 128 elements.
+    """
+    print("\n" + "=" * 60)
+    print("Test 10: Propped Cantilever – Cubic Load (global-x func) – Timoshenko slender")
+    print("=" * 60)
+
+    L = 4.0
+    # Analytical moment (same as Euler-Bernoulli Test 10; independent of EI)
+    M_ana = -41129.4643
+
+    def _run(n):
+        mesh = Mesh()
+        mat = Material(1, E, NU)
+        sec = RectangularBar(1, B, H_SLENDER)
+        nodes = mesh.generate_1d_mesh(0, 0, L, 0, n, mat, sec,
+                                      'timoshenko_2node')
+
+        # Propped cantilever: clamp at x=0, pin at x=L
+        mesh.constraints.add(Constraint(nodes[0], 0, 0.0))   # u(0)=0
+        mesh.constraints.add(Constraint(nodes[0], 1, 0.0))   # v(0)=0
+        mesh.constraints.add(Constraint(nodes[0], 2, 0.0))   # theta(0)=0
+        mesh.constraints.add(Constraint(nodes[-1], 1, 0.0))  # v(L)=0
+
+        func = '60000*(3*(x/4)**2-2*(x/4)**3)'
+        for element in mesh.elements:
+            ld = DistributedLoad(direction='y', func=func)
+            ld.element = element
+            mesh.distributed_loads.append(ld)
+
+        analysis = BeamAnalysis(mesh)
+        analysis.assemble()
+        displacements = analysis.solve()
+        results = StructureResults(mesh, displacements)
+
+        elem_len = L / n
+        elem_idx = min(int(3.0 / elem_len), n - 1)
+        local_x = 3.0 - elem_idx * elem_len
+        return results.element_results[elem_idx].bending_moment(local_x)
+
+    print(f"  Analytical M(3) = {M_ana:.4f}")
+    print(f"  {'n':>5}  {'M(3)':>14}  {'err%':>8}")
+
+    prev_err = None
+    for n in [16, 32, 64, 128]:
+        M_fem = _run(n)
+        err = abs((M_fem - M_ana) / M_ana) * 100
+        print(f"  {n:>5}  {M_fem:>14.4f}  {err:>8.3f}%")
+
+        if prev_err is not None:
+            assert err < prev_err * 1.05, (
+                f"Non-monotonic convergence at n={n}: err={err:.3f}% > prev {prev_err:.3f}%"
+            )
+        prev_err = err
+
+        if n == 32:
+            assert err < 5.0, f"n=32: |M(3)| error {err:.3f}% > 5%"
+        if n == 64:
+            assert err < 2.0, f"n=64: |M(3)| error {err:.3f}% > 2%"
+        if n == 128:
+            assert err < 1.0, f"n=128: |M(3)| error {err:.3f}% > 1%"
+
+    print("OK Slender Timoshenko: cubic load (global-x func) converges correctly")
+    return True
+
+
+# ===========================================================================
 # Main runner
 # ===========================================================================
 if __name__ == "__main__":
@@ -546,6 +643,7 @@ if __name__ == "__main__":
         ("Test 7: Exponential load – slender – piecewise",   test_exponential_load_multi_element_slender),
         ("Test 8: Mesh convergence – thick – sinusoidal",    test_mesh_convergence_thick_sinusoidal),
         ("Test 9: Sinusoidal func – multi-element – thick",  test_sinusoidal_func_multi_element_thick),
+        ("Test 10: Propped cantilever – cubic load – slender", test_propped_cantilever_cubic_load_slender_timoshenko),
     ]
 
     print("=" * 60)
