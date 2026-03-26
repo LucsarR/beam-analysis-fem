@@ -1567,6 +1567,36 @@ with tab3:
                     help="Show diagram as filled area"
                 )
             
+            fill_color = "green"
+            fill_opacity = 0.2
+            if fill_diagram:
+                fill_color_options = {
+                    "🟢 Green": "green",
+                    "🔵 Blue": "blue",
+                    "🔴 Red": "red",
+                    "🟠 Orange": "orange",
+                    "🟣 Purple": "purple",
+                    "🩵 Teal": "teal",
+                }
+                col_color, col_opacity = st.columns(2)
+                with col_color:
+                    fill_color_label = st.selectbox(
+                        "Fill color",
+                        options=list(fill_color_options.keys()),
+                        index=0,
+                        help="Choose the fill color for the diagram area"
+                    )
+                    fill_color = fill_color_options[fill_color_label]
+                with col_opacity:
+                    fill_opacity = st.slider(
+                        "Fill opacity",
+                        min_value=0.05,
+                        max_value=1.0,
+                        value=0.2,
+                        step=0.05,
+                        help="Adjust the transparency of the fill area"
+                    )
+            
             diagram_map = {
                 "Moment": "moment",
                 "Shear": "shear",
@@ -1579,6 +1609,8 @@ with tab3:
                         structure_results,
                         force_type=diagram_map[diagram_type],
                         fill_diagram=fill_diagram,
+                        fill_color=fill_color,
+                        fill_opacity=fill_opacity,
                     )
                     st.plotly_chart(fig, use_container_width=True)
                 except Exception as e:

@@ -262,7 +262,7 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
     
     return fig
 
-def plot_structure_diagram(structure_results, force_type="moment", n_points=50, scale=0.2, fill_diagram=False):
+def plot_structure_diagram(structure_results, force_type="moment", n_points=50, scale=0.2, fill_diagram=False, fill_color="green", fill_opacity=0.2):
     """
     Interactive Plotly plot: structure in 2D with force diagram (moment, shear, normal) along each element.
     The diagram is projected along the element's physical path, colored by force value using a true gradient line.
@@ -314,6 +314,11 @@ def plot_structure_diagram(structure_results, force_type="moment", n_points=50, 
     y_range = max(all_node_ys) - min(all_node_ys)
     structure_scale = max(x_range, y_range, 1.0)
     diagram_scale = scale * structure_scale
+
+    # Pre-compute fill rgba string once (used for every element when fill_diagram is enabled)
+    if fill_diagram:
+        r, g, b = mcolors.to_rgb(fill_color)
+        fill_rgba = f'rgba({int(r*255)},{int(g*255)},{int(b*255)},{fill_opacity})'
 
     # Plot elements and force diagrams
     for el_result in structure_results.element_results:
@@ -409,7 +414,7 @@ def plot_structure_diagram(structure_results, force_type="moment", n_points=50, 
                 x=x_poly,
                 y=y_poly,
                 fill='toself',
-                fillcolor='rgba(0,128,0,0.2)',
+                fillcolor=fill_rgba,
                 line=dict(color='rgba(0,0,0,0)', width=0),
                 hoverinfo='skip',
                 showlegend=False,
