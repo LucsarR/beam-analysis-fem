@@ -30,12 +30,15 @@ st.set_page_config(
 st.title("🔧 FEM Beam Analysis Tool")
 st.markdown("_A finite element analysis tool for beam structures_")
 
-# --- Hide number-input step buttons (the +/- controls don't make sense for coordinates
-#     and other fields where arbitrary values are entered) ---
+# --- Hide number-input step buttons for float/coordinate fields where arbitrary values
+#     are entered, but keep +/- controls for integer fields (step=1). ---
 st.markdown("""
 <style>
 div[data-testid="stNumberInput"] button {
     display: none !important;
+}
+div[data-testid="stNumberInput"]:has(input[step="1"]) button {
+    display: flex !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -1051,7 +1054,7 @@ with tab1:
                     n_subdiv = col5.number_input(
                         f"Subdivisions",
                         min_value=1,
-                        max_value=20,
+                        max_value=256,
                         value=existing_elem[4] if existing_elem and len(existing_elem) > 4 else 1,
                         key=f"subdiv_{i}",
                         help=f"Element {i+1} mesh refinement"
@@ -1564,17 +1567,6 @@ with tab3:
                     help="Show diagram as filled area"
                 )
             
-            if fill_diagram:
-                diagram_scale = st.slider(
-                    "Diagram scale",
-                    min_value=0.05,
-                    max_value=0.5,
-                    value=0.2,
-                    help="Adjust the visual scale of the diagram"
-                )
-            else:
-                diagram_scale = 0.2
-            
             diagram_map = {
                 "Moment": "moment",
                 "Shear": "shear",
@@ -1587,7 +1579,6 @@ with tab3:
                         structure_results,
                         force_type=diagram_map[diagram_type],
                         fill_diagram=fill_diagram,
-                        scale=diagram_scale
                     )
                     st.plotly_chart(fig, use_container_width=True)
                 except Exception as e:
