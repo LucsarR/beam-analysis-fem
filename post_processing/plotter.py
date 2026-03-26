@@ -202,7 +202,90 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
             load_dir_x, load_dir_y = perp_x, perp_y
         else:
             load_dir_x, load_dir_y = 0.0, 1.0
-        
+
+        def _mag_at(t):
+            """Return load magnitude (N/m) at fractional position t ∈ [0, 1]."""
+            if load_type == "constant":
+                return magnitude_start if magnitude_start is not None else 0.0
+            elif load_type == "linear":
+                if magnitude_start is not None and magnitude_end is not None:
+                    return magnitude_start + t * (magnitude_end - magnitude_start)
+                return 0.0
+            else:  # custom function
+                if func_str:
+                    try:
+                        x_val = t * L
+                        return float(eval(func_str, {"np": np, "x": x_val, "L": L}))
+                    except Exception:
+                        pass
+                return 1.0  # fallback placeholder
+
+        # Compute magnitudes along the element for contour and arrows
+        n_contour = 40
+        contour_ts = np.linspace(0, 1, n_contour)
+        contour_mags = np.array([_mag_at(t) for t in contour_ts])
+
+        # Normalise so max |magnitude| maps to scale * 0.7 arrow length
+        max_abs_mag = np.max(np.abs(contour_mags))
+        if max_abs_mag < 1e-10:
+            max_abs_mag = 1.0
+
+        norm_factor = scale * 0.7 / max_abs_mag
+
+        # Draw filled load-distribution contour (envelope of the distributed load)
+        axis_xs = x1 + contour_ts * (x2 - x1)
+        axis_ys = y1 + contour_ts * (y2 - y1)
+        tip_xs = axis_xs + load_dir_x * contour_mags * norm_factor
+        tip_ys = axis_ys + load_dir_y * contour_mags * norm_factor
+
+        # Filled polygon: axis → tips (forward) → axis (backward)
+        poly_xs = list(axis_xs) + list(tip_xs[::-1])
+        poly_ys = list(axis_ys) + list(tip_ys[::-1])
+
+        direction_label = {"x": "Global X", "y": "Global Y", "l": "Local axial", "t": "Local transverse"}.get(direction, direction)
+
+        fig.add_trace(go.Scatter(
+            x=poly_xs,
+            y=poly_ys,
+            fill='toself',
+            fillcolor='rgba(255,140,0,0.15)',
+            line=dict(width=0),
+            mode='lines',
+            showlegend=False,
+            hoverinfo='skip',
+        ))
+
+        # Contour outline along the tips
+        fig.add_trace(go.Scatter(
+            x=list(tip_xs) + [tip_xs[0]],
+            y=list(tip_ys) + [tip_ys[0]],
+            mode='lines',
+            line=dict(color='darkorange', width=2),
+            showlegend=False,
+            hoverinfo='skip',
+        ))
+
+        # Invisible hover points along the contour for interactive magnitude display
+        hover_ts = np.linspace(0, 1, 10)
+        hover_mags = np.array([_mag_at(t) for t in hover_ts])
+        hover_xs = x1 + hover_ts * (x2 - x1)
+        hover_ys = y1 + hover_ts * (y2 - y1)
+        hover_texts = [
+            f'Distributed Load<br>Element: {element_id}<br>Type: {load_type}<br>'
+            f'Direction: {direction_label}<br>Position: {t*100:.0f}%<br>Magnitude: {m:.3f} N/m'
+            for t, m in zip(hover_ts, hover_mags)
+        ]
+        fig.add_trace(go.Scatter(
+            x=hover_xs,
+            y=hover_ys,
+            mode='markers',
+            marker=dict(color='darkorange', size=8, opacity=0),
+            hovertemplate='%{text}<extra></extra>',
+            text=hover_texts,
+            showlegend=False,
+            name=f'Dist. Load {element_id}',
+        ))
+
         # Draw multiple arrows along the element to represent distributed load
         n_arrows = 5
         for i in range(n_arrows):
@@ -210,23 +293,12 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
             px = x1 + t * (x2 - x1)
             py = y1 + t * (y2 - y1)
             
-            # Determine magnitude at this position
-            if load_type == "constant":
-                mag = magnitude_start if magnitude_start is not None else 0.0
-            elif load_type == "linear":
-                # Linear interpolation between start and end magnitude
-                if magnitude_start is not None and magnitude_end is not None:
-                    mag = magnitude_start + t * (magnitude_end - magnitude_start)
-                else:
-                    mag = 0.0
-            else:  # custom function
-                # For preview, just show arrows - actual magnitude calculation requires eval
-                mag = 1.0  # placeholder
+            mag = _mag_at(t)
             
-            # Arrow length proportional to magnitude
-            arrow_scale = scale * 0.7 * np.sign(mag) if mag != 0 else scale * 0.7
-            arrow_dx = load_dir_x * arrow_scale
-            arrow_dy = load_dir_y * arrow_scale
+            # Arrow length proportional to actual magnitude (normalised)
+            arrow_len = mag * norm_factor
+            arrow_dx = load_dir_x * arrow_len
+            arrow_dy = load_dir_y * arrow_len
             
             fig.add_annotation(
                 x=px, y=py,
@@ -237,7 +309,11 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
                 arrowhead=2,
                 arrowsize=1,
                 arrowwidth=2,
-                arrowcolor='darkorange'
+                arrowcolor='darkorange',
+                text=f'{mag:.1f}',
+                font=dict(size=10, color='darkorange'),
+                bgcolor='rgba(255,165,0,0.0)',
+                borderwidth=0,
             )
     
     # Update layout
