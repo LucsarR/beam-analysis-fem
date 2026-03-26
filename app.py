@@ -1471,6 +1471,9 @@ with tab2:
                     # Prepare post-processing
                     structure_results = StructureResults(mesh, displacements, reactions)
                     st.session_state["structure_results"] = structure_results
+                    # Reset diagram visibility flags so new results are shown cleanly
+                    st.session_state["force_diagram_generated"] = False
+                    st.session_state["stress_dist_generated"] = False
                     
                     st.success("✅ Analysis completed successfully!")
                     
@@ -1666,6 +1669,9 @@ with tab3:
             }
             
             if st.button("📊 Generate Diagram", use_container_width=True):
+                st.session_state["force_diagram_generated"] = True
+            
+            if st.session_state.get("force_diagram_generated", False):
                 try:
                     n_orig = st.session_state.get("n_original_nodes", None)
                     
@@ -1796,13 +1802,52 @@ with tab3:
                             key="stress_position_slider"
                         )
                 
+                # --- Section-point query ------------------------------------------------
+                st.markdown("##### 📍 Extract stress at specific section position")
+                use_section_query = st.checkbox(
+                    "Query a specific y-position in the cross-section",
+                    value=False,
+                    help=(
+                        "Enter a y-coordinate within the section (measured from the centroid) "
+                        "to read the normal stress σ = N/A − M·y/I at that exact point."
+                    ),
+                    key="section_query_enabled",
+                )
+                section_query_y = None
+                if use_section_query:
+                    section_query_y = st.number_input(
+                        "Section y-coordinate (from centroid)",
+                        value=0.0,
+                        format="%.4f",
+                        help="y position within the cross-section (positive = above centroid)",
+                        key="section_query_y_value",
+                    )
+                
                 if selected_element_result is not None and st.button(
                     "🔍 Show Stress Distribution (Both Views)", use_container_width=True
                 ):
+                    st.session_state["stress_dist_generated"] = True
+                
+                if st.session_state.get("stress_dist_generated", False) and selected_element_result is not None:
                     try:
+                        # If a section-y query is active, compute and show the stress value
+                        if use_section_query and section_query_y is not None:
+                            N_val = selected_element_result.normal_force(x_pos)
+                            M_val = selected_element_result.bending_moment(x_pos)
+                            sigma_val = selected_element_result.element.section.normal_stress(N_val, M_val, section_query_y)
+                            st.info(
+                                f"📍 At section y = {section_query_y:.4f}  |  "
+                                f"N = {N_val:.4f}  |  M = {M_val:.4f}  |  "
+                                f"σ = **{sigma_val:.4f}**"
+                            )
+                        
                         # Display cross-section view (front view)
                         st.subheader("📐 Cross-Section View (Front)")
-                        fig_cross = plot_normal_stress_distribution(selected_element_result, x_pos)
+                        fig_cross = plot_normal_stress_distribution(
+                            selected_element_result,
+                            x_pos,
+                            query_y=section_query_y if use_section_query else None,
+                        )
                         st.plotly_chart(fig_cross, use_container_width=True)
                         
                         # Display side view
