@@ -11,14 +11,15 @@ class Load:
 class PointLoad(Load):
     """
     Represents a point load applied to a node.
-    direction: 0 = x, 1 = y, 2 = moment
+    direction: 0 = u (axial), 1 = v (transverse), 2 = moment/rotation,
+               3 = slope dv/dx (Reddy-Bickford only)
     """
     def __init__(self, magnitude, direction):
         super().__init__(magnitude)
         self.direction = direction
 
-    def apply(self, F_global, node):
-        idx = 3 * (node.id - 1) + self.direction
+    def apply(self, F_global, node, dofs_per_node=3):
+        idx = dofs_per_node * (node.id - 1) + self.direction
         F_global[idx] += self.magnitude
 
 class DistributedLoad(Load):
