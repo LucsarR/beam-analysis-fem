@@ -18,7 +18,8 @@ ELEMENT_TYPES = {
     "Euler-Bernoulli 2-node": "euler_bernoulli_2node",
     "Euler-Bernoulli 3-node": "euler_bernoulli_3node",
     "Timoshenko 2-node": "timoshenko_2node",
-    "Timoshenko 3-node": "timoshenko_3node"
+    "Timoshenko 3-node": "timoshenko_3node",
+    "Reddy-Bickford 2-node": "reddy_bickford_2node"
 }
 
 # Numerical tolerance

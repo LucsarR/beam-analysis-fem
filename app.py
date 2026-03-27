@@ -1101,11 +1101,19 @@ with tab1:
     # --- Input: Constraints ---
     with st.expander("🔒 Constraints (Boundary Conditions)", expanded=True):
         st.markdown("Define fixed or prescribed displacements and rotations.")
+
+        # Detect whether any Reddy-Bickford element is in use (needs 4 DOFs/node)
+        _has_reddy = any(
+            e[2] == "reddy_bickford_2node"
+            for e in st.session_state.get("elements", [])
+        )
+        _dof_options_c = [0, 1, 2, 3] if _has_reddy else [0, 1, 2]
+        _dof_labels_c = ["X displacement", "Y displacement", "Rotation", "Slope (dv/dx)"]
         
         n_constraints = st.number_input(
             "Number of constraints",
             min_value=0,
-            max_value=n_nodes*3,
+            max_value=n_nodes * (4 if _has_reddy else 3),
             value=len(st.session_state.get("constraints", [])),
             help="Define boundary conditions (e.g., fixed supports)"
         )
@@ -1127,12 +1135,14 @@ with tab1:
                         key=f"cnode_{i}",
                         help=f"Constraint {i+1} at node"
                     ))
-                    
+
+                    _existing_dir = existing_const[1] if existing_const and len(existing_const) > 1 else 0
+                    _dir_index = _dof_options_c.index(_existing_dir) if _existing_dir in _dof_options_c else 0
                     direction = int(col2.selectbox(
                         f"DOF",
-                        options=[0, 1, 2],
-                        format_func=lambda x: ["X displacement", "Y displacement", "Rotation"][x],
-                        index=existing_const[1] if existing_const and len(existing_const) > 1 else 0,
+                        options=_dof_options_c,
+                        format_func=lambda x: _dof_labels_c[x],
+                        index=_dir_index,
                         key=f"cdir_{i}",
                         help=f"Constraint {i+1} direction"
                     ))
@@ -1155,11 +1165,15 @@ with tab1:
     # --- Input: Point Loads ---
     with st.expander("⬇️ Point Loads", expanded=True):
         st.markdown("Define concentrated forces and moments at nodes.")
+
+        # Detect Reddy elements (computed above for constraints, re-used here)
+        _dof_options_l = [0, 1, 2, 3] if _has_reddy else [0, 1, 2]
+        _dof_labels_l = ["X force", "Y force", "Moment", "Applied slope (dv/dx)"]
         
         n_loads = st.number_input(
             "Number of point loads",
             min_value=0,
-            max_value=n_nodes*3,
+            max_value=n_nodes * (4 if _has_reddy else 3),
             value=len(st.session_state.get("point_loads", [])),
             help="Define point loads applied at nodes"
         )
@@ -1181,12 +1195,16 @@ with tab1:
                         key=f"lnode_{i}",
                         help=f"Load {i+1} at node"
                     ))
-                    
+
+                    _existing_ldir = existing_load[1] if existing_load and len(existing_load) > 1 else 1
+                    # default to direction 1 (Y force); clamp to valid range
+                    _ldir_default = _existing_ldir if _existing_ldir in _dof_options_l else 1
+                    _ldir_index = _dof_options_l.index(_ldir_default)
                     direction = int(col2.selectbox(
                         f"Direction",
-                        options=[0, 1, 2],
-                        format_func=lambda x: ["X force", "Y force", "Moment"][x],
-                        index=existing_load[1] if existing_load and len(existing_load) > 1 else 1,
+                        options=_dof_options_l,
+                        format_func=lambda x: _dof_labels_l[x],
+                        index=_ldir_index,
                         key=f"ldir_{i}",
                         help=f"Load {i+1} direction"
                     ))
