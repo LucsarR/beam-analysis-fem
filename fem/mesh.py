@@ -73,7 +73,7 @@ class Mesh:
         Raises:
             NotImplementedError: If element_type is not supported
         """
-        from fem.element import EulerBernoulliElement2Node, EulerBernoulliElement3Node, TimoshenkoElement2Node, TimoshenkoElement3Node
+        from fem.element import EulerBernoulliElement2Node, EulerBernoulliElement3Node, TimoshenkoElement2Node, TimoshenkoElement3Node, ReddyBickfordElement2Node
         if element_type == "euler_bernoulli_2node":
             element = EulerBernoulliElement2Node(self.element_id_counter, node_start, node_end, material, section)
         elif element_type == "euler_bernoulli_3node":
@@ -104,6 +104,8 @@ class Mesh:
             if node_center is None:
                 node_center = self.add_node(x_center, y_center)
             element = TimoshenkoElement3Node(self.element_id_counter, node_start, node_end, material, section, node_center)
+        elif element_type == "reddy_bickford_2node":
+            element = ReddyBickfordElement2Node(self.element_id_counter, node_start, node_end, material, section)
         else:
             raise NotImplementedError(f"Element type '{element_type}' not implemented.")
         self.elements.append(element)
