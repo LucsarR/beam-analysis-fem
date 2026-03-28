@@ -20,7 +20,7 @@ from fem.section import create_section
 from fem.constraint import Constraint
 from fem.load import PointLoad, DistributedLoad
 from fem.analysis import EulerBernoulliAnalysis
-from config import DEFAULT_E, DEFAULT_NU, SECTION_TYPES, ELEMENT_TYPES
+from config import DEFAULT_E, DEFAULT_NU, DEFAULT_G, SECTION_TYPES, ELEMENT_TYPES
 
 # --- Post-processing and Plotting ---
 from post_processing.forces import StructureResults
@@ -99,7 +99,9 @@ def save_project_to_dict():
             "name": prop.get("name", ""),
             "material": {
                 "E": prop["material"].E if "material" in prop else DEFAULT_E,
-                "nu": prop["material"].nu if "material" in prop else DEFAULT_NU
+                "G": prop["material"].G if "material" in prop else DEFAULT_G,
+                "nu": prop["material"].nu if "material" in prop else DEFAULT_NU,
+                "input_mode": prop.get("mat_input_mode", "Calculate G (from E and ν)")
             },
             "section": {
                 "type": prop.get("section_type", "general"),
@@ -136,11 +138,27 @@ def load_project_from_dict(project_data):
         # Reconstruct properties
         properties = []
         for prop_data in project_data.get("properties", []):
-            material = Material(
-                len(properties) + 1,
-                prop_data["material"]["E"],
-                prop_data["material"]["nu"]
-            )
+            mat_data = prop_data["material"]
+            mat_mode = mat_data.get("input_mode", "Calculate G (from E and ν)")
+            if mat_mode == "Calculate ν (from E and G)":
+                material = Material(
+                    len(properties) + 1,
+                    E=mat_data["E"],
+                    G=mat_data.get("G", DEFAULT_G),
+                )
+            elif mat_mode == "Calculate E (from G and ν)":
+                material = Material(
+                    len(properties) + 1,
+                    G=mat_data.get("G", DEFAULT_G),
+                    nu=mat_data["nu"],
+                )
+            else:
+                # Default: Calculate G from E and ν (also covers old files without input_mode)
+                material = Material(
+                    len(properties) + 1,
+                    E=mat_data["E"],
+                    nu=mat_data["nu"],
+                )
             section_data = prop_data["section"]
             section = create_section(
                 section_data["type"],
@@ -150,6 +168,7 @@ def load_project_from_dict(project_data):
             properties.append({
                 "name": prop_data["name"],
                 "material": material,
+                "mat_input_mode": mat_mode,
                 "section": section,
                 "section_type": section_data["type"],
                 "section_kwargs": section_data["kwargs"]
@@ -609,27 +628,136 @@ with tab1:
                     )
                     
                     st.markdown("**Material Properties**")
-                    E = st.number_input(
-                        "Young's Modulus E",
-                        value=existing_prop["material"].E if existing_prop and "material" in existing_prop else DEFAULT_E,
-                        format="%.2e",
-                        key=f"E_{i}",
-                        help="Elastic modulus of the material"
+
+                    _MAT_MODES = [
+                        "Calculate G (from E and ν)",
+                        "Calculate ν (from E and G)",
+                        "Calculate E (from G and ν)",
+                    ]
+                    _existing_mode = existing_prop.get("mat_input_mode", _MAT_MODES[0]) if existing_prop else _MAT_MODES[0]
+                    _mode_index = _MAT_MODES.index(_existing_mode) if _existing_mode in _MAT_MODES else 0
+
+                    mat_input_mode = st.radio(
+                        "Calculate:",
+                        _MAT_MODES,
+                        index=_mode_index,
+                        key=f"mat_mode_{i}",
+                        help=(
+                            "Choose which elastic constant to derive. "
+                            "Enter the other two — only 2 of E, G, ν can be "
+                            "specified at the same time; the third is computed "
+                            "from G = E / (2·(1 + ν))."
+                        ),
+                        horizontal=True,
                     )
-                    
-                    valid_E, msg_E = validate_number(E, min_val=0.0, field_name="Young's modulus")
-                    if not valid_E:
-                        st.error(msg_E)
-                    
-                    nu = st.number_input(
-                        "Poisson's Ratio ν",
-                        min_value=0.0,
-                        max_value=0.5,
-                        value=existing_prop["material"].nu if existing_prop and "material" in existing_prop else DEFAULT_NU,
-                        format="%.3f",
-                        key=f"nu_{i}",
-                        help="Poisson's ratio (0.0 to 0.5)"
-                    )
+
+                    if mat_input_mode == "Calculate G (from E and ν)":
+                        E = st.number_input(
+                            "Young's Modulus E",
+                            value=existing_prop["material"].E if existing_prop and "material" in existing_prop else DEFAULT_E,
+                            format="%.2e",
+                            key=f"E_{i}",
+                            help="Elastic modulus of the material",
+                        )
+                        valid_E, msg_E = validate_number(E, min_val=0.0, field_name="Young's modulus")
+                        if not valid_E:
+                            st.error(msg_E)
+
+                        nu = st.number_input(
+                            "Poisson's Ratio ν",
+                            min_value=0.0,
+                            max_value=0.5,
+                            value=existing_prop["material"].nu if existing_prop and "material" in existing_prop else DEFAULT_NU,
+                            format="%.3f",
+                            key=f"nu_{i}",
+                            help="Poisson's ratio (0.0 to 0.5)",
+                        )
+
+                        _G_computed = E / (2.0 * (1.0 + nu))
+                        st.number_input(
+                            "Shear Modulus G (computed)",
+                            value=_G_computed,
+                            format="%.2e",
+                            key=f"G_{i}",
+                            disabled=True,
+                            help="Computed automatically from G = E / (2·(1 + ν))",
+                        )
+                        mat_E, mat_nu, mat_G = E, nu, None
+
+                    elif mat_input_mode == "Calculate ν (from E and G)":
+                        E = st.number_input(
+                            "Young's Modulus E",
+                            value=existing_prop["material"].E if existing_prop and "material" in existing_prop else DEFAULT_E,
+                            format="%.2e",
+                            key=f"E_{i}",
+                            help="Elastic modulus of the material",
+                        )
+                        valid_E, msg_E = validate_number(E, min_val=0.0, field_name="Young's modulus")
+                        if not valid_E:
+                            st.error(msg_E)
+
+                        G_in = st.number_input(
+                            "Shear Modulus G",
+                            value=existing_prop["material"].G if existing_prop and "material" in existing_prop else DEFAULT_G,
+                            format="%.2e",
+                            key=f"G_{i}",
+                            help="Shear modulus of the material",
+                        )
+                        valid_G, msg_G = validate_number(G_in, min_val=0.0, field_name="Shear modulus")
+                        if not valid_G:
+                            st.error(msg_G)
+
+                        _nu_computed = E / (2.0 * G_in) - 1.0 if G_in > 0 else 0.0
+                        st.number_input(
+                            "Poisson's Ratio ν (computed)",
+                            value=_nu_computed,
+                            format="%.4f",
+                            key=f"nu_{i}",
+                            disabled=True,
+                            help="Computed automatically from ν = E / (2·G) − 1",
+                        )
+                        if G_in == 0:
+                            st.error("⚠️ Shear modulus G must be greater than zero.")
+                        elif not (0.0 <= _nu_computed <= 0.5):
+                            st.warning(
+                                f"⚠️ Computed Poisson's ratio ν = {_nu_computed:.4f} is outside the "
+                                "physically valid range [0, 0.5]. Check your E and G values."
+                            )
+                        mat_E, mat_nu, mat_G = E, None, G_in
+
+                    else:  # "Calculate E (from G and ν)"
+                        G_in = st.number_input(
+                            "Shear Modulus G",
+                            value=existing_prop["material"].G if existing_prop and "material" in existing_prop else DEFAULT_G,
+                            format="%.2e",
+                            key=f"G_{i}",
+                            help="Shear modulus of the material",
+                        )
+                        valid_G, msg_G = validate_number(G_in, min_val=0.0, field_name="Shear modulus")
+                        if not valid_G:
+                            st.error(msg_G)
+
+                        nu = st.number_input(
+                            "Poisson's Ratio ν",
+                            min_value=0.0,
+                            max_value=0.5,
+                            value=existing_prop["material"].nu if existing_prop and "material" in existing_prop else DEFAULT_NU,
+                            format="%.3f",
+                            key=f"nu_{i}",
+                            help="Poisson's ratio (0.0 to 0.5)",
+                        )
+
+                        _E_computed = 2.0 * G_in * (1.0 + nu)
+                        st.number_input(
+                            "Young's Modulus E (computed)",
+                            value=_E_computed,
+                            format="%.2e",
+                            key=f"E_{i}",
+                            disabled=True,
+                            help="Computed automatically from E = 2·G·(1 + ν)",
+                        )
+                        mat_E, mat_nu, mat_G = None, nu, G_in
+
                 
                 with col2:
                     st.markdown("**Section Properties**")
@@ -1008,11 +1136,12 @@ with tab1:
                     except Exception as e:
                         st.info("Preview not available for this section type.")
                 
-                material = Material(i+1, E, nu)
+                material = Material(i+1, E=mat_E, nu=mat_nu, G=mat_G)
                 section = create_section(section_type, i+1, **section_kwargs)
                 properties.append({
                     "name": prop_name,
                     "material": material,
+                    "mat_input_mode": mat_input_mode,
                     "section": section,
                     "section_type": section_type,
                     "section_kwargs": section_kwargs

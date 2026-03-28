@@ -1,6 +1,7 @@
 # Default material properties
 DEFAULT_E = 70e3  # Young's modulus [MPa]
 DEFAULT_NU = 0.3    # Poisson's ratio
+DEFAULT_G = DEFAULT_E / (2 * (1 + DEFAULT_NU))  # Shear modulus [MPa] (computed)
 
 # Default section dimensions
 DEFAULT_WIDTH = 10
