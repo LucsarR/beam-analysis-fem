@@ -1343,7 +1343,7 @@ with tab1:
                         value=existing_load[2] if existing_load and len(existing_load) > 2 else 0.0,
                         format="%.4f",
                         key=f"lmag_{i}",
-                        help=f"Load {i+1} magnitude (N or N·m)"
+                        help=f"Load {i+1} magnitude"
                     )
                     
                     point_loads.append((node_id, direction, magnitude))
@@ -1402,7 +1402,7 @@ with tab1:
                     
                     if load_type == "constant":
                         magnitude = col4.number_input(
-                            f"Value (N/m)",
+                            f"Value",
                             value=existing_dload[1] if existing_dload and existing_dload[1] is not None else 0.0,
                             format="%.4f",
                             key=f"dlval_{i}",
@@ -1412,14 +1412,14 @@ with tab1:
                     
                     elif load_type == "linear":
                         magnitude_start = col4.number_input(
-                            f"Start (N/m)",
+                            f"Start",
                             value=existing_dload[1] if existing_dload and existing_dload[1] is not None else 0.0,
                             format="%.4f",
                             key=f"dlstart_{i}",
                             help=f"Load {i+1} start value"
                         )
                         magnitude_end = col5.number_input(
-                            f"End (N/m)",
+                            f"End",
                             value=existing_dload[2] if existing_dload and existing_dload[2] is not None else 0.0,
                             format="%.4f",
                             key=f"dlend_{i}",
@@ -2057,37 +2057,78 @@ with tab4:
     ### 🚀 Quick Start Guide
     
     #### 1. Define Structure (Structure Definition Tab)
-    - **Nodes**: Define the nodal points of your beam structure
-    - **Properties**: Set material properties (Young's modulus, Poisson's ratio) and section geometry
-    - **Elements**: Connect nodes with beam elements and assign properties
-    - **Constraints**: Apply boundary conditions (fixed supports, prescribed displacements)
-    - **Loads**: Apply point loads or distributed loads
+    - **Nodes**: Define the nodal points of your beam structure (x, y coordinates)
+    - **Properties**: Set material properties (Young's modulus E, Poisson's ratio ν, Shear modulus G)
+      and cross-section geometry (rectangular, circular, I-beam, C-section, and more)
+    - **Elements**: Connect nodes with beam elements, select element formulation, assign a property
+      set, and choose the mesh refinement (number of sub-divisions per element)
+    - **Constraints**: Apply boundary conditions — fix translations and/or rotations at nodes,
+      or prescribe non-zero displacements
+    - **Point Loads**: Apply concentrated forces or moments at nodes
+    - **Distributed Loads**: Apply loads distributed along elements (constant, linear, or custom function)
     
     #### 2. Run Analysis (Analysis Tab)
-    - Review the model summary
-    - Click "Run Analysis" to perform FEM calculation
-    - View nodal displacements
-    - Download results as CSV
+    - Review the model summary (node/element counts, mesh node count)
+    - Click **👁️ Preview Structure with Loads** to inspect the setup before solving
+    - Click **🚀 Run Analysis** to perform the FEM calculation
+    - View nodal displacements and reaction forces at constrained DOFs
+    - Download displacements and reactions as CSV files
     
     #### 3. View Results (Results Tab)
-    - Generate force diagrams (moment, shear, normal force)
-    - Examine stress distributions in cross-sections
+    - **Force Diagrams**: Plot bending moment, shear force, or normal force diagrams
+      with optional fill, color, and transparency controls
+    - **Point Query**: Read the force/moment value at any position along the structure
+    - **Normal Stress Distribution**: Examine the stress field across the cross-section
+      at any cut position (cross-sectional view) and along the beam length (side view)
     
     #### 4. Save/Load Projects (Sidebar)
-    - **Save**: Download your project as a JSON file
-    - **Load**: Upload a previously saved project
-    - **New**: Start a fresh project
+    - **Save**: Download the full project as a JSON file
+    - **Load**: Upload a previously saved project to restore all inputs
+    - **New**: Start a fresh project (clears all current data)
     
     ### 📝 Tips
-    - Use the expanders to organize your input
-    - Validation messages will guide you through errors
-    - The sidebar allows you to save/load projects for later use
-    - Units: Lengths in meters, forces in Newtons, stresses in MPa
+    - Use the expanders to organize your input; each section can be collapsed
+    - Validation messages will guide you through errors before running the analysis
+    - The **Section Preview** diagram shows dimension labels for the selected cross-section type
+    - The app is **unit-agnostic** — choose any consistent unit system (see table below)
+    - For Reddy-Bickford elements, a fourth DOF per node (curvature) is automatically activated
     
     ### 🔧 Supported Features
-    - **Element Types**: Euler-Bernoulli, Timoshenko (both fully supported for analysis and visualization)
-    - **Section Types**: Rectangular, Circular, I-beam, C-section, and more
-    - **Load Types**: Point loads, distributed loads (constant, linear, custom functions)
-    - **Analysis**: Linear static analysis with both Euler-Bernoulli and Timoshenko beam theories
-    - **Visualization**: Force diagrams (moment, shear, normal), stress distributions, and deformed shapes
+    - **Element Formulations**: Euler-Bernoulli (2-node, 3-node), Timoshenko (2-node, 3-node),
+      Reddy-Bickford (2-node)
+    - **Section Types**: Rectangular bar/tube, Circular bar/tube, Trapezoidal bar/tube,
+      Hexagonal bar/tube, I-beam, C-section, L-section, T-section, Z-section, Hat section, General
+    - **Load Types**: Point loads and moments, distributed loads (constant, linear, custom functions
+      of position x and element length L)
+    - **Mesh Refinement**: Each element can be subdivided into multiple sub-elements for
+      improved accuracy without manually adding intermediate nodes
+    - **Analysis**: Linear static FEM with automatic assembly, boundary condition enforcement,
+      and reaction force recovery
+    - **Visualization**: Force diagrams, stress distributions, deformed/undeformed structure
+      preview, and section geometry diagrams
+
+    ---
+
+    ### 📐 Unit Reference — Common Consistent Systems in Structural Engineering
+
+    The tool is **unit-agnostic**: you may use any coherent set of units.
+    The table below lists the most common choices; pick one column and use it throughout.
+    All quantities in a single analysis must use the **same** unit system.
+
+    | Quantity | SI (N, m) | SI (kN, m) | SI (N, mm) | SI (kN, mm) | US (kip, in) | US (kip, ft) |
+    |---|---|---|---|---|---|---|
+    | Length | m | m | mm | mm | in | ft |
+    | Force | N | kN | N | kN | kip | kip |
+    | Moment | N·m | kN·m | N·mm | kN·mm | kip·in | kip·ft |
+    | Distributed load | N/m | kN/m | N/mm | kN/mm | kip/in | kip/ft |
+    | Pressure / Stress | Pa (N/m²) | kPa | MPa (N/mm²) | GPa (kN/mm²) | ksi (kip/in²) | ksf (kip/ft²) |
+    | Young's modulus E — Steel | 200 × 10⁹ Pa | 200 × 10⁶ kPa | 200 000 MPa | 200 GPa | 29 000 ksi | 4 176 000 ksf |
+    | Young's modulus E — Aluminum | 70 × 10⁹ Pa | 70 × 10⁶ kPa | 70 000 MPa | 70 GPa | 10 000 ksi | 1 440 000 ksf |
+    | Young's modulus E — Concrete | 30 × 10⁹ Pa | 30 × 10⁶ kPa | 30 000 MPa | 30 GPa | 4 350 ksi | 626 400 ksf |
+
+    > **Note on other common combinations:** Some practitioners use **MPa with metres**
+    > (i.e. stresses in MPa but lengths in m) or **kN with mm**. These are *not* coherent
+    > because 1 MPa = 1 N/mm² ≠ 1 N/m², so a mixed setup will give wrong results.
+    > Always verify that your force unit divided by your length unit squared equals your
+    > stress/modulus unit before entering values.
     """)
