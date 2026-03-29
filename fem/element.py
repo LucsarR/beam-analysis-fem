@@ -1431,17 +1431,12 @@ class ReddyBickfordElement2Node(Element):
         K_b[4, 3] += -6.0 * L * f; K_b[4, 4] += 4.0 * L ** 2 * f
 
         # --- E1 cross term: −E1·(ψ'·κ^T + κ·ψ'^T) ---
-        # Nonzero entries: [1,2],[2,1]=+E1/L; [1,5],[5,1]=−E1/L;
-        #                  [2,4],[4,2]=−E1/L; [4,5],[5,4]=+E1/L
-        # NOTE: Signs corrected and magnitude scaled by 0.15 - original implementation
-        # had inverted signs causing element to be too stiff. Empirical scaling factor
-        # found to match expected Timoshenko-like shear deformation behavior.
-        # TODO: Verify against Heyliger & Reddy (1988) reference formulation
-        E1_scaled = 0.15 * E1
-        K_b[1, 2] += E1_scaled / L;   K_b[2, 1] += E1_scaled / L
-        K_b[1, 5] += -E1_scaled / L;  K_b[5, 1] += -E1_scaled / L
-        K_b[2, 4] += -E1_scaled / L;  K_b[4, 2] += -E1_scaled / L
-        K_b[4, 5] += E1_scaled / L;   K_b[5, 4] += E1_scaled / L
+        # Nonzero entries: [1,2],[2,1]=−E1/L; [1,5],[5,1]=+E1/L;
+        #                  [2,4],[4,2]=+E1/L; [4,5],[5,4]=−E1/L
+        K_b[1, 2] += -E1 / L;  K_b[2, 1] += -E1 / L
+        K_b[1, 5] += E1 / L;   K_b[5, 1] += E1 / L
+        K_b[2, 4] += E1 / L;   K_b[4, 2] += E1 / L
+        K_b[4, 5] += -E1 / L;  K_b[5, 4] += -E1 / L
 
         # --- G1 shear term: G1·L·∫γᵢ·γⱼ dξ ---
         # γ = [N_θ,ᵢ + dN_v,ᵢ/dx] – see analytical integral table in derivation.
