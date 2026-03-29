@@ -7,6 +7,7 @@
 - [ ] Procurar por codigo duplicado(deixar mais clean)
 - [ ] Verificar distribuicao shear diagram esta estranho para femap_test
 - [ ] verificar timoshenko com subdivisions
+- [ ] verificar shear force e normal force com subdivision. Era para formar escada?
 
 # Ajuste do front-end
 - [ ] Point Loads inicia em Y force arrumar
