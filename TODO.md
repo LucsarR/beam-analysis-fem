@@ -17,4 +17,5 @@
 - [ ] Atualizar README's (tanto do workspace quanto do tests)
 - [ ] Atualizar pagina do Github
 - [ ] Atualizar GUI para ter um ar mais moderno
+- [ ] Adicionar prints de tela no readme
 - [ ] PyInstaller para criar .exe
