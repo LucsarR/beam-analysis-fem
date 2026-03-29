@@ -1619,54 +1619,231 @@ class ReddyBickfordElement2Node(Element):
 
     def bending_moment(self, x, displacements):
         """
-        Effective bending moment M̂(x) = D1·θ'(x) − E1·v''(x) at local position x.
+        Bending moment M(x) recovered from nodal forces at local position x.
+
+        For the Reddy-Bickford element, the bending moment is recovered from
+        the element equilibrium (K_local · d_local) and linearly interpolated:
+
+            M(0) = f[2] - f[3]     (moment at start node, work-conjugate to curvature)
+            M(L) = -(f[6] - f[7])  (moment at end node)
+            M(x) = M(0)·(1−ξ) + M(L)·ξ,   ξ = x/L
+
+        where f = K_local @ displacements is the element nodal force vector.
+        This method is exact at the nodes and provides linear variation between them.
 
         `displacements` must be in LOCAL coordinates:
         [u₁, v₁, θ₁, (dv/dx)₁, u₂, v₂, θ₂, (dv/dx)₂]
         """
-        D1, E1, _F1, _G1 = self._get_reddy_params()
         L = self.length
         xi = x / L
 
-        # θ is linear: θ'(x) = (θ₂ − θ₁) / L
-        theta1 = displacements[2]
-        theta2 = displacements[6]
-        dtheta_dx = (theta2 - theta1) / L
+        # Compute local element stiffness matrix
+        # (Extract just the local matrix, before transformation)
+        E = self.material.E
+        A = self.section.area
+        D1, E1, F1, G1 = self._get_reddy_params()
 
-        # v is cubic Hermite; v'' = d²v/dx² evaluated at ξ
-        v1 = displacements[1]
-        dvdx1 = displacements[3]   # dv/dx at node 1
-        v2 = displacements[5]
-        dvdx2 = displacements[7]   # dv/dx at node 2
+        # Build 8×8 local stiffness (same as in stiffness_matrix but without R transformation)
+        b_dofs = [1, 3, 2, 5, 7, 6]
+        K_b = np.zeros((6, 6))
 
-        d2H1 = 6.0 * (2.0 * xi - 1.0) / L ** 2
-        d2H2 = 2.0 * (3.0 * xi - 2.0) / L
-        d2H3 = 6.0 * (1.0 - 2.0 * xi) / L ** 2
-        d2H4 = 2.0 * (3.0 * xi - 1.0) / L
+        # D1 term
+        K_b[2, 2] += D1 / L
+        K_b[2, 5] += -D1 / L
+        K_b[5, 2] += -D1 / L
+        K_b[5, 5] += D1 / L
 
-        v_ddx = d2H1 * v1 + d2H2 * dvdx1 + d2H3 * v2 + d2H4 * dvdx2
+        # F1 term
+        f = F1 / L ** 3
+        K_b[0, 0] += 12.0 * f;  K_b[0, 1] += 6.0 * L * f
+        K_b[0, 3] += -12.0 * f; K_b[0, 4] += 6.0 * L * f
+        K_b[1, 0] += 6.0 * L * f;  K_b[1, 1] += 4.0 * L ** 2 * f
+        K_b[1, 3] += -6.0 * L * f; K_b[1, 4] += 2.0 * L ** 2 * f
+        K_b[3, 0] += -12.0 * f; K_b[3, 1] += -6.0 * L * f
+        K_b[3, 3] += 12.0 * f;  K_b[3, 4] += -6.0 * L * f
+        K_b[4, 0] += 6.0 * L * f;  K_b[4, 1] += 2.0 * L ** 2 * f
+        K_b[4, 3] += -6.0 * L * f; K_b[4, 4] += 4.0 * L ** 2 * f
 
-        return D1 * dtheta_dx - E1 * v_ddx
+        # E1 term
+        K_b[1, 2] += -E1 / L;   K_b[2, 1] += -E1 / L
+        K_b[1, 5] += E1 / L;    K_b[5, 1] += E1 / L
+        K_b[2, 4] += E1 / L;    K_b[4, 2] += E1 / L
+        K_b[4, 5] += -E1 / L;   K_b[5, 4] += -E1 / L
+
+        # G1 term
+        K_b[0, 0] += 6.0 * G1 / (5.0 * L)
+        K_b[0, 1] += G1 / 10.0
+        K_b[0, 2] += -G1 / 2.0
+        K_b[0, 3] += -6.0 * G1 / (5.0 * L)
+        K_b[0, 4] += G1 / 10.0
+        K_b[0, 5] += -G1 / 2.0
+
+        K_b[1, 0] += G1 / 10.0
+        K_b[1, 1] += 2.0 * G1 * L / 15.0
+        K_b[1, 2] += G1 * L / 12.0
+        K_b[1, 3] += -G1 / 10.0
+        K_b[1, 4] += -G1 * L / 30.0
+        K_b[1, 5] += -G1 * L / 12.0
+
+        K_b[2, 0] += -G1 / 2.0
+        K_b[2, 1] += G1 * L / 12.0
+        K_b[2, 2] += G1 * L / 3.0
+        K_b[2, 3] += G1 / 2.0
+        K_b[2, 4] += -G1 * L / 12.0
+        K_b[2, 5] += G1 * L / 6.0
+
+        K_b[3, 0] += -6.0 * G1 / (5.0 * L)
+        K_b[3, 1] += -G1 / 10.0
+        K_b[3, 2] += G1 / 2.0
+        K_b[3, 3] += 6.0 * G1 / (5.0 * L)
+        K_b[3, 4] += -G1 / 10.0
+        K_b[3, 5] += G1 / 2.0
+
+        K_b[4, 0] += G1 / 10.0
+        K_b[4, 1] += -G1 * L / 30.0
+        K_b[4, 2] += -G1 * L / 12.0
+        K_b[4, 3] += -G1 / 10.0
+        K_b[4, 4] += 2.0 * G1 * L / 15.0
+        K_b[4, 5] += G1 * L / 12.0
+
+        K_b[5, 0] += -G1 / 2.0
+        K_b[5, 1] += -G1 * L / 12.0
+        K_b[5, 2] += G1 * L / 6.0
+        K_b[5, 3] += G1 / 2.0
+        K_b[5, 4] += G1 * L / 12.0
+        K_b[5, 5] += G1 * L / 3.0
+
+        k_local = np.zeros((8, 8))
+        k_local[0, 0] = E * A / L
+        k_local[0, 4] = -E * A / L
+        k_local[4, 0] = -E * A / L
+        k_local[4, 4] = E * A / L
+
+        for i_b, i_g in enumerate(b_dofs):
+            for j_b, j_g in enumerate(b_dofs):
+                k_local[i_g, j_g] = K_b[i_b, j_b]
+
+        # Compute nodal forces
+        f = k_local @ displacements
+
+        # Extract moments at left and right ends
+        # M_left = Fθ₁ − F(dv/dx)₁  (work-conjugate to curvature)
+        # M_right = -(Fθ₂ − F(dv/dx)₂)
+        M_left = f[2] - f[3]
+        M_right = -(f[6] - f[7])
+
+        # Linear interpolation
+        return M_left * (1.0 - xi) + M_right * xi
 
     def shear_force(self, x, displacements):
         """
-        Effective shear force V̂ = −dM̂/dx = E1·v'''(x) at local position x.
+        Shear force V(x) recovered from nodal forces.
 
-        For a cubic Hermite v, v''' is constant along the element.
-        `displacements` in LOCAL coordinates.
+        For the Reddy-Bickford element with no distributed load, the shear force
+        is constant along the element and is computed from the moment gradient:
+
+            V = (M_left - M_right) / L = -dM/dx
+
+        where M_left and M_right are recovered from nodal forces.
+
+        `displacements` in LOCAL coordinates:
+        [u₁, v₁, θ₁, (dv/dx)₁, u₂, v₂, θ₂, (dv/dx)₂]
         """
-        _D1, E1, _F1, _G1 = self._get_reddy_params()
         L = self.length
 
-        v1 = displacements[1]
-        dvdx1 = displacements[3]
-        v2 = displacements[5]
-        dvdx2 = displacements[7]
+        # Compute local element stiffness matrix (same as in bending_moment)
+        E = self.material.E
+        A = self.section.area
+        D1, E1, F1, G1 = self._get_reddy_params()
 
-        # v''' = (1/L³)·[12·v₁ + 6L·v₁' − 12·v₂ + 6L·v₂']
-        v_dddx = (12.0 * v1 + 6.0 * L * dvdx1 - 12.0 * v2 + 6.0 * L * dvdx2) / L ** 3
+        b_dofs = [1, 3, 2, 5, 7, 6]
+        K_b = np.zeros((6, 6))
 
-        return E1 * v_dddx
+        # D1 term
+        K_b[2, 2] += D1 / L
+        K_b[2, 5] += -D1 / L
+        K_b[5, 2] += -D1 / L
+        K_b[5, 5] += D1 / L
+
+        # F1 term
+        f = F1 / L ** 3
+        K_b[0, 0] += 12.0 * f;  K_b[0, 1] += 6.0 * L * f
+        K_b[0, 3] += -12.0 * f; K_b[0, 4] += 6.0 * L * f
+        K_b[1, 0] += 6.0 * L * f;  K_b[1, 1] += 4.0 * L ** 2 * f
+        K_b[1, 3] += -6.0 * L * f; K_b[1, 4] += 2.0 * L ** 2 * f
+        K_b[3, 0] += -12.0 * f; K_b[3, 1] += -6.0 * L * f
+        K_b[3, 3] += 12.0 * f;  K_b[3, 4] += -6.0 * L * f
+        K_b[4, 0] += 6.0 * L * f;  K_b[4, 1] += 2.0 * L ** 2 * f
+        K_b[4, 3] += -6.0 * L * f; K_b[4, 4] += 4.0 * L ** 2 * f
+
+        # E1 term
+        K_b[1, 2] += -E1 / L;   K_b[2, 1] += -E1 / L
+        K_b[1, 5] += E1 / L;    K_b[5, 1] += E1 / L
+        K_b[2, 4] += E1 / L;    K_b[4, 2] += E1 / L
+        K_b[4, 5] += -E1 / L;   K_b[5, 4] += -E1 / L
+
+        # G1 term
+        K_b[0, 0] += 6.0 * G1 / (5.0 * L)
+        K_b[0, 1] += G1 / 10.0
+        K_b[0, 2] += -G1 / 2.0
+        K_b[0, 3] += -6.0 * G1 / (5.0 * L)
+        K_b[0, 4] += G1 / 10.0
+        K_b[0, 5] += -G1 / 2.0
+
+        K_b[1, 0] += G1 / 10.0
+        K_b[1, 1] += 2.0 * G1 * L / 15.0
+        K_b[1, 2] += G1 * L / 12.0
+        K_b[1, 3] += -G1 / 10.0
+        K_b[1, 4] += -G1 * L / 30.0
+        K_b[1, 5] += -G1 * L / 12.0
+
+        K_b[2, 0] += -G1 / 2.0
+        K_b[2, 1] += G1 * L / 12.0
+        K_b[2, 2] += G1 * L / 3.0
+        K_b[2, 3] += G1 / 2.0
+        K_b[2, 4] += -G1 * L / 12.0
+        K_b[2, 5] += G1 * L / 6.0
+
+        K_b[3, 0] += -6.0 * G1 / (5.0 * L)
+        K_b[3, 1] += -G1 / 10.0
+        K_b[3, 2] += G1 / 2.0
+        K_b[3, 3] += 6.0 * G1 / (5.0 * L)
+        K_b[3, 4] += -G1 / 10.0
+        K_b[3, 5] += G1 / 2.0
+
+        K_b[4, 0] += G1 / 10.0
+        K_b[4, 1] += -G1 * L / 30.0
+        K_b[4, 2] += -G1 * L / 12.0
+        K_b[4, 3] += -G1 / 10.0
+        K_b[4, 4] += 2.0 * G1 * L / 15.0
+        K_b[4, 5] += G1 * L / 12.0
+
+        K_b[5, 0] += -G1 / 2.0
+        K_b[5, 1] += -G1 * L / 12.0
+        K_b[5, 2] += G1 * L / 6.0
+        K_b[5, 3] += G1 / 2.0
+        K_b[5, 4] += G1 * L / 12.0
+        K_b[5, 5] += G1 * L / 3.0
+
+        k_local = np.zeros((8, 8))
+        k_local[0, 0] = E * A / L
+        k_local[0, 4] = -E * A / L
+        k_local[4, 0] = -E * A / L
+        k_local[4, 4] = E * A / L
+
+        for i_b, i_g in enumerate(b_dofs):
+            for j_b, j_g in enumerate(b_dofs):
+                k_local[i_g, j_g] = K_b[i_b, j_b]
+
+        # Compute nodal forces
+        f_vec = k_local @ displacements
+
+        # Extract moments at left and right ends
+        M_left = f_vec[2] - f_vec[3]
+        M_right = -(f_vec[6] - f_vec[7])
+
+        # Shear force (constant): V = -dM/dx
+        return (M_left - M_right) / L
 
     def normal_force(self, x, displacements):
         """

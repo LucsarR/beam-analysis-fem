@@ -76,17 +76,21 @@ class ConstraintSet:
     def calculate_all_reactions(self, displacement_vector, dofs_per_node=None):
         """
         Calculate reaction forces at all constraints using penalty method.
-        
+
         Args:
             displacement_vector: Global displacement vector
             dofs_per_node: Number of DOFs per node (3 for EB/Timoshenko, 4 for Reddy-Bickford)
-        
+                           If None, uses the value stored when apply_all was called.
+
         Returns:
             Dictionary mapping (node_id, direction) to reaction force value
             direction: 0=u, 1=v, 2=rotation (or dv/dx for Reddy dir 3)
         """
+        # Use the stored dofs_per_node if not explicitly provided
+        dpn = dofs_per_node if dofs_per_node is not None else self._dofs_per_node
+
         reactions = {}
         for constraint in self.constraints:
             key = (constraint.node.id, constraint.direction)
-            reactions[key] = constraint.calculate_reaction(displacement_vector, dofs_per_node)
+            reactions[key] = constraint.calculate_reaction(displacement_vector, dpn)
         return reactions

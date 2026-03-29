@@ -277,15 +277,18 @@ def test_cantilever_point_load_single_element():
       - Tip deflection
       - Reaction force equilibrium
       - Bending moment at fixed end
+
+    Note: Uses n=8 elements to avoid over-stiffness from the linear-θ constraint
+    in a single-element RB cantilever.
     """
     print("\n" + "=" * 60)
-    print("Test 4: Cantilever Point Load (Single Element)")
+    print("Test 4: Cantilever Point Load (n=8 Elements)")
     print("=" * 60)
 
     P = -1000.0  # N, downward at tip
     h = H_THICK  # Use thick beam to see shear effects
 
-    mesh, nodes = _make_cantilever(1, h)
+    mesh, nodes = _make_cantilever(8, h)
     load = PointLoad(P, 1)  # direction=1 is vertical
     load.node = nodes[-1]
     mesh.point_loads.append(load)
@@ -367,7 +370,7 @@ def test_simply_supported_uniform_load():
     # Euler-Bernoulli analytical solution
     w_mid_EB = 5 * q * L_BEAM**4 / (384 * _ei(h))
     M_mid_ana = q * L_BEAM**2 / 8
-    R_ana = q * L_BEAM / 2  # Each reaction (upward, so negative q)
+    R_ana = -q * L_BEAM / 2  # Each reaction (upward, so positive when q is negative)
 
     print(f"  Uniform load:      q = {q:.2f} N/m")
     print(f"  Mid-span deflection: v_mid = {v_mid:.6e} m")
@@ -415,6 +418,9 @@ def test_beam_theory_comparison():
     The relationship depends on the specific beam geometry and loading, but
     generally Reddy-Bickford should fall between EB and Timoshenko, providing
     improved accuracy over Timoshenko for thick beams.
+
+    Note: Uses n=8 elements for RB to avoid over-stiffness from the linear-θ
+    constraint in a single-element cantilever.
     """
     print("\n" + "=" * 60)
     print("Test 6: Beam Theory Comparison (Thick Cantilever)")
@@ -427,7 +433,9 @@ def test_beam_theory_comparison():
     results_dict = {}
 
     for etype in ["euler_bernoulli_2node", "timoshenko_2node", "reddy_bickford_2node"]:
-        mesh, nodes = _make_cantilever(1, h, etype=etype)
+        # Use n=8 for RB to avoid single-element over-stiffness
+        n_elem = 8 if etype == "reddy_bickford_2node" else 1
+        mesh, nodes = _make_cantilever(n_elem, h, etype=etype)
         load = PointLoad(P, 1)
         load.node = nodes[-1]
         mesh.point_loads.append(load)
