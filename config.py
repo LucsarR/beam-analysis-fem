@@ -1,9 +1,9 @@
-# Default material properties
-DEFAULT_E = 70e3  # Young's modulus [MPa]
+# Default material properties (unit-system-agnostic; see Help tab for unit reference)
+DEFAULT_E = 200e3  # Young's modulus — default corresponds to steel (e.g. 200 000 MPa or 200 GPa)
 DEFAULT_NU = 0.3    # Poisson's ratio
-DEFAULT_G = DEFAULT_E / (2 * (1 + DEFAULT_NU))  # Shear modulus [MPa] (computed)
+DEFAULT_G = DEFAULT_E / (2 * (1 + DEFAULT_NU))  # Shear modulus (computed from E and ν)
 
-# Default section dimensions
+# Default section dimensions (unused placeholders; actual defaults are set per section type in app.py)
 DEFAULT_WIDTH = 10
 DEFAULT_HEIGHT = 10
 
