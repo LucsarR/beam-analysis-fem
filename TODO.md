@@ -5,7 +5,6 @@
 - [ ] Testar 3node para ambos (Euler e Timo)
 - [ ] Shear Stress Distribution in Cross Section
 - [ ] Verificar Shear Coefficients
-- [ ] Implementar possibilidade de digitar o G da propriedade, com verificacao de erro(somente dois podem ser digitados ao mesmo tempo (E,G,v))
 - [ ] Testar Springs com restricao rotacional tbm
 - [ ] Procurar por codigo duplicado(deixar mais clean)
 - [ ] Verificar distribuicao shear diagram esta estranho para femap_test
