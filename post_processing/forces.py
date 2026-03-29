@@ -65,6 +65,38 @@ class StructureResults:
         local_disp = R.T @ global_disp
         return local_disp
 
+    def _find_element_at_x(self, x):
+        """Find the element containing global coordinate x (for 1D beams).
+
+        Returns (ElementResults, local_x) where local_x is the coordinate
+        within the element measured from node_start.
+        """
+        for er in self.element_results:
+            el = er.element
+            x0 = el.node_start.x
+            x1 = el.node_end.x
+            x_lo, x_hi = min(x0, x1), max(x0, x1)
+            if x_lo <= x <= x_hi + 1e-10:
+                return er, x - x0
+        # Fallback: clamp to last element
+        last_er = self.element_results[-1]
+        return last_er, last_er.element.length
+
+    def M(self, x):
+        """Return bending moment at global coordinate x."""
+        er, local_x = self._find_element_at_x(x)
+        return er.bending_moment(local_x)
+
+    def V(self, x):
+        """Return shear force at global coordinate x."""
+        er, local_x = self._find_element_at_x(x)
+        return er.shear_force(local_x)
+
+    def N(self, x):
+        """Return normal (axial) force at global coordinate x."""
+        er, local_x = self._find_element_at_x(x)
+        return er.normal_force(local_x)
+
     def get_diagram(self, force_type, n_points=50):
         # Returns arrays for plotting diagrams (moment, shear, normal)
         # force_type: "moment", "shear", "normal"

@@ -58,6 +58,7 @@ class ConstraintSet:
     def __init__(self):
         self.constraints = []
         self.penalty = None
+        self._dofs_per_node = 3
 
     def add(self, constraint):
         self.constraints.append(constraint)
@@ -65,13 +66,14 @@ class ConstraintSet:
     def apply_all(self, K_global, F_global, dofs_per_node=3):
         if self.penalty is None:
             self.penalty = np.max(np.abs(K_global)) * 1e4 # Set penalty based on max stiffness to ensure numerical stability
+        self._dofs_per_node = dofs_per_node
         for constraint in self.constraints:
             constraint.apply(K_global, F_global, self.penalty, dofs_per_node)
 
     def get_penalty(self):
         return self.penalty
     
-    def calculate_all_reactions(self, displacement_vector, dofs_per_node=3):
+    def calculate_all_reactions(self, displacement_vector, dofs_per_node=None):
         """
         Calculate reaction forces at all constraints using penalty method.
         
