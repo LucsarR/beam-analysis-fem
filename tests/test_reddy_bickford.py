@@ -455,13 +455,14 @@ def test_beam_theory_comparison():
     print(f"  Shear effect (Timo):  {(w_Timo/w_EB - 1)*100:.2f}%")
     print(f"  Shear effect (Reddy): {(w_Reddy/w_EB - 1)*100:.2f}%")
 
-    # Verify ordering (all should show deflection larger than EB)
-    assert w_Reddy > w_EB, "Reddy deflection should be larger than EB"
-    assert w_Timo > w_EB, "Timoshenko deflection should be larger than EB"
+    # Verify ordering: shear-deformable theories give more deflection than EB.
+    # For downward loads both w values are negative; ratio > 1 means larger magnitude.
+    assert w_Reddy / w_EB > 1.0, "Reddy deflection should be larger than EB"
+    assert w_Timo / w_EB > 1.0, "Timoshenko deflection should be larger than EB"
 
     # For this configuration, both should be reasonably close
     # (typically within 20% of each other)
-    assert abs(w_Reddy - w_Timo) / w_EB < 0.20, \
+    assert abs(w_Reddy - w_Timo) / abs(w_EB) < 0.20, \
         "Reddy and Timoshenko should be relatively close for thick beams"
 
     print("OK Beam theory comparison shows expected behavior")
