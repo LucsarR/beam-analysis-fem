@@ -1105,31 +1105,42 @@ class TimoshenkoElement3Node(Element):
         """
         Compute consistent nodal loads for a distributed load using numerical integration.
         Returns a 9-vector in GLOBAL coordinates [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3].
+
+        For custom functions (func), the variable ``x`` passed to the expression
+        is the **global** position along the beam (i.e. the x-coordinate of the
+        point on the element in the global frame).  ``L`` in the expression
+        refers to the length of the current element.
         """
         import numpy as np
         L = self.length
         c = self.c
         s = self.s
 
-        # Build load function f(x) from distributed_load
+        # Build load function f(x_local) from distributed_load.
+        # x_local is the local coordinate within the element (0 to L).
         if distributed_load.func:
-            def f(x):
+            # Custom function: evaluate using the global x position so that
+            # load expressions written in terms of the full-beam coordinate
+            # work correctly for any element in a multi-element mesh.
+            x_start = self.node_start.x
+            def f(x_local):
+                x_global = x_start + x_local * c
                 try:
-                    return float(eval(distributed_load.func, {"np": np, "x": x, "L": L}))
+                    return float(eval(distributed_load.func, {"np": np, "x": x_global, "L": L}))
                 except Exception as e:
                     print(f"Error evaluating custom function '{distributed_load.func}': {e}")
                     return 0.0
         elif distributed_load.magnitude_start is not None and distributed_load.magnitude_end is not None:
             a = float(distributed_load.magnitude_start)
             b = float(distributed_load.magnitude_end)
-            def f(x):
-                return a + (b - a) * (x / L)
+            def f(x_local):
+                return a + (b - a) * (x_local / L)
         elif distributed_load.magnitude_start is not None:
             a = float(distributed_load.magnitude_start)
-            def f(x):
+            def f(x_local):
                 return a
         else:
-            def f(x):
+            def f(x_local):
                 return 0.0
 
         # Project direction to local axes
@@ -1540,17 +1551,28 @@ class ReddyBickfordElement2Node(Element):
 
         Returns an 8-vector in GLOBAL coordinates
         [u₁, v₁, θ₁, (dv/dx)₁, u₂, v₂, θ₂, (dv/dx)₂].
+
+        For custom functions (func), the variable ``x`` passed to the expression
+        is the **global** position along the beam (i.e. the x-coordinate of the
+        point on the element in the global frame).  ``L`` in the expression
+        refers to the length of the current element.
         """
         L = self.length
         c = self.c
         s = self.s
 
-        # Build scalar load function f(x)
+        # Build scalar load function f(x_local) from distributed_load.
+        # x_local is the local coordinate within the element (0 to L).
         if distributed_load.func:
-            def f(x):
+            # Custom function: evaluate using the global x position so that
+            # load expressions written in terms of the full-beam coordinate
+            # work correctly for any element in a multi-element mesh.
+            x_start = self.node_start.x
+            def f(x_local):
+                x_global = x_start + x_local * c
                 try:
                     return float(eval(distributed_load.func,
-                                      {"np": np, "x": x, "L": L}))
+                                      {"np": np, "x": x_global, "L": L}))
                 except Exception as e:
                     print(f"Error evaluating load function '{distributed_load.func}': {e}")
                     return 0.0
@@ -1558,14 +1580,14 @@ class ReddyBickfordElement2Node(Element):
               and distributed_load.magnitude_end is not None):
             a = float(distributed_load.magnitude_start)
             b_val = float(distributed_load.magnitude_end)
-            def f(x):
-                return a + (b_val - a) * (x / L)
+            def f(x_local):
+                return a + (b_val - a) * (x_local / L)
         elif distributed_load.magnitude_start is not None:
             a = float(distributed_load.magnitude_start)
-            def f(x):
+            def f(x_local):
                 return a
         else:
-            def f(x):
+            def f(x_local):
                 return 0.0
 
         # Project global load direction onto local axes
