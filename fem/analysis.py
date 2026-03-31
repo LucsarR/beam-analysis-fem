@@ -52,19 +52,32 @@ class BeamAnalysis(Analysis):
                     for el in self.mesh.elements), default=3)
 
     def _get_element_dof_indices(self, element, dpn):
-        """Return global DOF index list for the given element."""
+        """Return global DOF index list for the given element.
+
+        Args:
+            element: The element object
+            dpn: Global degrees of freedom per node
+
+        Returns:
+            list: Global DOF indices for this element
+        """
+        # Get the element's DOFs per node (may be less than global dpn)
+        elem_dpn = getattr(element, 'dofs_per_node', 3)
+
         if hasattr(element, 'node_center') and element.node_center is not None:
             # 3-node element (Euler-Bernoulli or Timoshenko 3-node)
             dof_indices = []
             for nid in [element.node_start.id,
                         element.node_center.id,
                         element.node_end.id]:
-                dof_indices.extend([dpn*(nid-1)+k for k in range(dpn)])
+                # Map only the DOFs this element actually has
+                dof_indices.extend([dpn*(nid-1)+k for k in range(elem_dpn)])
         else:
             # 2-node element
             dof_indices = []
             for nid in [element.node_start.id, element.node_end.id]:
-                dof_indices.extend([dpn*(nid-1)+k for k in range(dpn)])
+                # Map only the DOFs this element actually has
+                dof_indices.extend([dpn*(nid-1)+k for k in range(elem_dpn)])
         return dof_indices
 
     def assemble(self):
@@ -79,8 +92,7 @@ class BeamAnalysis(Analysis):
         for element in self.mesh.elements:
             k_local = element.stiffness_matrix()
             fe_local = element.force_vector()
-            elem_dpn = getattr(element, 'dofs_per_node', 3)
-            dof_indices = self._get_element_dof_indices(element, elem_dpn)
+            dof_indices = self._get_element_dof_indices(element, dpn)
             n_elem_dof = len(dof_indices)
             for i in range(n_elem_dof):
                 for j in range(n_elem_dof):
@@ -95,8 +107,7 @@ class BeamAnalysis(Analysis):
         for load in getattr(self.mesh, "distributed_loads", []):
             el = load.element
             fe_global = load.apply(el)
-            elem_dpn = getattr(el, 'dofs_per_node', 3)
-            dof_indices = self._get_element_dof_indices(el, elem_dpn)
+            dof_indices = self._get_element_dof_indices(el, dpn)
             n_elem_dof = len(dof_indices)
             for i in range(n_elem_dof):
                 self.F_global[dof_indices[i]] += fe_global[i]
