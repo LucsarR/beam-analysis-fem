@@ -8,7 +8,7 @@
 - [ ] Verificar distribuicao shear diagram esta estranho para femap_test
 - [ ] verificar timoshenko com subdivisions
 - [ ] verificar shear force e normal force com subdivision. Era para formar escada?
-- [ ] A distribuicao da custom funcion ta estranha pois ele conta os elementos
+- [ ] O numero do elemento ao exolher nas forcas nao tem limite
 - [ ] tem secoes sem desenho ainda tipo a z
 
 # Ajuste do front-end
