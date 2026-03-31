@@ -21,6 +21,8 @@ class Element(ABC):
         pass
 
 class EulerBernoulliElement2Node(Element):
+    dofs_per_node = 3  # Each node has [u, v, θ] DOFs
+
     def __init__(self, id, node_start, node_end, material, section):
         super().__init__(id, node_start, node_end, material, section)
         self.length, self.c, self.s, self.R = self._compute_geometry()
@@ -229,6 +231,8 @@ class EulerBernoulliElement2Node(Element):
         return E * A * epsilon
 
 class EulerBernoulliElement3Node(Element):
+    dofs_per_node = 3  # Each node has [u, v, θ] DOFs
+
     def __init__(self, id, node_start, node_end, material, section, node_center=None):
         super().__init__(id, node_start, node_end, material, section)
         self.node_center = node_center  # Central node
@@ -612,6 +616,8 @@ class EulerBernoulliElement3Node(Element):
         return E * A * epsilon
     
 class TimoshenkoElement2Node(Element):
+    dofs_per_node = 3  # Each node has [u, v, θ] DOFs
+
     def __init__(self, id, node_start, node_end, material, section):
         super().__init__(id, node_start, node_end, material, section)
         self.length, self.c, self.s, self.R = self._compute_geometry()
@@ -895,18 +901,20 @@ class TimoshenkoElement2Node(Element):
 class TimoshenkoElement3Node(Element):
     """
     3-node Timoshenko beam element with quadratic shape functions.
-    
+
     The element has 9 DOFs: [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3]
     - All three nodes have rotation DOFs (unlike Euler-Bernoulli 3-node)
     - Axial: quadratic shape functions for u
     - Bending: quadratic shape functions for both v and θ (independent)
     - Includes shear deformation effects
-    
+
     Shape functions (ξ = x/L):
     - N1 = (1-ξ)(1-2ξ)  (node 1)
     - N2 = 4ξ(1-ξ)      (node 2, center)
     - N3 = ξ(2ξ-1)      (node 3)
     """
+    dofs_per_node = 3  # Each node has [u, v, θ] DOFs
+
     def __init__(self, id, node_start, node_end, material, section, node_center=None):
         super().__init__(id, node_start, node_end, material, section)
         self.node_center = node_center
