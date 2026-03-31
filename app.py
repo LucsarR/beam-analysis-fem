@@ -1638,32 +1638,36 @@ with tab2:
                     analysis = EulerBernoulliAnalysis(mesh)
                     analysis.assemble()
                     displacements = analysis.solve()
-                    
+
+                    # Get dpn (degrees of freedom per node) from analysis
+                    dpn = getattr(analysis, 'dpn', 3)
+
                     # Get reactions from analysis
                     reactions = analysis.get_reactions()
-                    
+
                     # Store results
                     st.session_state["mesh"] = mesh
                     st.session_state["displacements"] = displacements
                     st.session_state["reactions"] = reactions
                     st.session_state["n_original_nodes"] = len(nodes)
-                    
+                    st.session_state["dpn"] = dpn
+
                     # Prepare post-processing
-                    structure_results = StructureResults(mesh, displacements, reactions)
+                    structure_results = StructureResults(mesh, displacements, reactions, dpn)
                     st.session_state["structure_results"] = structure_results
                     # Reset diagram visibility flags so new results are shown cleanly
                     st.session_state["force_diagram_generated"] = False
                     st.session_state["stress_dist_generated"] = False
-                    
+
                     st.success("✅ Analysis completed successfully!")
-                    
+
                     # Display results preview
                     st.subheader("📊 Nodal Displacements")
                     disp_data = []
                     for i, node in enumerate(mesh.nodes):
-                        u = displacements[3*i]
-                        v = displacements[3*i+1]
-                        theta = displacements[3*i+2]
+                        u = displacements[dpn*i]
+                        v = displacements[dpn*i+1]
+                        theta = displacements[dpn*i+2]
                         disp_data.append({
                             "Node": node.id,
                             "X": f"{node.x:.4f}",

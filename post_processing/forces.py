@@ -32,33 +32,38 @@ class StructureResults:
     """
     Manages results for all elements in the mesh.
     """
-    def __init__(self, mesh, displacements, reactions=None):
+    def __init__(self, mesh, displacements, reactions=None, dpn=3):
         self.mesh = mesh
         self.displacements = displacements
         self.reactions = reactions  # Dictionary: {(node_id, direction): reaction_force}
+        self.dpn = dpn  # Global degrees of freedom per node
         self.element_results = [
             ElementResults(el, self._get_element_dofs(el)) for el in mesh.elements
         ]
 
     def _get_element_dofs(self, element):
-        """Extract DOFs for the element from global displacement vector."""
-        # Handle both 2-node (6 or 8 DOF) and 3-node (8 DOF) elements
+        """Extract DOFs for the element from global displacement vector.
+
+        Uses the same logic as BeamAnalysis._get_element_dof_indices to ensure
+        consistency with the assembly process.
+        """
+        # Get the element's DOFs per node (may be less than global dpn)
+        elem_dpn = getattr(element, 'dofs_per_node', 3)
+        dpn = self.dpn
+
         if hasattr(element, 'node_center') and element.node_center is not None:
-            # 3-node element with 8 DOFs: [u1, v1, θ1, u2, v2, u3, v3, θ3]
-            # Center node has only u and v (no rotation)
-            dof_indices = [
-                3*(element.node_start.id-1), 3*(element.node_start.id-1)+1, 3*(element.node_start.id-1)+2,  # u1, v1, θ1
-                3*(element.node_center.id-1), 3*(element.node_center.id-1)+1,  # u2, v2
-                3*(element.node_end.id-1), 3*(element.node_end.id-1)+1, 3*(element.node_end.id-1)+2  # u3, v3, θ3
-            ]
-        else:
-            # 2-node element: use element's dofs_per_node (3 for EB/Timoshenko, 4 for Reddy)
-            elem_dpn = getattr(element, 'dofs_per_node', 3)
-            node_ids = [element.node_start.id, element.node_end.id]
+            # 3-node element (9 DOFs for EB/Timoshenko: [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3])
             dof_indices = []
-            for nid in node_ids:
-                dof_indices.extend([elem_dpn*(nid-1)+k for k in range(elem_dpn)])
-        
+            for nid in [element.node_start.id, element.node_center.id, element.node_end.id]:
+                # Map only the DOFs this element actually has
+                dof_indices.extend([dpn*(nid-1)+k for k in range(elem_dpn)])
+        else:
+            # 2-node element
+            dof_indices = []
+            for nid in [element.node_start.id, element.node_end.id]:
+                # Map only the DOFs this element actually has
+                dof_indices.extend([dpn*(nid-1)+k for k in range(elem_dpn)])
+
         global_disp = self.displacements[dof_indices]
         # Transform to local coordinates
         R = element.R
