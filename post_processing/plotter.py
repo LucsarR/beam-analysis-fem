@@ -583,14 +583,15 @@ def plot_structure_diagram(
         pxs = x1 + ts * dx   # numpy array
         pys = y1 + ts * dy   # numpy array
 
-        # Offset positions: force diagram curve (perpendicular to the beam axis).
-        # These are used both for the gradient markers and (optionally) the fill area.
+        # Offset positions for the force diagram curve (perpendicular to beam axis)
         pxs_off = pxs + vals_normalized * perp[0] * diagram_scale
         pys_off = pys + vals_normalized * perp[1] * diagram_scale
         pxs_off_list = pxs_off.tolist()
         pys_off_list = pys_off.tolist()
 
-        # Force diagram curve outline (thin black line connecting the offset points)
+        # Force diagram curve: drawn as a thin line offset from the beam axis so
+        # that no unlabelled dot markers appear between the structural node labels.
+        # Invisible hover markers at the same positions allow reading force values.
         fig.add_trace(go.Scatter(
             x=pxs_off_list,
             y=pys_off_list,
@@ -599,22 +600,11 @@ def plot_structure_diagram(
             hoverinfo='skip',
             showlegend=False,
         ))
-
-        # Gradient: ONE trace with per-marker colour plotted on the force diagram
-        # curve (off-axis), so that beam-axis nodes remain the only visible points
-        # on the element axis.
         fig.add_trace(go.Scatter(
             x=pxs_off_list,
             y=pys_off_list,
             mode='markers',
-            marker=dict(
-                size=7,
-                color=vals,
-                colorscale=colorscale,
-                cmin=vmin,
-                cmax=vmax,
-                showscale=False,
-            ),
+            marker=dict(size=8, opacity=0, color='rgba(0,0,0,0)'),
             customdata=np.column_stack([vals, pxs, pys]),
             hovertemplate=(
                 f'x=%{{customdata[1]:.3f}}, y=%{{customdata[2]:.3f}}<br>'
