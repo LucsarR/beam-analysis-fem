@@ -567,9 +567,8 @@ class EulerBernoulliElement3Node(Element):
     def _recover_local_nodal_forces(self, displacements):
         """Recover local nodal force vector f_local = K_local · d_local."""
         d_local = np.asarray(displacements, dtype=float)
-        d_global = self.R @ d_local
-        f_global = self.stiffness_matrix() @ d_global
-        return self.R.T @ f_global
+        k_local = self.R.T @ self.stiffness_matrix() @ self.R
+        return k_local @ d_local
 
     def normal_force(self, x, displacements):
         """
@@ -1263,9 +1262,8 @@ class TimoshenkoElement3Node(Element):
     def _recover_local_nodal_forces(self, displacements):
         """Recover local nodal force vector f_local = K_local · d_local."""
         d_local = np.asarray(displacements, dtype=float)
-        d_global = self.R @ d_local
-        f_global = self.stiffness_matrix() @ d_global
-        return self.R.T @ f_global
+        k_local = self.R.T @ self.stiffness_matrix() @ self.R
+        return k_local @ d_local
 
 class ReddyBickfordElement2Node(Element):
     """

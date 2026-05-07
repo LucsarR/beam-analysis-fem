@@ -599,9 +599,16 @@ def test_internal_force_recovery_across_element_types():
         m_start = results.M(0.0)
         m_mid = results.M(L / 2)
         m_end = results.M(L)
-        assert abs(m_start) > abs(m_mid) > abs(m_end), (
-            f"{element_type}: bending moment should reduce from fixed end to free end, "
-            f"got M(0)={m_start}, M(L/2)={m_mid}, M(L)={m_end}"
+        m_start_expected = P * L
+        m_mid_expected = P * (L / 2)
+        assert abs(m_start - m_start_expected) < 1e-3 * abs(m_start_expected), (
+            f"{element_type}: expected M(0)≈{m_start_expected}, got {m_start}"
+        )
+        assert abs(m_mid - m_mid_expected) < 1e-3 * abs(m_mid_expected), (
+            f"{element_type}: expected M(L/2)≈{m_mid_expected}, got {m_mid}"
+        )
+        assert abs(m_end) < 1e-3 * abs(P * L), (
+            f"{element_type}: free-end bending moment should be near zero, got M(L)={m_end}"
         )
 
         for v in (results.V(0.0), results.V(L / 2), results.V(L)):

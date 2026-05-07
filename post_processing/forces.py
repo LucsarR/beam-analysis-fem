@@ -39,7 +39,7 @@ class StructureResults:
         self.reactions = reactions  # Dictionary: {(node_id, direction): reaction_force}
         if dpn is None:
             # Keep post-processing DOF extraction consistent with analysis assembly.
-            self.dpn = max((getattr(el, "dofs_per_node", 3) for el in mesh.elements), default=3)
+            self.dpn = max([getattr(el, "dofs_per_node", 3) for el in mesh.elements], default=3)
         else:
             self.dpn = dpn  # Global degrees of freedom per node
         self.element_results = [
