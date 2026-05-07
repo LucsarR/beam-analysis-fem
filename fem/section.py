@@ -38,9 +38,8 @@ class Section(ABC):
         mostly carried by the web (A_v ≈ A_web, so kappa = A_v / A).
         """
         if total_area <= 0:
-            return 5/6
-        kappa = area_web / total_area
-        return max(0.1, min(1.0, kappa))
+            raise ValueError("Section area must be positive to compute shear coefficient.")
+        return area_web / total_area
 
 class RectangularBar(Section):
     def __init__(self, id, width, height):
