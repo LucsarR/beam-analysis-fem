@@ -536,60 +536,40 @@ class EulerBernoulliElement3Node(Element):
     def bending_moment(self, x, displacements):
         """
         Returns bending moment M(x) at position x (in local coordinates, 0 <= x <= L).
-        For Euler-Bernoulli: M(x) = E*I * dθ/dx
-        Displacements should be in local coordinates: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
+        For the 3-node Euler-Bernoulli element, recover end moments from element
+        equilibrium (K_local · d_local) and linearly interpolate between ends.
         """
-        E = self.material.E
-        I = self.section.inertia
         L = self.length
-        
-        # Local DOFs: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
-        theta1 = displacements[2]
-        theta2 = displacements[5]
-        theta3 = displacements[8]
-        
         xi = x / L
-        
-        # Derivatives of quadratic shape functions for rotation
-        dN1_theta = (-3 + 4*xi) / L
-        dN2_theta = (4 - 8*xi) / L
-        dN3_theta = (-1 + 4*xi) / L
-        
-        # dθ/dx
-        dtheta_dx = dN1_theta * theta1 + dN2_theta * theta2 + dN3_theta * theta3
-        
-        return E * I * dtheta_dx
+
+        f_local = self._recover_local_nodal_forces(displacements)
+        # Sign convention aligned with 2-node elements:
+        # M(0) = -F_theta_start, M(L) = F_theta_end
+        M0 = -f_local[2]
+        ML = f_local[8]
+        return M0 * (1.0 - xi) + ML * xi
 
     def shear_force(self, x, displacements):
         """
         Returns shear force V(x) at position x (in local coordinates, 0 <= x <= L).
-        For Euler-Bernoulli: V(x) = E*I * d²θ/dx² = E*I * d³w/dx³
-        Displacements should be in local coordinates: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
+        Recover end shears from element equilibrium (K_local · d_local) and
+        linearly interpolate between element ends.
         """
-        E = self.material.E
-        I = self.section.inertia
         L = self.length
-        
-        # Local DOFs: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
-        theta1 = displacements[2]
-        theta2 = displacements[5]
-        theta3 = displacements[8]
-        
         xi = x / L
-        
-        # Second derivatives of quadratic shape functions for rotation
-        # d²θ/dx² = (1/L²) * d²θ/dξ²
-        # For quadratic: dN/dξ = a + bξ, so d²N/dξ² = b (constant)
-        d2N1_theta_dxi2 = 4
-        d2N2_theta_dxi2 = -8
-        d2N3_theta_dxi2 = 4
-        
-        d2theta_dx2 = (1/L**2) * (d2N1_theta_dxi2 * theta1 + d2N2_theta_dxi2 * theta2 + d2N3_theta_dxi2 * theta3)
-        
-        # Shear force: V = -EI * d²θ/dx²
-        # Sign convention: negative because V = -dM/dx for Euler-Bernoulli beams
-        # Positive shear causes counterclockwise rotation of the element
-        return -E * I * d2theta_dx2
+
+        f_local = self._recover_local_nodal_forces(displacements)
+        # Internal shears from nodal equilibrium at element ends
+        V0 = f_local[1]
+        VL = -f_local[7]
+        return V0 * (1.0 - xi) + VL * xi
+
+    def _recover_local_nodal_forces(self, displacements):
+        """Recover local nodal force vector f_local = K_local · d_local."""
+        d_local = np.asarray(displacements, dtype=float)
+        d_global = self.R @ d_local
+        f_global = self.stiffness_matrix() @ d_global
+        return self.R.T @ f_global
 
     def normal_force(self, x, displacements):
         """
@@ -1244,43 +1224,16 @@ class TimoshenkoElement3Node(Element):
     def shear_force(self, x, displacements):
         """
         Returns shear force V(x) at position x (in local coordinates, 0 <= x <= L).
-        For Timoshenko beam theory: V = κ*G*A*(dv/dx - θ)
+        For the 3-node Timoshenko element, recover end shears from element
+        equilibrium (K_local · d_local) and linearly interpolate between ends.
         """
-        G = self.material.G
-        A = self.section.area
-        kappa = self.section.shear_coefficient
         L = self.length
-        
-        # Local DOFs: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
-        v1 = displacements[1]
-        theta1 = displacements[2]
-        v2 = displacements[4]
-        theta2 = displacements[5]
-        v3 = displacements[7]
-        theta3 = displacements[8]
-        
         xi = x / L
-        
-        # Derivatives of quadratic shape functions for v
-        dN1_v = (-3 + 4*xi) / L
-        dN2_v = (4 - 8*xi) / L
-        dN3_v = (-1 + 4*xi) / L
-        
-        # Quadratic shape functions for θ
-        N1_theta = (1 - xi) * (1 - 2*xi)
-        N2_theta = 4 * xi * (1 - xi)
-        N3_theta = xi * (2*xi - 1)
-        
-        # dv/dx
-        dv_dx = dN1_v * v1 + dN2_v * v2 + dN3_v * v3
-        
-        # θ
-        theta = N1_theta * theta1 + N2_theta * theta2 + N3_theta * theta3
-        
-        # Shear force
-        V = kappa * G * A * (dv_dx - theta)
-        
-        return V
+
+        f_local = self._recover_local_nodal_forces(displacements)
+        V0 = f_local[1]
+        VL = -f_local[7]
+        return V0 * (1.0 - xi) + VL * xi
     
     def normal_force(self, x, displacements):
         """
@@ -1306,6 +1259,13 @@ class TimoshenkoElement3Node(Element):
         epsilon = dN1 * u1 + dN2 * u2 + dN3 * u3
         
         return E * A * epsilon
+
+    def _recover_local_nodal_forces(self, displacements):
+        """Recover local nodal force vector f_local = K_local · d_local."""
+        d_local = np.asarray(displacements, dtype=float)
+        d_global = self.R @ d_local
+        f_global = self.stiffness_matrix() @ d_global
+        return self.R.T @ f_global
 
 class ReddyBickfordElement2Node(Element):
     """
