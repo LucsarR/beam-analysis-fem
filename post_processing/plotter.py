@@ -583,14 +583,17 @@ def plot_structure_diagram(
         pxs = x1 + ts * dx   # numpy array
         pys = y1 + ts * dy   # numpy array
 
-        # Offset positions: force diagram curve (perpendicular to the beam axis)
+        # Offset positions: force diagram curve (perpendicular to the beam axis).
+        # These are used both for the gradient markers and (optionally) the fill area.
         pxs_off = pxs + vals_normalized * perp[0] * diagram_scale
         pys_off = pys + vals_normalized * perp[1] * diagram_scale
+        pxs_off_list = pxs_off.tolist()
+        pys_off_list = pys_off.tolist()
 
         # Force diagram curve outline (thin black line connecting the offset points)
         fig.add_trace(go.Scatter(
-            x=pxs_off.tolist(),
-            y=pys_off.tolist(),
+            x=pxs_off_list,
+            y=pys_off_list,
             mode='lines',
             line=dict(color='black', width=1),
             hoverinfo='skip',
@@ -601,8 +604,8 @@ def plot_structure_diagram(
         # curve (off-axis), so that beam-axis nodes remain the only visible points
         # on the element axis.
         fig.add_trace(go.Scatter(
-            x=pxs_off.tolist(),
-            y=pys_off.tolist(),
+            x=pxs_off_list,
+            y=pys_off_list,
             mode='markers',
             marker=dict(
                 size=7,
@@ -623,8 +626,8 @@ def plot_structure_diagram(
 
         # Fill diagram
         if fill_diagram:
-            x_poly = pxs_off.tolist() + [x2, x1]
-            y_poly = pys_off.tolist() + [y2, y1]
+            x_poly = pxs_off_list + [x2, x1]
+            y_poly = pys_off_list + [y2, y1]
             fig.add_trace(go.Scatter(
                 x=x_poly, y=y_poly,
                 fill='toself',
