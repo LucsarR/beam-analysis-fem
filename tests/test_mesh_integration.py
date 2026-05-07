@@ -463,8 +463,8 @@ def test_timoshenko_structure_results():
     print("✓ test_timoshenko_structure_results passed")
 
 
-def _run_app_like_analysis(element_type):
-    """Build and solve a small mixed-DOF model using the app.py analysis flow."""
+def build_mixed_dof_test_model(element_type):
+    """Build and solve a small mixed-DOF model for analysis-pipeline regression tests."""
     mesh = Mesh()
     mat = Material(1, 210e9, 0.3)
     sec = RectangularBar(1, 0.05, 0.1)
@@ -523,7 +523,7 @@ def _run_app_like_analysis(element_type):
 
 def test_app_pipeline_with_euler_bernoulli_3node():
     """App-style analysis flow should handle Euler-Bernoulli 3-node mixed with 4-DOF elements."""
-    mesh, analysis, displacements, results = _run_app_like_analysis("euler_bernoulli_3node")
+    mesh, analysis, displacements, results = build_mixed_dof_test_model("euler_bernoulli_3node")
 
     assert analysis.dpn == 4
     assert len(displacements) == 4 * len(mesh.nodes)
@@ -542,7 +542,7 @@ def test_app_pipeline_with_euler_bernoulli_3node():
 
 def test_app_pipeline_with_timoshenko_3node():
     """App-style analysis flow should handle Timoshenko 3-node mixed with 4-DOF elements."""
-    mesh, analysis, displacements, results = _run_app_like_analysis("timoshenko_3node")
+    mesh, analysis, displacements, results = build_mixed_dof_test_model("timoshenko_3node")
 
     assert analysis.dpn == 4
     assert len(displacements) == 4 * len(mesh.nodes)
@@ -584,7 +584,8 @@ def test_streamlit_app_run_analysis_with_mixed_dofs():
         at.session_state["distributed_loads"] = []
 
         at.run(timeout=60)
-        at.button[1].click()
+        run_analysis_button = next(btn for btn in at.button if btn.label == "🚀 Run Analysis")
+        run_analysis_button.click()
         at.run(timeout=60)
 
         errors = [err.value for err in at.error]

@@ -109,10 +109,20 @@ class BeamAnalysis(Analysis):
                 self.F_global[dof_indices[i]] += fe_global[i]
 
     def _stabilize_inactive_dofs(self, tol=1e-12):
-        """Pin unused global DOFs so mixed-DOF meshes remain solvable."""
-        for i in range(self.K_global.shape[0]):
-            row_norm = np.linalg.norm(self.K_global[i, :])
-            col_norm = np.linalg.norm(self.K_global[:, i])
+        """Pin unused global DOFs so mixed-DOF meshes remain solvable.
+
+        Mixed meshes can allocate the global system with more DOFs per node than
+        some elements actually use. That leaves zero-stiffness rows/columns for
+        unsupported DOFs on otherwise valid nodes. When such a DOF has no load,
+        it is safely fixed to zero here so the linear solve remains well-posed.
+        If a load was applied to one of those inactive DOFs, the model definition
+        is inconsistent, so a ValueError is raised instead. The tolerance is used
+        to identify numerically zero rows/columns robustly.
+        """
+        row_norms = np.sum(np.abs(self.K_global), axis=1)
+        col_norms = np.sum(np.abs(self.K_global), axis=0)
+
+        for i, (row_norm, col_norm) in enumerate(zip(row_norms, col_norms)):
             if row_norm <= tol and col_norm <= tol:
                 if abs(self.F_global[i]) > tol:
                     raise ValueError(
