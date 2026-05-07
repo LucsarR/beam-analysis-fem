@@ -118,6 +118,12 @@ class BeamAnalysis(Analysis):
         If a load was applied to one of those inactive DOFs, the model definition
         is inconsistent, so a ValueError is raised instead. The tolerance is used
         to identify numerically zero rows/columns robustly.
+
+        Args:
+            tol: Absolute tolerance used to classify a global DOF row/column as
+                inactive. The default is intentionally small because assembled
+                stiffness entries for active DOFs are many orders of magnitude
+                larger in this application.
         """
         row_norms = np.sum(np.abs(self.K_global), axis=1)
         col_norms = np.sum(np.abs(self.K_global), axis=0)

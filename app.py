@@ -1676,7 +1676,7 @@ with tab2:
                             "V": f"{v:.6e}",
                             "θ": f"{theta:.6e}"
                         }
-                        if dpn > 3:
+                        if dpn == 4 and dpn*i+3 < len(displacements):
                             row["dv/dx"] = f"{displacements[dpn*i+3]:.6e}"
                         disp_data.append(row)
                     
@@ -1710,7 +1710,7 @@ with tab2:
                                 "Node": node_id,
                                 "X": f"{node.x:.4f}",
                                 "Y": f"{node.y:.4f}",
-                                "Direction": direction_labels[direction],
+                                "Direction": direction_labels.get(direction, f"DOF {direction}"),
                                 "Reaction": f"{force:.6e}"
                             })
                         
