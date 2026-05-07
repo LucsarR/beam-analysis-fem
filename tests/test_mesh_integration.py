@@ -559,6 +559,70 @@ def test_app_pipeline_with_timoshenko_3node():
     print("✓ test_app_pipeline_with_timoshenko_3node passed")
 
 
+def test_internal_force_recovery_across_element_types():
+    """Internal force recovery should vary correctly across all supported beam elements."""
+    element_types = [
+        "euler_bernoulli_2node",
+        "euler_bernoulli_3node",
+        "timoshenko_2node",
+        "timoshenko_3node",
+        "reddy_bickford_2node",
+    ]
+
+    E = 210e9
+    nu = 0.3
+    L = 2.0
+    n_elements = 4
+    P = -1000.0
+
+    for element_type in element_types:
+        mesh = Mesh()
+        mat = Material(1, E, nu)
+        sec = RectangularBar(1, 0.05, 0.1)
+        nodes = mesh.generate_1d_mesh(0, 0, L, 0, n_elements, mat, sec, element_type)
+
+        mesh.constraints.add(Constraint(nodes[0], 0, 0.0))
+        mesh.constraints.add(Constraint(nodes[0], 1, 0.0))
+        mesh.constraints.add(Constraint(nodes[0], 2, 0.0))
+        if element_type == "reddy_bickford_2node":
+            mesh.constraints.add(Constraint(nodes[0], 3, 0.0))
+
+        tip_load = PointLoad(P, 1)
+        tip_load.node = nodes[-1]
+        mesh.point_loads.append(tip_load)
+
+        analysis = EulerBernoulliAnalysis(mesh)
+        analysis.assemble()
+        displacements = analysis.solve()
+        results = StructureResults(mesh, displacements)
+
+        m_start = results.M(0.0)
+        m_mid = results.M(L / 2)
+        m_end = results.M(L)
+        m_start_expected = P * L
+        m_mid_expected = P * (L / 2)
+        assert abs(m_start - m_start_expected) < 1e-3 * abs(m_start_expected), (
+            f"{element_type}: expected M(0)≈{m_start_expected}, got {m_start}"
+        )
+        assert abs(m_mid - m_mid_expected) < 1e-3 * abs(m_mid_expected), (
+            f"{element_type}: expected M(L/2)≈{m_mid_expected}, got {m_mid}"
+        )
+        assert abs(m_end) < 1e-3 * abs(P * L), (
+            f"{element_type}: free-end bending moment should be near zero, got M(L)={m_end}"
+        )
+
+        for v in (results.V(0.0), results.V(L / 2), results.V(L)):
+            assert abs(abs(v) - abs(P)) < 1e-3 * abs(P), (
+                f"{element_type}: expected |V|≈|P|={abs(P)}, got {v}"
+            )
+
+        for x in (0.0, L / 2, L):
+            n_val = results.N(x)
+            assert abs(n_val) < 1e-6, f"{element_type}: expected N≈0 for pure bending, got {n_val} at x={x}"
+
+    print("✓ test_internal_force_recovery_across_element_types passed")
+
+
 def test_streamlit_app_run_analysis_with_mixed_dofs():
     """The Streamlit Run Analysis flow should complete without UI errors for mixed DOF meshes."""
     mat = Material(1, 210e9, 0.3)
@@ -621,6 +685,7 @@ def run_all_tests():
     test_timoshenko_structure_results()
     test_app_pipeline_with_euler_bernoulli_3node()
     test_app_pipeline_with_timoshenko_3node()
+    test_internal_force_recovery_across_element_types()
     test_streamlit_app_run_analysis_with_mixed_dofs()
     
     print("\n" + "="*60)
