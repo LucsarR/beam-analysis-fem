@@ -1,4 +1,5 @@
 import numpy as np
+from fem.analysis import get_element_dof_indices
 
 class ElementResults:
     """
@@ -47,23 +48,7 @@ class StructureResults:
         Uses the same logic as BeamAnalysis._get_element_dof_indices to ensure
         consistency with the assembly process.
         """
-        # Get the element's DOFs per node (may be less than global dpn)
-        elem_dpn = getattr(element, 'dofs_per_node', 3)
-        dpn = self.dpn
-
-        if hasattr(element, 'node_center') and element.node_center is not None:
-            # 3-node element (9 DOFs for EB/Timoshenko: [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3])
-            dof_indices = []
-            for nid in [element.node_start.id, element.node_center.id, element.node_end.id]:
-                # Map only the DOFs this element actually has
-                dof_indices.extend([dpn*(nid-1)+k for k in range(elem_dpn)])
-        else:
-            # 2-node element
-            dof_indices = []
-            for nid in [element.node_start.id, element.node_end.id]:
-                # Map only the DOFs this element actually has
-                dof_indices.extend([dpn*(nid-1)+k for k in range(elem_dpn)])
-
+        dof_indices = get_element_dof_indices(element, self.dpn)
         global_disp = self.displacements[dof_indices]
         # Transform to local coordinates
         R = element.R
