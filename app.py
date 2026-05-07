@@ -498,8 +498,8 @@ with st.sidebar:
                 st.success("✅ Project loaded successfully!")
             else:
                 st.error("❌ Failed to load project.")
-        except json.JSONDecodeError:
-            st.error("❌ Invalid JSON file.")
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            st.error("❌ Invalid project file. Please upload a valid UTF-8 JSON file.")
     
     st.divider()
     
