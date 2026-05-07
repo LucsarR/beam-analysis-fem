@@ -31,6 +31,17 @@ class Section(ABC):
         """
         return None, None, None
 
+    @staticmethod
+    def _web_dominated_shear_coefficient(area_web, total_area):
+        """
+        Approximate kappa for open thin-walled sections where vertical shear is
+        mostly carried by the web (A_v ≈ A_web, so kappa = A_v / A).
+        """
+        if total_area <= 0:
+            return 5/6
+        kappa = area_web / total_area
+        return max(0.1, min(1.0, kappa))
+
 class RectangularBar(Section):
     def __init__(self, id, width, height):
         super().__init__(id)
@@ -258,6 +269,7 @@ class IBeam(Section):
         inertia_web = (self.tw * (self.h - 2*self.tf)**3) / 12
         inertia_flange = 2 * ((self.b * self.tf**3) / 12 + self.b * self.tf * ((self.h/2 - self.tf/2)**2))
         self.inertia = inertia_web + inertia_flange
+        self.shear_coefficient = self._web_dominated_shear_coefficient(area_web, self.area)
 
     def xy_grid(self, n_points=100):
         x_min, x_max = -self.b/2, self.b/2
@@ -288,6 +300,7 @@ class CSection(Section):
         inertia_web = (self.tw * self.h**3) / 12
         inertia_flange = 2 * ((self.b * self.tf**3) / 12 + self.b * self.tf * ((self.h/2 - self.tf/2)**2))
         self.inertia = inertia_web + inertia_flange
+        self.shear_coefficient = self._web_dominated_shear_coefficient(area_web, self.area)
 
     def xy_grid(self, n_points=100):
         x_min, x_max = -self.b/2, self.b/2
@@ -347,6 +360,7 @@ class TSection(Section):
         inertia_web = (self.tw * (self.h - self.tf)**3) / 12
         inertia_flange = (self.b * self.tf**3) / 12 + self.b * self.tf * ((self.h - self.tf/2)**2)
         self.inertia = inertia_web + inertia_flange
+        self.shear_coefficient = self._web_dominated_shear_coefficient(area_web, self.area)
 
     def xy_grid(self, n_points=100):
         x_min, x_max = -self.b/2, self.b/2
@@ -377,6 +391,7 @@ class ZSection(Section):
         inertia_web = (self.tw * self.h**3) / 12
         inertia_flange = 2 * ((self.b * self.tf**3) / 12 + self.b * self.tf * ((self.h/2 - self.tf/2)**2))
         self.inertia = inertia_web + inertia_flange
+        self.shear_coefficient = self._web_dominated_shear_coefficient(area_web, self.area)
 
     def xy_grid(self, n_points=100):
         # Approximate as two flanges and a web, offset in x
@@ -410,6 +425,7 @@ class HatSection(Section):
         inertia_web = (self.tw * self.h**3) / 12
         inertia_flange = 2 * ((self.b * self.tf**3) / 12 + self.b * self.tf * ((self.h/2 - self.tf/2)**2))
         self.inertia = inertia_web + inertia_flange
+        self.shear_coefficient = self._web_dominated_shear_coefficient(area_web, self.area)
 
     def xy_grid(self, n_points=100):
         x_min, x_max = -self.b/2, self.b/2

@@ -300,9 +300,12 @@ def test_ibeam_inertia():
 
 
 def test_ibeam_shear_coefficient():
-    """IBeam inherits default shear coefficient 5/6"""
-    s = IBeam(1, h=0.2, b=0.1, tw=0.01, tf=0.015)
-    assert _close(s.shear_coefficient, 5 / 6), f"kappa={s.shear_coefficient}"
+    """IBeam: kappa ≈ A_web / A_total"""
+    h, b, tw, tf = 0.2, 0.1, 0.01, 0.015
+    s = IBeam(1, h=h, b=b, tw=tw, tf=tf)
+    area_web = tw * (h - 2 * tf)
+    area_total = area_web + 2 * b * tf
+    assert _close(s.shear_coefficient, area_web / area_total), f"kappa={s.shear_coefficient}"
 
 
 # =============================================================================
@@ -328,9 +331,12 @@ def test_csection_inertia():
 
 
 def test_csection_shear_coefficient():
-    """CSection inherits default shear coefficient 5/6"""
-    s = CSection(1, h=0.15, b=0.07, tw=0.008, tf=0.012)
-    assert _close(s.shear_coefficient, 5 / 6), f"kappa={s.shear_coefficient}"
+    """CSection: kappa ≈ A_web / A_total"""
+    h, b, tw, tf = 0.15, 0.07, 0.008, 0.012
+    s = CSection(1, h=h, b=b, tw=tw, tf=tf)
+    area_web = tw * h
+    area_total = area_web + 2 * b * tf
+    assert _close(s.shear_coefficient, area_web / area_total), f"kappa={s.shear_coefficient}"
 
 
 # =============================================================================
@@ -382,9 +388,12 @@ def test_tsection_inertia():
 
 
 def test_tsection_shear_coefficient():
-    """TSection inherits default shear coefficient 5/6"""
-    s = TSection(1, b=0.1, h=0.18, tw=0.01, tf=0.015)
-    assert _close(s.shear_coefficient, 5 / 6), f"kappa={s.shear_coefficient}"
+    """TSection: kappa ≈ A_web / A_total"""
+    b, h, tw, tf = 0.1, 0.18, 0.01, 0.015
+    s = TSection(1, b=b, h=h, tw=tw, tf=tf)
+    area_web = tw * (h - tf)
+    area_total = area_web + b * tf
+    assert _close(s.shear_coefficient, area_web / area_total), f"kappa={s.shear_coefficient}"
 
 
 # =============================================================================
@@ -410,9 +419,12 @@ def test_zsection_inertia():
 
 
 def test_zsection_shear_coefficient():
-    """ZSection inherits default shear coefficient 5/6"""
-    s = ZSection(1, h=0.15, b=0.07, tw=0.008, tf=0.012)
-    assert _close(s.shear_coefficient, 5 / 6), f"kappa={s.shear_coefficient}"
+    """ZSection: kappa ≈ A_web / A_total"""
+    h, b, tw, tf = 0.15, 0.07, 0.008, 0.012
+    s = ZSection(1, h=h, b=b, tw=tw, tf=tf)
+    area_web = tw * h
+    area_total = area_web + 2 * b * tf
+    assert _close(s.shear_coefficient, area_web / area_total), f"kappa={s.shear_coefficient}"
 
 
 # =============================================================================
@@ -438,9 +450,12 @@ def test_hatsection_inertia():
 
 
 def test_hatsection_shear_coefficient():
-    """HatSection inherits default shear coefficient 5/6"""
-    s = HatSection(1, h=0.12, b=0.06, tw=0.007, tf=0.010)
-    assert _close(s.shear_coefficient, 5 / 6), f"kappa={s.shear_coefficient}"
+    """HatSection: kappa ≈ A_web / A_total"""
+    h, b, tw, tf = 0.12, 0.06, 0.007, 0.010
+    s = HatSection(1, h=h, b=b, tw=tw, tf=tf)
+    area_web = tw * h
+    area_total = area_web + 2 * b * tf
+    assert _close(s.shear_coefficient, area_web / area_total), f"kappa={s.shear_coefficient}"
 
 
 # =============================================================================

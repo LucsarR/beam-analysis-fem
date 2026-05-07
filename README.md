@@ -113,3 +113,4 @@ The element implementations are based on:
 - Logan, D.L. "A First Course in the Finite Element Method" (2017)
 - Timoshenko, S.P. "Strength of Materials" (1955)
 - Cowper, G.R. "The Shear Coefficient in Timoshenko's Beam Theory" (1966)
+- EN 1993-1-1 (Eurocode 3), Annexes for steel member shear area approximations (A_v ≈ A_web for thin-walled open sections)
