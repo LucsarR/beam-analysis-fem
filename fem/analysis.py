@@ -1,6 +1,19 @@
 import numpy as np
 from abc import ABC, abstractmethod
 
+def get_element_dof_indices(element, dpn):
+    """Return global DOF indices for an element using the mesh/global DOF size."""
+    elem_dpn = getattr(element, 'dofs_per_node', 3)
+    node_ids = [element.node_start.id, element.node_end.id]
+
+    if hasattr(element, 'node_center') and element.node_center is not None:
+        node_ids = [element.node_start.id, element.node_center.id, element.node_end.id]
+
+    dof_indices = []
+    for nid in node_ids:
+        dof_indices.extend([dpn * (nid - 1) + k for k in range(elem_dpn)])
+    return dof_indices
+
 class Analysis(ABC):
     """
     Abstract base class for finite element analysis.
@@ -61,24 +74,7 @@ class BeamAnalysis(Analysis):
         Returns:
             list: Global DOF indices for this element
         """
-        # Get the element's DOFs per node (may be less than global dpn)
-        elem_dpn = getattr(element, 'dofs_per_node', 3)
-
-        if hasattr(element, 'node_center') and element.node_center is not None:
-            # 3-node element (Euler-Bernoulli or Timoshenko 3-node)
-            dof_indices = []
-            for nid in [element.node_start.id,
-                        element.node_center.id,
-                        element.node_end.id]:
-                # Map only the DOFs this element actually has
-                dof_indices.extend([dpn*(nid-1)+k for k in range(elem_dpn)])
-        else:
-            # 2-node element
-            dof_indices = []
-            for nid in [element.node_start.id, element.node_end.id]:
-                # Map only the DOFs this element actually has
-                dof_indices.extend([dpn*(nid-1)+k for k in range(elem_dpn)])
-        return dof_indices
+        return get_element_dof_indices(element, dpn)
 
     def assemble(self):
         n_nodes = len(self.mesh.nodes)
@@ -112,11 +108,26 @@ class BeamAnalysis(Analysis):
             for i in range(n_elem_dof):
                 self.F_global[dof_indices[i]] += fe_global[i]
 
+    def _stabilize_inactive_dofs(self, tol=1e-12):
+        """Pin unused global DOFs so mixed-DOF meshes remain solvable."""
+        for i in range(self.K_global.shape[0]):
+            row_norm = np.linalg.norm(self.K_global[i, :])
+            col_norm = np.linalg.norm(self.K_global[:, i])
+            if row_norm <= tol and col_norm <= tol:
+                if abs(self.F_global[i]) > tol:
+                    raise ValueError(
+                        f"Load applied to inactive DOF {i}. "
+                        "Check constraints/loads for nodes that do not support that DOF."
+                    )
+                self.K_global[i, i] = 1.0
+                self.F_global[i] = 0.0
+
     def solve(self):
         dpn = getattr(self, 'dpn', 3)
         # Apply constraints (modifies K_global and F_global with penalty method)
         if hasattr(self.mesh, "constraints"):
             self.mesh.constraints.apply_all(self.K_global, self.F_global, dpn)
+        self._stabilize_inactive_dofs()
         
         # Solve for displacements
         displacements = np.linalg.solve(self.K_global, self.F_global)

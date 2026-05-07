@@ -1668,14 +1668,17 @@ with tab2:
                         u = displacements[dpn*i]
                         v = displacements[dpn*i+1]
                         theta = displacements[dpn*i+2]
-                        disp_data.append({
+                        row = {
                             "Node": node.id,
                             "X": f"{node.x:.4f}",
                             "Y": f"{node.y:.4f}",
                             "U": f"{u:.6e}",
                             "V": f"{v:.6e}",
                             "θ": f"{theta:.6e}"
-                        })
+                        }
+                        if dpn > 3:
+                            row["dv/dx"] = f"{displacements[dpn*i+3]:.6e}"
+                        disp_data.append(row)
                     
                     df_disp = pd.DataFrame(disp_data)
                     st.dataframe(df_disp, use_container_width=True)
@@ -1695,7 +1698,7 @@ with tab2:
                         st.subheader("⚙️ Reaction Forces at Constraints")
                         
                         # Map direction to labels
-                        direction_labels = {0: "X", 1: "Y", 2: "Rotation"}
+                        direction_labels = {0: "X", 1: "Y", 2: "Rotation", 3: "Slope (dv/dx)"}
                         
                         # Create node lookup dictionary for O(1) access
                         node_lookup = {n.id: n for n in mesh.nodes}

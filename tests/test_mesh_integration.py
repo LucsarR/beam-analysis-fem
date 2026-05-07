@@ -15,6 +15,7 @@ This test suite verifies:
 """
 
 import numpy as np
+from streamlit.testing.v1 import AppTest
 from fem.mesh import Mesh
 from fem.material import Material
 from fem.section import RectangularBar, CircularBar
@@ -462,6 +463,139 @@ def test_timoshenko_structure_results():
     print("✓ test_timoshenko_structure_results passed")
 
 
+def _run_app_like_analysis(element_type):
+    """Build and solve a small mixed-DOF model using the app.py analysis flow."""
+    mesh = Mesh()
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+
+    for x in (0.0, 1.0, 2.0):
+        mesh.add_node(x, 0.0)
+
+    original_elements = [
+        (1, 2, "reddy_bickford_2node", 1),
+        (2, 3, element_type, 1),
+    ]
+    original_to_mesh_elements = {}
+
+    for orig_idx, (n1, n2, etype, n_subdiv) in enumerate(original_elements, start=1):
+        node_start = mesh.get_node_by_id(n1)
+        node_end = mesh.get_node_by_id(n2)
+
+        if n_subdiv == 1:
+            el = mesh.add_element(node_start, node_end, mat, sec, element_type=etype)
+            original_to_mesh_elements[orig_idx] = [el.id]
+        else:
+            subdiv_nodes = [node_start]
+            for i in range(1, n_subdiv):
+                x = node_start.x + (node_end.x - node_start.x) * i / n_subdiv
+                y = node_start.y + (node_end.y - node_start.y) * i / n_subdiv
+                existing = next((n for n in mesh.nodes if np.isclose(n.x, x) and np.isclose(n.y, y)), None)
+                subdiv_nodes.append(existing if existing else mesh.add_node(x, y))
+            subdiv_nodes.append(node_end)
+
+            subdiv_ids = []
+            for i in range(n_subdiv):
+                el = mesh.add_element(
+                    subdiv_nodes[i], subdiv_nodes[i + 1], mat, sec, element_type=etype
+                )
+                subdiv_ids.append(el.id)
+            original_to_mesh_elements[orig_idx] = subdiv_ids
+
+    for direction in range(4):
+        mesh.constraints.add(Constraint(mesh.get_node_by_id(1), direction, 0.0))
+
+    load = PointLoad(-1000.0, 1)
+    load.node = mesh.get_node_by_id(3)
+    mesh.point_loads.append(load)
+
+    for mesh_el_id in original_to_mesh_elements[2]:
+        dist_load = DistributedLoad(-100.0, None, "y")
+        dist_load.element = mesh.get_element_by_id(mesh_el_id)
+        mesh.distributed_loads.append(dist_load)
+
+    analysis = EulerBernoulliAnalysis(mesh)
+    analysis.assemble()
+    displacements = analysis.solve()
+    results = StructureResults(mesh, displacements, analysis.get_reactions(), analysis.dpn)
+    return mesh, analysis, displacements, results
+
+
+def test_app_pipeline_with_euler_bernoulli_3node():
+    """App-style analysis flow should handle Euler-Bernoulli 3-node mixed with 4-DOF elements."""
+    mesh, analysis, displacements, results = _run_app_like_analysis("euler_bernoulli_3node")
+
+    assert analysis.dpn == 4
+    assert len(displacements) == 4 * len(mesh.nodes)
+    assert len(results.element_results) == len(mesh.elements)
+    assert any(getattr(el, "node_center", None) is not None for el in mesh.elements)
+
+    three_node_result = next(
+        er for er in results.element_results if getattr(er.element, "node_center", None) is not None
+    )
+    assert np.isfinite(three_node_result.bending_moment(three_node_result.length / 2))
+    assert np.isfinite(three_node_result.shear_force(three_node_result.length / 2))
+    assert np.isfinite(three_node_result.normal_force(three_node_result.length / 2))
+
+    print("✓ test_app_pipeline_with_euler_bernoulli_3node passed")
+
+
+def test_app_pipeline_with_timoshenko_3node():
+    """App-style analysis flow should handle Timoshenko 3-node mixed with 4-DOF elements."""
+    mesh, analysis, displacements, results = _run_app_like_analysis("timoshenko_3node")
+
+    assert analysis.dpn == 4
+    assert len(displacements) == 4 * len(mesh.nodes)
+    assert len(results.element_results) == len(mesh.elements)
+    assert any(getattr(el, "node_center", None) is not None for el in mesh.elements)
+
+    three_node_result = next(
+        er for er in results.element_results if getattr(er.element, "node_center", None) is not None
+    )
+    assert np.isfinite(three_node_result.bending_moment(three_node_result.length / 2))
+    assert np.isfinite(three_node_result.shear_force(three_node_result.length / 2))
+    assert np.isfinite(three_node_result.normal_force(three_node_result.length / 2))
+
+    print("✓ test_app_pipeline_with_timoshenko_3node passed")
+
+
+def test_streamlit_app_run_analysis_with_mixed_dofs():
+    """The Streamlit Run Analysis flow should complete without UI errors for mixed DOF meshes."""
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+
+    for element_type in ("euler_bernoulli_3node", "timoshenko_3node"):
+        at = AppTest.from_file("app.py")
+        at.session_state["nodes"] = [(0.0, 0.0), (1.0, 0.0), (2.0, 0.0)]
+        at.session_state["properties"] = [{
+            "name": "Property_1",
+            "material": mat,
+            "mat_input_mode": "Calculate G (from E and ν)",
+            "section": sec,
+            "section_type": "rectangular_bar",
+            "section_kwargs": {"width": 0.05, "height": 0.1}
+        }]
+        at.session_state["elements"] = [
+            (1, 2, "reddy_bickford_2node", "Property_1", 1),
+            (2, 3, element_type, "Property_1", 1),
+        ]
+        at.session_state["constraints"] = [(1, 0, 0.0), (1, 1, 0.0), (1, 2, 0.0), (1, 3, 0.0)]
+        at.session_state["point_loads"] = [(3, 1, -1000.0)]
+        at.session_state["distributed_loads"] = []
+
+        at.run(timeout=60)
+        at.button[1].click()
+        at.run(timeout=60)
+
+        errors = [err.value for err in at.error]
+        assert not any(msg.startswith("❌ Analysis failed") for msg in errors), (
+            f"Run Analysis failed for {element_type}: {errors}"
+        )
+        assert "displacements" in at.session_state
+
+    print("✓ test_streamlit_app_run_analysis_with_mixed_dofs passed")
+
+
 def run_all_tests():
     """Run all integration tests."""
     print("\n" + "="*60)
@@ -484,6 +618,9 @@ def run_all_tests():
     test_element_geometry()
     test_structure_results_integration()
     test_timoshenko_structure_results()
+    test_app_pipeline_with_euler_bernoulli_3node()
+    test_app_pipeline_with_timoshenko_3node()
+    test_streamlit_app_run_analysis_with_mixed_dofs()
     
     print("\n" + "="*60)
     print("✅ All Mesh Integration Tests Passed!")
