@@ -122,7 +122,7 @@ def load_project_from_dict(project_data):
         # 'value' argument computed from the freshly loaded project data.
         persistent_keys = {
             "nodes", "properties", "elements", "constraints", "point_loads",
-            "distributed_loads", "project_description", "file_loader_key",
+            "distributed_loads", "project_description",
         }
         for k in list(st.session_state.keys()):
             if k not in persistent_keys:
@@ -459,8 +459,7 @@ with st.sidebar:
         key="project_description_input",
         help="Add a description for this project"
     )
-    if project_desc:
-        st.session_state["project_description"] = project_desc
+    st.session_state["project_description"] = project_desc
     
     st.divider()
     
@@ -486,23 +485,17 @@ with st.sidebar:
     
     # Load Project
     st.subheader("📂 Load Project")
-    # Use a dynamic key so the file uploader resets after a successful load
-    # (prevents requiring the user to click "x" to fully apply the loaded project)
-    file_loader_key = f"project_loader_{st.session_state.get('file_loader_key', 0)}"
     uploaded_file = st.file_uploader(
         "Choose a project file",
         type=["json"],
         help="Upload a previously saved project JSON file",
-        key=file_loader_key
+        key="project_loader"
     )
-    if uploaded_file is not None:
+    if st.button("📂 Load Project File", use_container_width=True, disabled=uploaded_file is None):
         try:
-            project_data = json.loads(uploaded_file.read())
+            project_data = json.loads(uploaded_file.getvalue().decode("utf-8"))
             if load_project_from_dict(project_data):
                 st.success("✅ Project loaded successfully!")
-                # Increment key so the file uploader resets on the next run
-                st.session_state["file_loader_key"] = st.session_state.get("file_loader_key", 0) + 1
-                st.rerun()
             else:
                 st.error("❌ Failed to load project.")
         except json.JSONDecodeError:
