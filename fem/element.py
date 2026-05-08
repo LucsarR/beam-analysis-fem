@@ -80,6 +80,8 @@ class EulerBernoulliElement2Node(Element):
 
         k_local = np.zeros((6, 6))
 
+        # 3-point Gauss-Legendre is exact here for the polynomial terms from
+        # Hermite-cubic Euler-Bernoulli interpolation.
         xi_gauss = np.array([-np.sqrt(3/5), 0.0, np.sqrt(3/5)])
         w_gauss = np.array([5/9, 8/9, 5/9])
 
@@ -727,7 +729,8 @@ class TimoshenkoElement2Node(Element):
         k_local = np.zeros((6, 6))
         As = kappa * A
 
-        # Axial + bending terms with 2-point Gauss integration
+        # Axial + bending terms with 2-point Gauss integration.
+        # This is exact for the linear shape-function derivatives used here.
         xi_gauss = np.array([-1 / np.sqrt(3), 1 / np.sqrt(3)])
         w_gauss = np.array([1.0, 1.0])
         for xi_g, w_g in zip(xi_gauss, w_gauss):
@@ -740,7 +743,8 @@ class TimoshenkoElement2Node(Element):
             k_local += E * A * np.outer(b_axial, b_axial) * jac * w_g
             k_local += E * I * np.outer(b_bending, b_bending) * jac * w_g
 
-        # Reduced integration for shear term (single point) to mitigate locking
+        # Reduced integration for shear term (single point) to mitigate
+        # shear locking (artificially stiff transverse response in slender beams).
         xi = 0.5
         jac = L
         n1 = 1.0 - xi
