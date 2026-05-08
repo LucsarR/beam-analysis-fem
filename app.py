@@ -83,7 +83,8 @@ def save_project_to_dict():
         "metadata": {
             "version": "1.0",
             "created": datetime.now().isoformat(),
-            "description": st.session_state.get("project_description", "")
+            "description": st.session_state.get("project_description", ""),
+            "stiffness_integration_mode": st.session_state.get("stiffness_integration_mode", "analytical"),
         },
         "nodes": st.session_state.get("nodes", []),
         "properties": [],
@@ -122,7 +123,7 @@ def load_project_from_dict(project_data):
         # 'value' argument computed from the freshly loaded project data.
         persistent_keys = {
             "nodes", "properties", "elements", "constraints", "point_loads",
-            "distributed_loads", "project_description",
+            "distributed_loads", "project_description", "stiffness_integration_mode",
         }
         for k in list(st.session_state.keys()):
             if k not in persistent_keys:
@@ -134,6 +135,7 @@ def load_project_from_dict(project_data):
         st.session_state["point_loads"] = project_data.get("point_loads", [])
         st.session_state["distributed_loads"] = project_data.get("distributed_loads", [])
         st.session_state["project_description"] = project_data.get("metadata", {}).get("description", "")
+        st.session_state["stiffness_integration_mode"] = project_data.get("metadata", {}).get("stiffness_integration_mode", "analytical")
         
         # Reconstruct properties
         properties = []
@@ -529,6 +531,8 @@ if "point_loads" not in st.session_state:
     st.session_state["point_loads"] = []
 if "distributed_loads" not in st.session_state:
     st.session_state["distributed_loads"] = []
+if "stiffness_integration_mode" not in st.session_state:
+    st.session_state["stiffness_integration_mode"] = "analytical"
 
 # --- Main Content: Tabs for better organization ---
 tab1, tab2, tab3, tab4 = st.tabs(["📐 Structure Definition", "⚙️ Analysis", "📊 Results", "ℹ️ Help"])
@@ -1457,6 +1461,18 @@ with tab1:
 with tab2:
     st.header("⚙️ Run Analysis")
     st.markdown("Execute finite element analysis on the defined structure.")
+
+    integration_mode_labels = {
+        "Analytical (default)": "analytical",
+        "Numerical integration": "numerical",
+    }
+    selected_label = st.selectbox(
+        "Stiffness matrix integration",
+        options=list(integration_mode_labels.keys()),
+        index=0 if st.session_state.get("stiffness_integration_mode", "analytical") == "analytical" else 1,
+        help="Choose how 2-node element stiffness matrices are computed.",
+    )
+    st.session_state["stiffness_integration_mode"] = integration_mode_labels[selected_label]
     
     # Summary of model
     with st.expander("📋 Model Summary", expanded=True):
@@ -1561,7 +1577,8 @@ with tab2:
                                 node_end,
                                 prop["material"],
                                 prop["section"],
-                                element_type=etype
+                                element_type=etype,
+                                stiffness_integration=st.session_state["stiffness_integration_mode"],
                             )
                             original_to_mesh_elements[orig_idx] = [el.id]
                         else:
@@ -1589,7 +1606,8 @@ with tab2:
                                     subdiv_nodes[i+1],
                                     prop["material"],
                                     prop["section"],
-                                    element_type=etype
+                                    element_type=etype,
+                                    stiffness_integration=st.session_state["stiffness_integration_mode"],
                                 )
                                 subdiv_ids.append(el.id)
                             original_to_mesh_elements[orig_idx] = subdiv_ids

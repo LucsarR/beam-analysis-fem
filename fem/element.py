@@ -23,8 +23,9 @@ class Element(ABC):
 class EulerBernoulliElement2Node(Element):
     dofs_per_node = 3  # Each node has [u, v, θ] DOFs
 
-    def __init__(self, id, node_start, node_end, material, section):
+    def __init__(self, id, node_start, node_end, material, section, stiffness_integration="analytical"):
         super().__init__(id, node_start, node_end, material, section)
+        self.stiffness_integration = stiffness_integration
         self.length, self.c, self.s, self.R = self._compute_geometry()
 
     def _compute_geometry(self):
@@ -45,6 +46,14 @@ class EulerBernoulliElement2Node(Element):
         return L, c, s, R
 
     def stiffness_matrix(self):
+        if self.stiffness_integration == "numerical":
+            return self._stiffness_matrix_numerical()
+        if self.stiffness_integration != "analytical":
+            raise ValueError(
+                f"Unsupported stiffness integration mode '{self.stiffness_integration}' "
+                f"for {self.__class__.__name__}"
+            )
+
         E = self.material.E
         A = self.section.area
         I = self.section.inertia
@@ -60,6 +69,35 @@ class EulerBernoulliElement2Node(Element):
             [0, -6, -3*L, 0, 6, -3*L],
             [0, 3*L, L**2, 0, -3*L, 2*L**2]
         ])
+        return R @ k_local @ R.T
+
+    def _stiffness_matrix_numerical(self):
+        E = self.material.E
+        A = self.section.area
+        I = self.section.inertia
+        L = self.length
+        R = self.R
+
+        k_local = np.zeros((6, 6))
+
+        xi_gauss = np.array([-np.sqrt(3/5), 0.0, np.sqrt(3/5)])
+        w_gauss = np.array([5/9, 8/9, 5/9])
+
+        for xi_g, w_g in zip(xi_gauss, w_gauss):
+            xi = 0.5 * (xi_g + 1.0)
+            jac = L / 2.0
+
+            b_axial = np.array([-1.0 / L, 0.0, 0.0, 1.0 / L, 0.0, 0.0])
+
+            d2n1 = (-6.0 + 12.0 * xi) / (L ** 2)
+            d2n2 = (-4.0 + 6.0 * xi) / L
+            d2n3 = (6.0 - 12.0 * xi) / (L ** 2)
+            d2n4 = (-2.0 + 6.0 * xi) / L
+            b_bending = np.array([0.0, d2n1, d2n2, 0.0, d2n3, d2n4])
+
+            k_local += E * A * np.outer(b_axial, b_axial) * jac * w_g
+            k_local += E * I * np.outer(b_bending, b_bending) * jac * w_g
+
         return R @ k_local @ R.T
 
     def force_vector(self, q_ini=0, q_fim=0, p_ini=0, p_fim=0):
@@ -597,8 +635,9 @@ class EulerBernoulliElement3Node(Element):
 class TimoshenkoElement2Node(Element):
     dofs_per_node = 3  # Each node has [u, v, θ] DOFs
 
-    def __init__(self, id, node_start, node_end, material, section):
+    def __init__(self, id, node_start, node_end, material, section, stiffness_integration="analytical"):
         super().__init__(id, node_start, node_end, material, section)
+        self.stiffness_integration = stiffness_integration
         self.length, self.c, self.s, self.R = self._compute_geometry()
 
     def _compute_geometry(self):
@@ -619,6 +658,14 @@ class TimoshenkoElement2Node(Element):
         return L, c, s, R
 
     def stiffness_matrix(self):
+        if self.stiffness_integration == "numerical":
+            return self._stiffness_matrix_numerical()
+        if self.stiffness_integration != "analytical":
+            raise ValueError(
+                f"Unsupported stiffness integration mode '{self.stiffness_integration}' "
+                f"for {self.__class__.__name__}"
+            )
+
         E = self.material.E
         G = self.material.G
         A = self.section.area
@@ -666,6 +713,41 @@ class TimoshenkoElement2Node(Element):
         k_local[5, 5] = (4 + phi) * E * I / (L * (1 + phi))
         
         # Transform to global coordinates
+        return R @ k_local @ R.T
+
+    def _stiffness_matrix_numerical(self):
+        E = self.material.E
+        G = self.material.G
+        A = self.section.area
+        I = self.section.inertia
+        kappa = self.section.shear_coefficient
+        L = self.length
+        R = self.R
+
+        k_local = np.zeros((6, 6))
+        As = kappa * A
+
+        # Axial + bending terms with 2-point Gauss integration
+        xi_gauss = np.array([-1 / np.sqrt(3), 1 / np.sqrt(3)])
+        w_gauss = np.array([1.0, 1.0])
+        for xi_g, w_g in zip(xi_gauss, w_gauss):
+            xi = 0.5 * (xi_g + 1.0)
+            jac = L / 2.0
+
+            b_axial = np.array([-1.0 / L, 0.0, 0.0, 1.0 / L, 0.0, 0.0])
+            b_bending = np.array([0.0, 0.0, -1.0 / L, 0.0, 0.0, 1.0 / L])
+
+            k_local += E * A * np.outer(b_axial, b_axial) * jac * w_g
+            k_local += E * I * np.outer(b_bending, b_bending) * jac * w_g
+
+        # Reduced integration for shear term (single point) to mitigate locking
+        xi = 0.5
+        jac = L
+        n1 = 1.0 - xi
+        n2 = xi
+        b_shear = np.array([0.0, -1.0 / L, -n1, 0.0, 1.0 / L, -n2])
+        k_local += As * G * np.outer(b_shear, b_shear) * jac
+
         return R @ k_local @ R.T
 
     def force_vector(self, q_ini=0, q_fim=0, p_ini=0, p_fim=0):
