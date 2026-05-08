@@ -80,6 +80,13 @@ def test_add_elements():
     assert el2.id == 2
     assert len(mesh.elements) == 2
     assert mesh.element_id_counter == 3
+
+    # Add Euler-Bernoulli 2-node element with numerical stiffness integration
+    el3 = mesh.add_element(
+        n1, n3, mat, sec, 'euler_bernoulli_2node',
+        stiffness_integration='numerical'
+    )
+    assert el3.stiffness_integration == 'numerical'
     
     # Test invalid element type
     try:
@@ -89,6 +96,31 @@ def test_add_elements():
         pass
     
     print("✓ test_add_elements passed")
+
+
+def test_euler_bernoulli_numerical_stiffness_matches_analytical():
+    """Numerical integration option should remain consistent with analytical EB stiffness."""
+    mesh = Mesh()
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+
+    n1 = mesh.add_node(0, 0)
+    n2 = mesh.add_node(2, 0)
+
+    el_analytical = mesh.add_element(
+        n1, n2, mat, sec, 'euler_bernoulli_2node',
+        stiffness_integration='analytical'
+    )
+    el_numerical = mesh.add_element(
+        n1, n2, mat, sec, 'euler_bernoulli_2node',
+        stiffness_integration='numerical'
+    )
+
+    k_analytical = el_analytical.stiffness_matrix()
+    k_numerical = el_numerical.stiffness_matrix()
+
+    assert np.allclose(k_analytical, k_numerical, rtol=1e-10, atol=1e-8)
+    print("✓ test_euler_bernoulli_numerical_stiffness_matches_analytical passed")
 
 
 def test_element_attributes():
@@ -661,6 +693,40 @@ def test_streamlit_app_run_analysis_with_mixed_dofs():
     print("✓ test_streamlit_app_run_analysis_with_mixed_dofs passed")
 
 
+def test_streamlit_app_numerical_integration_option_applied_to_elements():
+    """Run Analysis should pass the selected numerical integration mode to 2-node elements."""
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+
+    at = AppTest.from_file("app.py")
+    at.session_state["nodes"] = [(0.0, 0.0), (2.0, 0.0)]
+    at.session_state["properties"] = [{
+        "name": "Property_1",
+        "material": mat,
+        "mat_input_mode": "Calculate G (from E and ν)",
+        "section": sec,
+        "section_type": "rectangular_bar",
+        "section_kwargs": {"width": 0.05, "height": 0.1}
+    }]
+    at.session_state["elements"] = [(1, 2, "euler_bernoulli_2node", "Property_1", 1)]
+    at.session_state["constraints"] = [(1, 0, 0.0), (1, 1, 0.0), (1, 2, 0.0)]
+    at.session_state["point_loads"] = [(2, 1, -1000.0)]
+    at.session_state["distributed_loads"] = []
+    at.session_state["stiffness_integration_mode"] = "numerical"
+
+    at.run(timeout=60)
+    run_analysis_button = next(btn for btn in at.button if btn.label == "🚀 Run Analysis")
+    run_analysis_button.click()
+    at.run(timeout=60)
+
+    errors = [err.value for err in at.error]
+    assert not any(msg.startswith("❌ Analysis failed") for msg in errors), (
+        f"Run Analysis failed with numerical integration mode: {errors}"
+    )
+    assert at.session_state["mesh"].elements[0].stiffness_integration == "numerical"
+    print("✓ test_streamlit_app_numerical_integration_option_applied_to_elements passed")
+
+
 def run_all_tests():
     """Run all integration tests."""
     print("\n" + "="*60)
@@ -670,6 +736,7 @@ def run_all_tests():
     test_mesh_creation()
     test_add_nodes()
     test_add_elements()
+    test_euler_bernoulli_numerical_stiffness_matches_analytical()
     test_element_attributes()
     test_generate_1d_mesh()
     test_constraint_integration()
@@ -687,6 +754,7 @@ def run_all_tests():
     test_app_pipeline_with_timoshenko_3node()
     test_internal_force_recovery_across_element_types()
     test_streamlit_app_run_analysis_with_mixed_dofs()
+    test_streamlit_app_numerical_integration_option_applied_to_elements()
     
     print("\n" + "="*60)
     print("✅ All Mesh Integration Tests Passed!")

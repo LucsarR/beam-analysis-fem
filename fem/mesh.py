@@ -52,7 +52,7 @@ class Mesh:
         self.node_id_counter += 1
         return node
 
-    def add_element(self, node_start, node_end, material, section, element_type="euler_bernoulli_2node"):
+    def add_element(self, node_start, node_end, material, section, element_type="euler_bernoulli_2node", stiffness_integration="analytical"):
         """
         Add an element to the mesh connecting two nodes.
         
@@ -66,6 +66,7 @@ class Mesh:
                 - "euler_bernoulli_3node": 3-node Euler-Bernoulli beam
                 - "timoshenko_2node": 2-node Timoshenko beam
                 - "timoshenko_3node": 3-node Timoshenko beam
+            stiffness_integration (str): Stiffness matrix formulation ("analytical" or "numerical")
                 
         Returns:
             Element: The created element object with assigned ID
@@ -75,7 +76,10 @@ class Mesh:
         """
         from fem.element import EulerBernoulliElement2Node, EulerBernoulliElement3Node, TimoshenkoElement2Node, TimoshenkoElement3Node, ReddyBickfordElement2Node
         if element_type == "euler_bernoulli_2node":
-            element = EulerBernoulliElement2Node(self.element_id_counter, node_start, node_end, material, section)
+            element = EulerBernoulliElement2Node(
+                self.element_id_counter, node_start, node_end, material, section,
+                stiffness_integration=stiffness_integration
+            )
         elif element_type == "euler_bernoulli_3node":
             # For 3-node element, create or find the central node
             x_center = (node_start.x + node_end.x) / 2
@@ -90,7 +94,10 @@ class Mesh:
                 node_center = self.add_node(x_center, y_center)
             element = EulerBernoulliElement3Node(self.element_id_counter, node_start, node_end, material, section, node_center)
         elif element_type == "timoshenko_2node":
-            element = TimoshenkoElement2Node(self.element_id_counter, node_start, node_end, material, section)
+            element = TimoshenkoElement2Node(
+                self.element_id_counter, node_start, node_end, material, section,
+                stiffness_integration=stiffness_integration
+            )
         elif element_type == "timoshenko_3node":
             # For 3-node element, create or find the central node
             x_center = (node_start.x + node_end.x) / 2
@@ -112,7 +119,7 @@ class Mesh:
         self.element_id_counter += 1
         return element
 
-    def generate_1d_mesh(self, x_start, y_start, x_end, y_end, n_elements, material, section, element_type="euler_bernoulli_2node"):
+    def generate_1d_mesh(self, x_start, y_start, x_end, y_end, n_elements, material, section, element_type="euler_bernoulli_2node", stiffness_integration="analytical"):
         """
         Generate a structured 1D mesh between two points.
         
@@ -128,6 +135,7 @@ class Mesh:
             material (Material): Material properties for all elements
             section (Section): Cross-section properties for all elements
             element_type (str): Type of elements to create (default: "euler_bernoulli_2node")
+            stiffness_integration (str): Stiffness matrix formulation ("analytical" or "numerical")
             
         Returns:
             list: List of created Node objects (length: n_elements + 1)
@@ -140,7 +148,10 @@ class Mesh:
             node = self.add_node(x, y)
             nodes.append(node)
         for i in range(n_elements):
-            self.add_element(nodes[i], nodes[i+1], material, section, element_type)
+            self.add_element(
+                nodes[i], nodes[i+1], material, section, element_type,
+                stiffness_integration=stiffness_integration
+            )
         return nodes
 
     def get_node_by_id(self, node_id):
