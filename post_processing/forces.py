@@ -5,10 +5,19 @@ class ElementResults:
     """
     Stores and computes results for a single element: bending moment, shear force, normal force.
     """
-    def __init__(self, element, displacements):
+    def __init__(self, element, displacements, mesh=None):
         self.element = element
         self.displacements = displacements
         self.length = element.length
+        self.mesh = mesh
+        self._distributed_loads = []
+        self._can_equilibrium_recover = getattr(element, "dofs_per_node", 3) == 3
+        if mesh is not None:
+            self._distributed_loads = [
+                load for load in mesh.distributed_loads
+                if getattr(load, "element", None) is element
+            ]
+        self._f_int_local = self._recover_local_internal_nodal_forces()
         self.compute_forces()
 
     def compute_forces(self):
@@ -19,15 +28,87 @@ class ElementResults:
 
     def bending_moment(self, x):
         # Return bending moment at position x along the element
+        if self._f_int_local is not None:
+            m0 = -self._f_int_local[2]
+            v0 = self._f_int_local[1]
+            return m0 + v0 * x + self._integrate_transverse_load(x, weighted=True)
         return self.element.bending_moment(x, self.displacements)
 
     def shear_force(self, x):
         # Return shear force at position x along the element
+        if self._f_int_local is not None:
+            return self._f_int_local[1] + self._integrate_transverse_load(x)
         return self.element.shear_force(x, self.displacements)
 
     def normal_force(self, x):
         # Return normal force at position x along the element
         return self.element.normal_force(x, self.displacements)
+
+    def _recover_local_internal_nodal_forces(self):
+        if (
+            not self._can_equilibrium_recover
+            or not hasattr(self.element, "stiffness_matrix")
+            or len(self.displacements) < 3
+        ):
+            return None
+
+        d_local = np.asarray(self.displacements, dtype=float)
+        k_local = self.element.R.T @ self.element.stiffness_matrix() @ self.element.R
+        f_ext_local = np.zeros_like(d_local, dtype=float)
+
+        for load in self._distributed_loads:
+            fe_global = load.apply(self.element)
+            f_ext_local += self.element.R.T @ np.asarray(fe_global, dtype=float)
+
+        return k_local @ d_local - f_ext_local
+
+    def _eval_distributed_load_local_transverse(self, distributed_load, x_local):
+        L = self.length
+        c = self.element.c
+        s = self.element.s
+
+        if distributed_load.func:
+            x_global = self.element.node_start.x + x_local * c
+            try:
+                value = float(eval(distributed_load.func, {"np": np, "x": x_global, "L": L}))
+            except Exception:
+                value = 0.0
+        elif (
+            distributed_load.magnitude_start is not None
+            and distributed_load.magnitude_end is not None
+        ):
+            a = float(distributed_load.magnitude_start)
+            b = float(distributed_load.magnitude_end)
+            value = a + (b - a) * (x_local / L)
+        elif distributed_load.magnitude_start is not None:
+            value = float(distributed_load.magnitude_start)
+        else:
+            value = 0.0
+
+        if distributed_load.direction == "x":
+            return -value * s
+        if distributed_load.direction == "y":
+            return value * c
+        if distributed_load.direction == "t":
+            return value
+        return 0.0
+
+    def _integrate_transverse_load(self, x, weighted=False):
+        if not self._distributed_loads or x <= 0.0:
+            return 0.0
+
+        xi, wi = np.polynomial.legendre.leggauss(8)
+        s = 0.5 * (xi + 1.0) * x
+        w = 0.5 * wi * x
+
+        total = 0.0
+        for si, wi_scaled in zip(s, w):
+            p = sum(
+                self._eval_distributed_load_local_transverse(load, float(si))
+                for load in self._distributed_loads
+            )
+            total += ((x - si) * p if weighted else p) * wi_scaled
+        return float(total)
 
 class StructureResults:
     """
@@ -43,7 +124,7 @@ class StructureResults:
         else:
             self.dpn = dpn  # Global degrees of freedom per node
         self.element_results = [
-            ElementResults(el, self._get_element_dofs(el)) for el in mesh.elements
+            ElementResults(el, self._get_element_dofs(el), mesh) for el in mesh.elements
         ]
 
     def _get_element_dofs(self, element):

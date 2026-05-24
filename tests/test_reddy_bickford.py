@@ -787,6 +787,86 @@ def test_beam_theory_polynomial_distributed_loads():
 
 
 # ===========================================================================
+# Test 12 – Single-element polynomial load internal-force recovery
+# ===========================================================================
+def test_single_element_polynomial_load_internal_forces():
+    """
+    A single 2-node element should recover the analytical shear/moment diagrams
+    for polynomial distributed loads via element equilibrium.
+    """
+    print("\n" + "=" * 60)
+    print("Test 12: Single-Element Polynomial Internal-Force Recovery")
+    print("=" * 60)
+
+    h = H_THICK
+    n = 1
+
+    def _analytical_reactions(a0, a1, a2):
+        total = a0 * L_BEAM + a1 * L_BEAM**2 / 2 + a2 * L_BEAM**3 / 3
+        first_moment = a0 * L_BEAM**2 / 2 + a1 * L_BEAM**3 / 3 + a2 * L_BEAM**4 / 4
+        r_right = -first_moment / L_BEAM
+        r_left = -total - r_right
+        return r_left, r_right
+
+    def _analytical_shear(x, r_left, a0, a1, a2):
+        return r_left + a0 * x + a1 * x**2 / 2 + a2 * x**3 / 3
+
+    def _analytical_moment(x, r_left, a0, a1, a2):
+        return r_left * x + a0 * x**2 / 2 + a1 * x**3 / 6 + a2 * x**4 / 12
+
+    load_cases = [
+        ("Linear", -1000.0, -250.0, 0.0),
+        ("Quadratic", -1000.0, -250.0, -80.0),
+    ]
+
+    xs = np.linspace(0.0, L_BEAM, 25)
+    etypes = [
+        "euler_bernoulli_2node",
+        "timoshenko_2node",
+        "euler_bernoulli_3node",
+        "timoshenko_3node",
+    ]
+
+    for case_name, a0, a1, a2 in load_cases:
+        print(f"\n  Case: {case_name} load")
+        r_left, _ = _analytical_reactions(a0, a1, a2)
+        v_ref = max(abs(_analytical_shear(x, r_left, a0, a1, a2)) for x in xs)
+        m_ref = max(abs(_analytical_moment(x, r_left, a0, a1, a2)) for x in xs)
+
+        for etype in etypes:
+            mesh, nodes = _make_simply_supported(n, h, etype=etype)
+            func = f"({a0}) + ({a1})*x + ({a2})*x**2"
+            load = DistributedLoad(direction="y", func=func)
+            load.element = mesh.elements[0]
+            mesh.distributed_loads.append(load)
+
+            _, results = _solve(mesh)
+
+            max_shear_error = max(
+                abs(results.V(float(x)) - _analytical_shear(float(x), r_left, a0, a1, a2))
+                for x in xs
+            ) / v_ref
+            max_moment_error = max(
+                abs(results.M(float(x)) - _analytical_moment(float(x), r_left, a0, a1, a2))
+                for x in xs
+            ) / m_ref
+
+            assert max_shear_error < 5e-6, \
+                f"{etype}: single-element shear error too large ({max_shear_error * 100:.3e}%)"
+            assert max_moment_error < 5e-6, \
+                f"{etype}: single-element moment error too large ({max_moment_error * 100:.3e}%)"
+
+            print(
+                f"    {etype:>21}: "
+                f"shear err={max_shear_error * 100:.3e}%, "
+                f"moment err={max_moment_error * 100:.3e}%"
+            )
+
+    print("OK Single-element polynomial-load internal forces match analytical diagrams")
+    return True
+
+
+# ===========================================================================
 # Main test runner
 # ===========================================================================
 if __name__ == "__main__":
@@ -802,6 +882,7 @@ if __name__ == "__main__":
         test_shear_force_recovery,
         test_normal_force_recovery,
         test_beam_theory_polynomial_distributed_loads,
+        test_single_element_polynomial_load_internal_forces,
     ]
 
     print("\n" + "=" * 70)
