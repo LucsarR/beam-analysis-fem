@@ -582,12 +582,15 @@ def plot_structure_diagram(
         ts = xs / L if L > 1e-10 else np.zeros_like(xs)
         pxs = x1 + ts * dx   # numpy array
         pys = y1 + ts * dy   # numpy array
+        # Force-diagram curve (offset from element axis)
+        pxs_off = pxs + vals_normalized * perp[0] * diagram_scale
+        pys_off = pys + vals_normalized * perp[1] * diagram_scale
 
         # Gradient: ONE trace with per-marker colour (replaces the old per-segment
         # trace loop – reduces trace count by ~n_points, a ≈30× speedup).
         fig.add_trace(go.Scatter(
-            x=pxs.tolist(),
-            y=pys.tolist(),
+            x=pxs_off.tolist(),
+            y=pys_off.tolist(),
             mode='markers',
             marker=dict(
                 size=7,
@@ -608,10 +611,10 @@ def plot_structure_diagram(
 
         # Fill diagram (already one trace per element – keep as-is)
         if fill_diagram:
-            pxs_off = (pxs + vals_normalized * perp[0] * diagram_scale).tolist()
-            pys_off = (pys + vals_normalized * perp[1] * diagram_scale).tolist()
-            x_poly = pxs_off + [x2, x1]
-            y_poly = pys_off + [y2, y1]
+            pxs_off_list = pxs_off.tolist()
+            pys_off_list = pys_off.tolist()
+            x_poly = pxs_off_list + [x2, x1]
+            y_poly = pys_off_list + [y2, y1]
             fig.add_trace(go.Scatter(
                 x=x_poly, y=y_poly,
                 fill='toself',
@@ -623,7 +626,7 @@ def plot_structure_diagram(
             ))
             # Hover markers on the offset outline
             fig.add_trace(go.Scatter(
-                x=pxs_off, y=pys_off,
+                x=pxs_off_list, y=pys_off_list,
                 mode='markers',
                 marker=dict(size=8, opacity=0, color='rgba(0,0,0,0)'),
                 customdata=np.column_stack([vals, pxs, pys]),
