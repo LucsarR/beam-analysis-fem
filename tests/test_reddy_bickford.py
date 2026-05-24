@@ -675,6 +675,118 @@ def test_normal_force_recovery():
 
 
 # ===========================================================================
+# Test 11 – Polynomial distributed loads across beam theories
+# ===========================================================================
+def test_beam_theory_polynomial_distributed_loads():
+    """
+    Verify that Euler-Bernoulli, Timoshenko, and Reddy-Bickford produce
+    consistent internal-force diagrams for linear and quadratic distributed loads.
+
+    Note:
+      - Beam theory mainly affects deflection (through shear deformation effects).
+      - For statically determinate beams, reactions and moment/shear resultants
+        should remain consistent across theories.
+    """
+    print("\n" + "=" * 60)
+    print("Test 11: Beam Theory Comparison with Polynomial Distributed Loads")
+    print("=" * 60)
+
+    n = 24
+    h = H_THICK
+
+    def _analytical_reactions(a0, a1, a2):
+        total = a0 * L_BEAM + a1 * L_BEAM**2 / 2 + a2 * L_BEAM**3 / 3
+        first_moment = a0 * L_BEAM**2 / 2 + a1 * L_BEAM**3 / 3 + a2 * L_BEAM**4 / 4
+        r_right = -first_moment / L_BEAM
+        r_left = -total - r_right
+        return r_left, r_right, total
+
+    def _analytical_moment(x, r_left, a0, a1, a2):
+        return (
+            r_left * x
+            + a0 * x**2 / 2
+            + a1 * x**3 / 6
+            + a2 * x**4 / 12
+        )
+
+    load_cases = [
+        ("Linear", -1000.0, -250.0, 0.0),
+        ("Quadratic", -1000.0, -250.0, -80.0),
+    ]
+
+    for case_name, a0, a1, a2 in load_cases:
+        print(f"\n  Case: {case_name} load")
+        print(f"    q(x) = {a0:.1f} + ({a1:.1f})x + ({a2:.1f})x²  [N/m]")
+
+        r_left_ana, r_right_ana, total_load = _analytical_reactions(a0, a1, a2)
+        m_ref = max(
+            abs(_analytical_moment(x, r_left_ana, a0, a1, a2))
+            for x in np.linspace(0.0, L_BEAM, 200)
+        )
+
+        results_dict = {}
+        for etype in ["euler_bernoulli_2node", "timoshenko_2node", "reddy_bickford_2node"]:
+            mesh, nodes = _make_simply_supported(n, h, etype=etype)
+            func = f"({a0}) + ({a1})*x + ({a2})*x**2"
+
+            for element in mesh.elements:
+                load = DistributedLoad(direction="y", func=func)
+                load.element = element
+                mesh.distributed_loads.append(load)
+
+            displacements, results = _solve(mesh)
+            ry_left, ry_right = _get_reactions(mesh, nodes, displacements)
+
+            equilibrium_error = abs((ry_left + ry_right) + total_load) / abs(total_load)
+            assert equilibrium_error < 1e-8, \
+                f"{etype}: equilibrium error too large ({equilibrium_error * 100:.3e}%)"
+
+            reaction_error_left = abs((ry_left - r_left_ana) / r_left_ana)
+            reaction_error_right = abs((ry_right - r_right_ana) / r_right_ana)
+            assert reaction_error_left < 2e-3, \
+                f"{etype}: left reaction error too large ({reaction_error_left * 100:.3f}%)"
+            assert reaction_error_right < 2e-3, \
+                f"{etype}: right reaction error too large ({reaction_error_right * 100:.3f}%)"
+
+            xs = np.linspace(0.1 * L_BEAM, 0.9 * L_BEAM, 17)
+            max_moment_error = max(
+                abs(results.M(float(x)) - _analytical_moment(float(x), r_left_ana, a0, a1, a2))
+                for x in xs
+            ) / m_ref
+            assert max_moment_error < 1.5e-2, \
+                f"{etype}: moment-diagram error too large ({max_moment_error * 100:.3f}%)"
+
+            dofs_per_node = 4 if etype == "reddy_bickford_2node" else 3
+            mid_node = nodes[len(nodes) // 2]
+            v_mid = displacements[(mid_node.id - 1) * dofs_per_node + 1]
+
+            results_dict[etype] = {
+                "v_mid": v_mid,
+                "ry_left": ry_left,
+                "ry_right": ry_right,
+                "moment_error": max_moment_error,
+            }
+
+            print(
+                f"    {etype:>21}: "
+                f"RyL={ry_left:.3f}, RyR={ry_right:.3f}, "
+                f"moment err={max_moment_error * 100:.3f}%"
+            )
+
+        w_eb = results_dict["euler_bernoulli_2node"]["v_mid"]
+        w_timo = results_dict["timoshenko_2node"]["v_mid"]
+        w_reddy = results_dict["reddy_bickford_2node"]["v_mid"]
+
+        assert w_timo / w_eb > 1.0, "Timoshenko mid-span deflection should exceed EB"
+        assert w_reddy / w_eb > 1.0, "Reddy mid-span deflection should exceed EB"
+        assert abs(w_reddy - w_timo) / abs(w_eb) < 0.05, \
+            "Reddy and Timoshenko deflections should remain close for thick beams"
+
+    print("OK Polynomial distributed-load behavior is consistent across beam theories")
+    return True
+
+
+# ===========================================================================
 # Main test runner
 # ===========================================================================
 if __name__ == "__main__":
@@ -689,6 +801,7 @@ if __name__ == "__main__":
         test_bending_moment_recovery,
         test_shear_force_recovery,
         test_normal_force_recovery,
+        test_beam_theory_polynomial_distributed_loads,
     ]
 
     print("\n" + "=" * 70)
