@@ -1806,20 +1806,7 @@ with tab3:
                     )
             
             # --- Performance & display options ----------------------------
-            col_pts, col_hide = st.columns(2)
-            with col_pts:
-                diag_n_points = st.slider(
-                    "Diagram resolution (points per element)",
-                    min_value=10,
-                    max_value=100,
-                    value=30,
-                    step=5,
-                    help=(
-                        "Number of sample points per element. "
-                        "Lower values render faster; higher values give a smoother curve."
-                    ),
-                    key="diag_n_points",
-                )
+            col_hide = st.columns(1)[0]
             with col_hide:
                 hide_subdiv_nodes = st.checkbox(
                     "Hide subdivision nodes",
@@ -1900,7 +1887,6 @@ with tab3:
                     fig = plot_structure_diagram(
                         structure_results,
                         force_type=diagram_map[diagram_type],
-                        n_points=diag_n_points,
                         fill_diagram=fill_diagram,
                         fill_color=fill_color,
                         fill_opacity=fill_opacity,

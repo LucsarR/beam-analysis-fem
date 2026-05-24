@@ -727,6 +727,36 @@ def test_streamlit_app_numerical_integration_option_applied_to_elements():
     print("✓ test_streamlit_app_numerical_integration_option_applied_to_elements passed")
 
 
+def test_streamlit_app_force_diagram_resolution_slider_removed():
+    """Force diagram tab should not expose manual points-per-element slider."""
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+
+    at = AppTest.from_file("app.py")
+    at.session_state["nodes"] = [(0.0, 0.0), (2.0, 0.0)]
+    at.session_state["properties"] = [{
+        "name": "Property_1",
+        "material": mat,
+        "mat_input_mode": "Calculate G (from E and ν)",
+        "section": sec,
+        "section_type": "rectangular_bar",
+        "section_kwargs": {"width": 0.05, "height": 0.1}
+    }]
+    at.session_state["elements"] = [(1, 2, "euler_bernoulli_2node", "Property_1", 1)]
+    at.session_state["constraints"] = [(1, 0, 0.0), (1, 1, 0.0), (1, 2, 0.0)]
+    at.session_state["point_loads"] = [(2, 1, -1000.0)]
+    at.session_state["distributed_loads"] = []
+
+    at.run(timeout=60)
+    run_analysis_button = next(btn for btn in at.button if btn.label == "🚀 Run Analysis")
+    run_analysis_button.click()
+    at.run(timeout=60)
+
+    slider_labels = [sl.label for sl in at.slider]
+    assert "Diagram resolution (points per element)" not in slider_labels
+    print("✓ test_streamlit_app_force_diagram_resolution_slider_removed passed")
+
+
 def run_all_tests():
     """Run all integration tests."""
     print("\n" + "="*60)
@@ -755,6 +785,7 @@ def run_all_tests():
     test_internal_force_recovery_across_element_types()
     test_streamlit_app_run_analysis_with_mixed_dofs()
     test_streamlit_app_numerical_integration_option_applied_to_elements()
+    test_streamlit_app_force_diagram_resolution_slider_removed()
     
     print("\n" + "="*60)
     print("✅ All Mesh Integration Tests Passed!")
