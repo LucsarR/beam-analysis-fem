@@ -443,10 +443,17 @@ def find_position_on_structure(structure_results, x_global, y_global):
     return best
 
 
+def _auto_diagram_points_per_element(n_elements, target_total_points=1000, min_points=10, max_points=1000):
+    """Auto-scale points-per-element from a global target for the whole structure."""
+    safe_elements = max(int(n_elements), 1)
+    points = int(round(target_total_points / safe_elements))
+    return max(min_points, min(max_points, points))
+
+
 def plot_structure_diagram(
     structure_results,
     force_type="moment",
-    n_points=30,
+    n_points=None,
     scale=0.2,
     fill_diagram=False,
     fill_color="green",
@@ -469,9 +476,9 @@ def plot_structure_diagram(
     ----------
     structure_results : StructureResults
     force_type : {"moment", "shear", "normal"}
-    n_points : int
-        Number of sample points per element for the force diagram (default 30).
-        Lower values improve performance; higher values improve smoothness.
+    n_points : int or None
+        Number of sample points per element for the force diagram.
+        When None, it is auto-scaled from a global target across the structure.
     scale : float
         Diagram amplitude as a fraction of the overall structure size.
     fill_diagram : bool
@@ -499,6 +506,8 @@ def plot_structure_diagram(
     colorscale = "rainbow"
 
     fig = go.Figure()
+    if n_points is None:
+        n_points = _auto_diagram_points_per_element(len(structure_results.element_results))
 
     # --- Plot nodes -------------------------------------------------------
     for node in structure_results.mesh.nodes:
