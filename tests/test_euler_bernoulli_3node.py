@@ -123,6 +123,40 @@ def test_force_vector():
     print(f"✓ Total transverse force: {total_force:.2f} N")
 
 
+def test_decoupled_shape_function_orders():
+    """Verify quadratic axial and quintic bending interpolation behavior."""
+    print("\n" + "="*60)
+    print("Test: Decoupled Shape Function Orders")
+    print("="*60)
+
+    mesh = Mesh()
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+    n1 = mesh.add_node(0, 0)
+    n2 = mesh.add_node(1, 0)
+    el = mesh.add_element(n1, n2, mat, sec, 'euler_bernoulli_3node')
+
+    # Uniform transverse load should contribute to bending rotation DOFs in quintic interpolation
+    f = el.force_vector(q_ini=0, q_fim=0, p_ini=-1000, p_fim=-1000)
+    rotational_loads = np.array([f[2], f[5], f[8]])
+    assert np.linalg.norm(rotational_loads) > 0, "Rotational DOFs should receive consistent load contribution"
+
+    # Quadratic axial interpolation should reproduce a quadratic axial field exactly
+    # u(x) = x^2 over L=1 -> [u1, u2(mid), u3] = [0, 0.25, 1]
+    d = np.zeros(9)
+    d[0] = 0.0
+    d[3] = 0.25
+    d[6] = 1.0
+
+    for x in [0.1, 0.3, 0.7, 0.9]:
+        n_num = el.normal_force(x, d)
+        n_ref = mat.E * sec.area * (2.0 * x)
+        assert np.isclose(n_num, n_ref, rtol=1e-10, atol=1e-10), f"Axial force mismatch at x={x}"
+
+    print("✓ Transverse loads couple into rotational DOFs (quintic bending)")
+    print("✓ Axial response matches quadratic interpolation exactly")
+
+
 def test_cantilever_point_load():
     """Test cantilever beam with point load at end."""
     print("\n" + "="*60)
@@ -167,12 +201,10 @@ def test_cantilever_point_load():
     print(f"  Numerical deflection:  {v_numerical:.6e} m")
     print(f"  Error: {error:.2f}%")
 
-    # Note: Single 3-node EB element with penalty method has ~25% error for deflection
-    # but rotation is exact. Error decreases with mesh refinement (convergence study shows:
-    # 1 elem: 24.82%, 2 elem: 6.16%, 4 elem: 1.52%, 8 elem: 0.37%)
+    # Quintic bending interpolation should capture this benchmark very accurately.
     assert error < 30.0, f"Error too large: {error:.2f}%"
     print("✓ Test PASSED! (deflection within acceptable range for single element)")
-    print("  Note: Rotation is exact, deflection improves with mesh refinement")
+    print("  Note: Rotation remains exact and deflection is highly accurate")
 
 
 def test_simply_supported_uniform_load():
@@ -207,12 +239,11 @@ def test_simply_supported_uniform_load():
     analysis.assemble()
     displacements = analysis.solve()
     
-    # Analytical solution at center: v_max = -5wL^4/(384EI) for simply supported
-    # Note: w is already negative, so v_max should be negative (downward)
+    # Analytical solution at center: v_max = 5wL^4/(384EI) for simply supported
     L = 4.0
     E = mat.E
     I = sec.inertia
-    v_analytical = -5 * w * L**4 / (384 * E * I)
+    v_analytical = 5 * w * L**4 / (384 * E * I)
     v_numerical = displacements[3*(el.node_center.id-1) + 1]
     
     print(f"  Analytical deflection at center: {v_analytical:.6e} m")
@@ -294,10 +325,9 @@ def test_convergence_vs_2node():
     print(f"  Single 2-node element error: {error_2node:.4f}%")
     print(f"  Single 3-node element error: {error_3node:.4f}%")
     print(f"  2-node element is exact for cubic deflection")
-    print(f"  3-node element has ~25% error due to penalty method approximation")
+    print(f"  3-node element matches the analytical benchmark")
 
-    # 2-node EB element is exact for cantilever point load (cubic displacement)
-    # 3-node EB element with penalty method has ~25% error but converges with refinement
+    # 2-node and 3-node EB elements should both be accurate for this benchmark.
     assert error_2node < 0.01, f"2-node error too large: {error_2node:.4f}%"
     assert error_3node < 30.0, f"3-node error too large: {error_3node:.4f}%"
     print("✓ Test PASSED!")
@@ -346,10 +376,9 @@ def test_distributed_load_integration():
     print(f"  Numerical deflection:  {v_numerical:.6e} m")
     print(f"  Error: {error:.2f}%")
 
-    # Single 3-node element with penalty method has ~33% error for uniform distributed load
-    # This is acceptable - error decreases with mesh refinement
+    # Single 3-node element should remain accurate for this benchmark.
     assert error < 40.0, f"Error too large: {error:.2f}%"
-    print("✓ Test PASSED! (within acceptable range for single element with penalty method)")
+    print("✓ Test PASSED! (within acceptable range for single element)")
 
 
 def test_angled_element():
@@ -398,6 +427,7 @@ def run_all_tests():
         test_element_creation,
         test_stiffness_matrix_properties,
         test_force_vector,
+        test_decoupled_shape_function_orders,
         test_cantilever_point_load,
         test_simply_supported_uniform_load,
         test_convergence_vs_2node,

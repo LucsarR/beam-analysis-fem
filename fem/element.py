@@ -1,6 +1,65 @@
 import numpy as np
 from abc import ABC, abstractmethod
 
+def _quadratic_shape_functions_3node(xi):
+    """Quadratic Lagrange shape functions on ξ ∈ [0, 1] for nodes [0, 0.5, 1]."""
+    n1 = (1 - xi) * (1 - 2 * xi)
+    n2 = 4 * xi * (1 - xi)
+    n3 = xi * (2 * xi - 1)
+    return np.array([n1, n2, n3], dtype=float)
+
+def _quintic_bending_shapes_3node(xi, L):
+    """
+    Quintic Hermite-like interpolation for 3-node bending DOFs.
+
+    Returns shape vectors for DOFs [v1, θ1, v2, θ2, v3, θ3]:
+      n_w:      w interpolation
+      dn_w_dx:  dw/dx interpolation
+      d2_w_dx2: d²w/dx² interpolation
+      d3_w_dx3: d³w/dx³ interpolation
+
+    Also returns (n_theta, dn_theta_dx) for a quintic interpolation of
+    θ using nodal rotations [θ1, θ2, θ3].
+    """
+    # Quintic basis (ξ = x/L)
+    n1 = 24 * xi**5 - 68 * xi**4 + 66 * xi**3 - 23 * xi**2 + 1
+    m1 = 4 * xi**5 - 12 * xi**4 + 13 * xi**3 - 6 * xi**2 + xi
+    n2 = 16 * xi**4 - 32 * xi**3 + 16 * xi**2
+    m2 = 16 * xi**5 - 40 * xi**4 + 32 * xi**3 - 8 * xi**2
+    n3 = -24 * xi**5 + 52 * xi**4 - 34 * xi**3 + 7 * xi**2
+    m3 = 4 * xi**5 - 8 * xi**4 + 5 * xi**3 - xi**2
+
+    dn1 = 120 * xi**4 - 272 * xi**3 + 198 * xi**2 - 46 * xi
+    dm1 = 20 * xi**4 - 48 * xi**3 + 39 * xi**2 - 12 * xi + 1
+    dn2 = 64 * xi**3 - 96 * xi**2 + 32 * xi
+    dm2 = 80 * xi**4 - 160 * xi**3 + 96 * xi**2 - 16 * xi
+    dn3 = -120 * xi**4 + 208 * xi**3 - 102 * xi**2 + 14 * xi
+    dm3 = 20 * xi**4 - 32 * xi**3 + 15 * xi**2 - 2 * xi
+
+    d2n1 = 480 * xi**3 - 816 * xi**2 + 396 * xi - 46
+    d2m1 = 80 * xi**3 - 144 * xi**2 + 78 * xi - 12
+    d2n2 = 192 * xi**2 - 192 * xi + 32
+    d2m2 = 320 * xi**3 - 480 * xi**2 + 192 * xi - 16
+    d2n3 = -480 * xi**3 + 624 * xi**2 - 204 * xi + 14
+    d2m3 = 80 * xi**3 - 96 * xi**2 + 30 * xi - 2
+
+    d3n1 = 1440 * xi**2 - 1632 * xi + 396
+    d3m1 = 240 * xi**2 - 288 * xi + 78
+    d3n2 = 384 * xi - 192
+    d3m2 = 960 * xi**2 - 960 * xi + 192
+    d3n3 = -1440 * xi**2 + 1248 * xi - 204
+    d3m3 = 240 * xi**2 - 192 * xi + 30
+
+    n_w = np.array([n1, L * m1, n2, L * m2, n3, L * m3], dtype=float)
+    dn_w_dx = np.array([dn1 / L, dm1, dn2 / L, dm2, dn3 / L, dm3], dtype=float)
+    d2_w_dx2 = np.array([d2n1 / (L**2), d2m1 / L, d2n2 / (L**2), d2m2 / L, d2n3 / (L**2), d2m3 / L], dtype=float)
+    d3_w_dx3 = np.array([d3n1 / (L**3), d3m1 / (L**2), d3n2 / (L**3), d3m2 / (L**2), d3n3 / (L**3), d3m3 / (L**2)], dtype=float)
+
+    n_theta = np.array([n1, n2, n3], dtype=float)
+    dn_theta_dx = np.array([dn1 / L, dn2 / L, dn3 / L], dtype=float)
+
+    return n_w, dn_w_dx, d2_w_dx2, d3_w_dx3, n_theta, dn_theta_dx
+
 class Element(ABC):
     """
     Abstract base class for beam elements.
@@ -305,18 +364,8 @@ class EulerBernoulliElement3Node(Element):
         
         The element has 9 DOFs: [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3]
         - Axial: quadratic shape functions for u
-        - Bending: quadratic shape functions for rotation θ
-        - Displacement v is derived from θ using the Euler-Bernoulli relation: θ = dw/dx
-        - Central node now has rotation DOF
-        
-        For Euler-Bernoulli beams: M = EI * dθ/dx
-        Strain energy: U = ∫(EI/2)*(dθ/dx)² dx
-        
-        We use quadratic shape functions for θ:
-        - θ(ξ) = N1(ξ)*θ1 + N2(ξ)*θ2 + N3(ξ)*θ3
-        Where N1 = (1-ξ)(1-2ξ), N2 = 4ξ(1-ξ), N3 = ξ(2ξ-1)
-        
-        The displacement is obtained by integrating: w = ∫θ dx + constant
+        - Bending: quintic interpolation for [v1, θ1, v2, θ2, v3, θ3]
+          with Euler-Bernoulli curvature κ = d²v/dx²
         
         References:
         - Reddy, J.N. "An Introduction to the Finite Element Method" (2006)
@@ -343,70 +392,18 @@ class EulerBernoulliElement3Node(Element):
             for j, jj in enumerate(axial_dofs):
                 k_local[ii, jj] = k_axial[i, j]
         
-        # Bending stiffness for Euler-Bernoulli beam
-        # Using quadratic shape functions for rotation θ
-        # DOFs for bending: [v1, θ1, v2, θ2, v3, θ3] = indices [1, 2, 4, 5, 7, 8]
+        # Bending stiffness for Euler-Bernoulli beam with quintic bending interpolation
         bending_dofs = [1, 2, 4, 5, 7, 8]
         n_bending = len(bending_dofs)
         k_bending = np.zeros((n_bending, n_bending))
         
-        # Numerical integration using 3-point Gauss quadrature
-        xi_gauss = np.array([-np.sqrt(3/5), 0, np.sqrt(3/5)])
-        w_gauss = np.array([5/9, 8/9, 5/9])
-        
-        for xi_g, w_g in zip(xi_gauss, w_gauss):
-            # Map from [-1,1] to [0,1]
-            xi = (xi_g + 1) / 2
-            
-            # Quadratic shape function derivatives for θ
-            # dN/dξ
-            dN1_dxi = -3 + 4*xi
-            dN2_dxi = 4 - 8*xi
-            dN3_dxi = -1 + 4*xi
-            
-            # dθ/dx = (1/L) * dθ/dξ = (1/L) * (dN1*θ1 + dN2*θ2 + dN3*θ3)
-            # Bending strain energy density: (EI/2) * (dθ/dx)²
-            
-            # Shape function vector for dθ/dx (on rotation DOFs only)
-            # We only put derivatives on θ DOFs, not v DOFs
-            dtheta_dx_vec = np.zeros(n_bending)
-            dtheta_dx_vec[1] = dN1_dxi / L  # θ1 position
-            dtheta_dx_vec[3] = dN2_dxi / L  # θ2 position
-            dtheta_dx_vec[5] = dN3_dxi / L  # θ3 position
-            
-            # Add contribution to stiffness: ∫ EI * (dθ/dx)² dx
-            # Jacobian for transformation: dx = (L/2) dξ_gauss
-            k_bending += E * I * np.outer(dtheta_dx_vec, dtheta_dx_vec) * (L/2) * w_g
-            
-            # Now enforce compatibility: dw/dx = θ
-            # Using penalty method with carefully chosen penalty parameter
-            # The penalty value of 10000*EI/L was chosen empirically to:
-            # 1. Enforce the Euler-Bernoulli constraint θ = dw/dx reasonably well
-            # 2. Avoid numerical ill-conditioning from too large a penalty
-            # 3. Balance constraint enforcement with solution accuracy
-            # For better accuracy, use finer meshes rather than increasing penalty
-            penalty = 10000 * E * I / L  # Empirically chosen for constraint/conditioning balance
-            
-            # Quadratic shape functions for v
-            N1_v = (1 - xi) * (1 - 2*xi)
-            N2_v = 4 * xi * (1 - xi)
-            N3_v = xi * (2*xi - 1)
-            
-            # dw/dx = (1/L) * dw/dξ
-            dw_dx_vec = np.zeros(n_bending)
-            dw_dx_vec[0] = dN1_dxi / L  # v1 position
-            dw_dx_vec[2] = dN2_dxi / L  # v2 position
-            dw_dx_vec[4] = dN3_dxi / L  # v3 position
-            
-            # θ shape functions
-            theta_vec = np.zeros(n_bending)
-            theta_vec[1] = N1_v  # θ1 position
-            theta_vec[3] = N2_v  # θ2 position
-            theta_vec[5] = N3_v  # θ3 position
-            
-            # Constraint: (dw/dx - θ) = 0
-            constraint_vec = dw_dx_vec - theta_vec
-            k_bending += penalty * np.outer(constraint_vec, constraint_vec) * (L/2) * w_g
+        # 5-point Gauss integration on ξ ∈ [0, 1]
+        xi_g, w_g = np.polynomial.legendre.leggauss(5)
+        t = 0.5 * (xi_g + 1.0)
+        wt = 0.5 * w_g
+        for xi, wi in zip(t, wt):
+            _, _, d2_w_dx2, _, _, _ = _quintic_bending_shapes_3node(xi, L)
+            k_bending += E * I * np.outer(d2_w_dx2, d2_w_dx2) * wi * L
         
         # Assign bending stiffness to DOFs [v1, θ1, v2, θ2, v3, θ3]
         for i, ii in enumerate(bending_dofs):
@@ -432,39 +429,20 @@ class EulerBernoulliElement3Node(Element):
         L = self.length
         R = self.R
         
-        # Consistent load vector for linearly varying distributed loads
-        # For quadratic axial shape functions
-        q_avg = (q_ini + q_fim) / 2
-        fe_axial = L * np.array([
-            q_ini / 6,
-            2 * q_avg / 3,
-            q_fim / 6
-        ])
-        
-        # For bending with quadratic shape functions for displacement
-        # Using consistent load distribution for transverse load
-        p_avg = (p_ini + p_fim) / 2
-        fe_bending_v = L * np.array([
-            (7*p_ini + 3*p_fim) / 20,
-            (16*p_ini + 16*p_fim) / 70,
-            (3*p_ini + 7*p_fim) / 20
-        ])
-        
-        # For rotation DOFs, the consistent loads are typically zero
-        # unless there are distributed moments
-        fe_bending_theta = np.zeros(3)
-        
-        # Assemble into 9-DOF vector [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3]
         fe_local = np.zeros(9)
-        fe_local[0] = fe_axial[0]  # u1
-        fe_local[1] = fe_bending_v[0]  # v1
-        fe_local[2] = fe_bending_theta[0]  # θ1
-        fe_local[3] = fe_axial[1]  # u2
-        fe_local[4] = fe_bending_v[1]  # v2
-        fe_local[5] = fe_bending_theta[1]  # θ2
-        fe_local[6] = fe_axial[2]  # u3
-        fe_local[7] = fe_bending_v[2]  # v3
-        fe_local[8] = fe_bending_theta[2]  # θ3
+        xi_g, w_g = np.polynomial.legendre.leggauss(5)
+        t = 0.5 * (xi_g + 1.0)
+        wt = 0.5 * w_g
+
+        for xi, wi in zip(t, wt):
+            qx = q_ini + (q_fim - q_ini) * xi
+            px = p_ini + (p_fim - p_ini) * xi
+
+            n_ax = _quadratic_shape_functions_3node(xi)
+            n_w, _, _, _, _, _ = _quintic_bending_shapes_3node(xi, L)
+
+            fe_local[[0, 3, 6]] += n_ax * qx * wi * L
+            fe_local[[1, 2, 4, 5, 7, 8]] += n_w * px * wi * L
         
         # Transform to global coordinates
         fe_global = R @ fe_local
@@ -539,32 +517,21 @@ class EulerBernoulliElement3Node(Element):
             x = ti * L
             
             # Quadratic shape functions for axial
-            N1_ax = (1 - ti) * (1 - 2*ti)
-            N2_ax = 4 * ti * (1 - ti)
-            N3_ax = ti * (2*ti - 1)
+            N1_ax, N2_ax, N3_ax = _quadratic_shape_functions_3node(ti)
             qx = q_local(x)
             ia1 += N1_ax * qx * wi_scaled * L
             ia2 += N2_ax * qx * wi_scaled * L
             ia3 += N3_ax * qx * wi_scaled * L
 
-            # Quadratic shape functions for bending (v and θ independent)
-            N1_v = (1 - ti) * (1 - 2*ti)
-            N2_v = 4 * ti * (1 - ti)
-            N3_v = ti * (2*ti - 1)
-            
-            # For rotation, distributed loads typically don't contribute
-            # unless there are distributed moments
-            N1_theta = 0
-            N2_theta = 0
-            N3_theta = 0
-            
+            # Quintic bending interpolation for [v1, θ1, v2, θ2, v3, θ3]
+            n_w, _, _, _, _, _ = _quintic_bending_shapes_3node(ti, L)
             px = p_local(x)
-            iv1 += N1_v * px * wi_scaled * L
-            itheta1 += N1_theta * px * wi_scaled * L
-            iv2 += N2_v * px * wi_scaled * L
-            itheta2 += N2_theta * px * wi_scaled * L
-            iv3 += N3_v * px * wi_scaled * L
-            itheta3 += N3_theta * px * wi_scaled * L
+            iv1 += n_w[0] * px * wi_scaled * L
+            itheta1 += n_w[1] * px * wi_scaled * L
+            iv2 += n_w[2] * px * wi_scaled * L
+            itheta2 += n_w[3] * px * wi_scaled * L
+            iv3 += n_w[4] * px * wi_scaled * L
+            itheta3 += n_w[5] * px * wi_scaled * L
 
         # Local consistent vector [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
         flocal = np.array([ia1, iv1, itheta1, ia2, iv2, itheta2, ia3, iv3, itheta3], dtype=float)
@@ -579,15 +546,14 @@ class EulerBernoulliElement3Node(Element):
         For the 3-node Euler-Bernoulli element, recover end moments from element
         equilibrium (K_local · d_local) and linearly interpolate between ends.
         """
+        E = self.material.E
+        I = self.section.inertia
         L = self.length
         xi = x / L
-
-        f_local = self._recover_local_nodal_forces(displacements)
-        # Sign convention aligned with 2-node elements:
-        # M(0) = -F_theta_start, M(L) = F_theta_end
-        M0 = -f_local[2]
-        ML = f_local[8]
-        return M0 * (1.0 - xi) + ML * xi
+        d_local = np.asarray(displacements, dtype=float)
+        d_bending = d_local[[1, 2, 4, 5, 7, 8]]
+        _, _, d2_w_dx2, _, _, _ = _quintic_bending_shapes_3node(xi, L)
+        return E * I * np.dot(d2_w_dx2, d_bending)
 
     def shear_force(self, x, displacements):
         """
@@ -595,14 +561,14 @@ class EulerBernoulliElement3Node(Element):
         Recover end shears from element equilibrium (K_local · d_local) and
         linearly interpolate between element ends.
         """
+        E = self.material.E
+        I = self.section.inertia
         L = self.length
         xi = x / L
-
-        f_local = self._recover_local_nodal_forces(displacements)
-        # Internal shears from nodal equilibrium at element ends
-        V0 = f_local[1]
-        VL = -f_local[7]
-        return V0 * (1.0 - xi) + VL * xi
+        d_local = np.asarray(displacements, dtype=float)
+        d_bending = d_local[[1, 2, 4, 5, 7, 8]]
+        _, _, _, d3_w_dx3, _, _ = _quintic_bending_shapes_3node(xi, L)
+        return E * I * np.dot(d3_w_dx3, d_bending)
 
     def _recover_local_nodal_forces(self, displacements):
         """Recover local nodal force vector f_local = K_local · d_local."""
@@ -965,18 +931,13 @@ class TimoshenkoElement2Node(Element):
 
 class TimoshenkoElement3Node(Element):
     """
-    3-node Timoshenko beam element with quadratic shape functions.
+    3-node Timoshenko beam element with decoupled interpolation orders.
 
     The element has 9 DOFs: [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3]
     - All three nodes have rotation DOFs (unlike Euler-Bernoulli 3-node)
     - Axial: quadratic shape functions for u
-    - Bending: quadratic shape functions for both v and θ (independent)
+    - Bending: quintic interpolation for v and quadratic interpolation for θ
     - Includes shear deformation effects
-
-    Shape functions (ξ = x/L):
-    - N1 = (1-ξ)(1-2ξ)  (node 1)
-    - N2 = 4ξ(1-ξ)      (node 2, center)
-    - N3 = ξ(2ξ-1)      (node 3)
     """
     dofs_per_node = 3  # Each node has [u, v, θ] DOFs
 
@@ -1011,7 +972,10 @@ class TimoshenkoElement3Node(Element):
         """
         Stiffness matrix for 3-node Timoshenko beam element.
         
-        Uses quadratic shape functions for both displacement and rotation.
+        Uses decoupled interpolation:
+        - axial u: quadratic
+        - bending v: quintic
+        - rotation θ: quadratic
         Includes shear deformation effects through the shear coefficient.
         
         The stiffness matrix is computed using numerical integration (Gauss quadrature)
@@ -1070,12 +1034,10 @@ class TimoshenkoElement3Node(Element):
             xi = (xi_g + 1) / 2
             
             # Quadratic shape functions for θ
-            dN1_theta = (-3 + 4*xi) / L
-            dN2_theta = (4 - 8*xi) / L
-            dN3_theta = (-1 + 4*xi) / L
+            dn_theta_dx = np.array([(-3 + 4*xi) / L, (4 - 8*xi) / L, (-1 + 4*xi) / L], dtype=float)
             
             # Bending stiffness: E*I*(dθ/dx)²
-            dtheta_vec = np.array([0, dN1_theta, 0, dN2_theta, 0, dN3_theta])
+            dtheta_vec = np.array([0, dn_theta_dx[0], 0, dn_theta_dx[1], 0, dn_theta_dx[2]])
             k_bending_shear += E * I * np.outer(dtheta_vec, dtheta_vec) * (L/2) * w_g
         
         # Reduced integration (2-point) for shear stiffness to avoid shear locking
@@ -1087,29 +1049,13 @@ class TimoshenkoElement3Node(Element):
             # Map from [-1,1] to [0,1]
             xi = (xi_g + 1) / 2
             
-            # Quadratic shape functions and derivatives for v
-            N1_v = (1 - xi) * (1 - 2*xi)
-            N2_v = 4 * xi * (1 - xi)
-            N3_v = xi * (2*xi - 1)
-            
-            dN1_v = (-3 + 4*xi) / L
-            dN2_v = (4 - 8*xi) / L
-            dN3_v = (-1 + 4*xi) / L
-            
-            # Quadratic shape functions for θ
-            N1_theta = (1 - xi) * (1 - 2*xi)
-            N2_theta = 4 * xi * (1 - xi)
-            N3_theta = xi * (2*xi - 1)
-            
-            # Shape function vectors for v and θ
-            # v = [N1_v, 0, N2_v, 0, N3_v, 0]
-            # θ = [0, N1_theta, 0, N2_theta, 0, N3_theta]
-            # dv/dx = [dN1_v, 0, dN2_v, 0, dN3_v, 0]
-            
+            _, dn_w_dx, _, _, _, _ = _quintic_bending_shapes_3node(xi, L)
+            n_theta = _quadratic_shape_functions_3node(xi)
+
             # Shear stiffness: κ*G*A*(dv/dx - θ)²
-            dv_vec = np.array([dN1_v, 0, dN2_v, 0, dN3_v, 0])
-            theta_vec = np.array([0, -N1_theta, 0, -N2_theta, 0, -N3_theta])
-            gamma_vec = dv_vec + theta_vec  # dv/dx - θ
+            dv_vec = dn_w_dx
+            theta_vec = np.array([0, n_theta[0], 0, n_theta[1], 0, n_theta[2]])
+            gamma_vec = dv_vec - theta_vec
             k_bending_shear += As * G * np.outer(gamma_vec, gamma_vec) * (L/2) * w_g
         
         # Assign bending and shear stiffness
@@ -1136,39 +1082,20 @@ class TimoshenkoElement3Node(Element):
         L = self.length
         R = self.R
         
-        # Consistent load vector for linearly varying distributed loads
-        # For quadratic axial shape functions
-        q_avg = (q_ini + q_fim) / 2
-        fe_axial = L * np.array([
-            q_ini / 6,
-            2 * q_avg / 3,
-            q_fim / 6
-        ])
-        
-        # For bending with quadratic shape functions
-        # Using consistent load distribution for transverse load
-        p_avg = (p_ini + p_fim) / 2
-        fe_bending_v = L * np.array([
-            (7*p_ini + 3*p_fim) / 20,
-            (16*p_ini + 16*p_fim) / 70,
-            (3*p_ini + 7*p_fim) / 20
-        ])
-        
-        # For rotation DOFs, the consistent loads are typically zero
-        # unless there are distributed moments
-        fe_bending_theta = np.zeros(3)
-        
-        # Assemble into 9-DOF vector [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3]
         fe_local = np.zeros(9)
-        fe_local[0] = fe_axial[0]  # u1
-        fe_local[1] = fe_bending_v[0]  # v1
-        fe_local[2] = fe_bending_theta[0]  # θ1
-        fe_local[3] = fe_axial[1]  # u2
-        fe_local[4] = fe_bending_v[1]  # v2
-        fe_local[5] = fe_bending_theta[1]  # θ2
-        fe_local[6] = fe_axial[2]  # u3
-        fe_local[7] = fe_bending_v[2]  # v3
-        fe_local[8] = fe_bending_theta[2]  # θ3
+        xi_g, w_g = np.polynomial.legendre.leggauss(5)
+        t = 0.5 * (xi_g + 1.0)
+        wt = 0.5 * w_g
+
+        for xi, wi in zip(t, wt):
+            qx = q_ini + (q_fim - q_ini) * xi
+            px = p_ini + (p_fim - p_ini) * xi
+
+            n_ax = _quadratic_shape_functions_3node(xi)
+            n_w, _, _, _, _, _ = _quintic_bending_shapes_3node(xi, L)
+
+            fe_local[[0, 3, 6]] += n_ax * qx * wi * L
+            fe_local[[1, 2, 4, 5, 7, 8]] += n_w * px * wi * L
         
         # Transform to global coordinates
         fe_global = R @ fe_local
@@ -1246,32 +1173,21 @@ class TimoshenkoElement3Node(Element):
             x = ti * L
             
             # Quadratic shape functions for axial
-            N1_ax = (1 - ti) * (1 - 2*ti)
-            N2_ax = 4 * ti * (1 - ti)
-            N3_ax = ti * (2*ti - 1)
+            N1_ax, N2_ax, N3_ax = _quadratic_shape_functions_3node(ti)
             qx = q_local(x)
             ia1 += N1_ax * qx * wi_scaled * L
             ia2 += N2_ax * qx * wi_scaled * L
             ia3 += N3_ax * qx * wi_scaled * L
 
-            # Quadratic shape functions for bending (v and θ independent)
-            N1_v = (1 - ti) * (1 - 2*ti)
-            N2_v = 4 * ti * (1 - ti)
-            N3_v = ti * (2*ti - 1)
-            
-            # For rotation, distributed loads typically don't contribute
-            # unless there are distributed moments
-            N1_theta = 0
-            N2_theta = 0
-            N3_theta = 0
-            
+            # Quintic bending interpolation for [v1, θ1, v2, θ2, v3, θ3]
+            n_w, _, _, _, _, _ = _quintic_bending_shapes_3node(ti, L)
             px = p_local(x)
-            iv1 += N1_v * px * wi_scaled * L
-            itheta1 += N1_theta * px * wi_scaled * L
-            iv2 += N2_v * px * wi_scaled * L
-            itheta2 += N2_theta * px * wi_scaled * L
-            iv3 += N3_v * px * wi_scaled * L
-            itheta3 += N3_theta * px * wi_scaled * L
+            iv1 += n_w[0] * px * wi_scaled * L
+            itheta1 += n_w[1] * px * wi_scaled * L
+            iv2 += n_w[2] * px * wi_scaled * L
+            itheta2 += n_w[3] * px * wi_scaled * L
+            iv3 += n_w[4] * px * wi_scaled * L
+            itheta3 += n_w[5] * px * wi_scaled * L
 
         # Local consistent vector [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
         flocal = np.array([ia1, iv1, itheta1, ia2, iv2, itheta2, ia3, iv3, itheta3], dtype=float)
@@ -1296,13 +1212,10 @@ class TimoshenkoElement3Node(Element):
         
         xi = x / L
         
-        # Derivatives of quadratic shape functions
-        dN1_theta = (-3 + 4*xi) / L
-        dN2_theta = (4 - 8*xi) / L
-        dN3_theta = (-1 + 4*xi) / L
+        dn_theta_dx = np.array([(-3 + 4*xi) / L, (4 - 8*xi) / L, (-1 + 4*xi) / L], dtype=float)
         
         # dθ/dx
-        dtheta_dx = dN1_theta * theta1 + dN2_theta * theta2 + dN3_theta * theta3
+        dtheta_dx = dn_theta_dx[0] * theta1 + dn_theta_dx[1] * theta2 + dn_theta_dx[2] * theta3
         
         return E * I * dtheta_dx
     
