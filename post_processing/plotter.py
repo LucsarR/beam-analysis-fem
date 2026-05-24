@@ -443,7 +443,7 @@ def find_position_on_structure(structure_results, x_global, y_global):
     return best
 
 
-def _auto_diagram_points_per_element(n_elements, target_total_points=1000, min_points=10, max_points=100):
+def _auto_diagram_points_per_element(n_elements, target_total_points=1000, min_points=10, max_points=1000):
     """Auto-scale points-per-element from a global target for the whole structure."""
     safe_elements = max(int(n_elements), 1)
     points = int(round(target_total_points / safe_elements))
