@@ -550,6 +550,29 @@ if "structural_behavior_mode" not in st.session_state:
 tab1, tab2, tab3, tab4 = st.tabs(["📐 Structure Definition", "⚙️ Analysis", "📊 Results", "ℹ️ Help"])
 
 with tab1:
+    behavior_labels = STRUCTURAL_BEHAVIOR_TYPES
+    behavior_keys = list(behavior_labels.keys())
+    behavior_values = list(behavior_labels.values())
+    current_behavior = st.session_state.get("structural_behavior_mode", "frame")
+    if current_behavior not in behavior_values:
+        current_behavior = "frame"
+
+    with st.expander("🧩 Structural Behavior", expanded=True):
+        st.markdown("Choose the structural model before defining constraints and loads.")
+        selected_behavior_label = st.selectbox(
+            "Structural behavior",
+            options=behavior_keys,
+            index=behavior_values.index(current_behavior),
+            help="This controls which DOFs, loads, and results are relevant in the interface.",
+        )
+        st.session_state["structural_behavior_mode"] = behavior_labels[selected_behavior_label]
+        st.info(
+            "ℹ️ **Behavior modes**\n"
+            "- **Truss**: axial response only (tension/compression).\n"
+            "- **Beam**: shear + bending response.\n"
+            "- **Frame**: axial + shear + bending (default)."
+        )
+
     # --- Input: Nodes ---
     with st.expander("🔵 Nodes", expanded=True):
         st.markdown("Define the nodal points of your structure.")
@@ -1245,7 +1268,13 @@ with tab1:
             e[2] == "reddy_bickford_2node"
             for e in st.session_state.get("elements", [])
         )
-        _dof_options_c = [0, 1, 2, 3] if _has_reddy else [0, 1, 2]
+        _behavior = st.session_state.get("structural_behavior_mode", "frame")
+        if _behavior == "truss":
+            _dof_options_c = [0, 1]
+        elif _behavior == "beam":
+            _dof_options_c = [1, 2, 3] if _has_reddy else [1, 2]
+        else:
+            _dof_options_c = [0, 1, 2, 3] if _has_reddy else [0, 1, 2]
         _dof_labels_c = ["X displacement", "Y displacement", "Rotation", "Slope (dv/dx)"]
         
         n_constraints = st.number_input(
@@ -1305,7 +1334,12 @@ with tab1:
         st.markdown("Define concentrated forces and moments at nodes.")
 
         # Detect Reddy elements (computed above for constraints, re-used here)
-        _dof_options_l = [0, 1, 2, 3] if _has_reddy else [0, 1, 2]
+        if _behavior == "truss":
+            _dof_options_l = [0, 1]
+        elif _behavior == "beam":
+            _dof_options_l = [1, 2, 3] if _has_reddy else [1, 2]
+        else:
+            _dof_options_l = [0, 1, 2, 3] if _has_reddy else [0, 1, 2]
         _dof_labels_l = ["X force", "Y force", "Moment", "Applied slope (dv/dx)"]
         
         n_loads = st.number_input(
@@ -1365,6 +1399,14 @@ with tab1:
     # --- Input: Distributed Loads ---
     with st.expander("📏 Distributed Loads", expanded=True):
         st.markdown("Define distributed loads along elements.")
+        if _behavior == "truss":
+            st.caption("Truss mode accepts only axial distributed loads (local axial direction).")
+            _dist_direction_options = ['l']
+        elif _behavior == "beam":
+            st.caption("Beam mode accepts only transverse distributed loads (local transverse direction).")
+            _dist_direction_options = ['t']
+        else:
+            _dist_direction_options = ['x', 'y', 'l', 't']
         
         n_dist_loads = st.number_input(
             "Number of distributed loads",
@@ -1400,9 +1442,9 @@ with tab1:
                     
                     direction = col3.selectbox(
                         f"Direction",
-                        options=['x', 'y', 'l', 't'],
+                        options=_dist_direction_options,
                         format_func=lambda x: {"x": "Global X", "y": "Global Y", "l": "Local axial", "t": "Local transverse"}[x],
-                        index=['x', 'y', 'l', 't'].index(existing_dload[3] if existing_dload and len(existing_dload) > 3 else 'y'),
+                        index=_dist_direction_options.index(existing_dload[3]) if existing_dload and len(existing_dload) > 3 and existing_dload[3] in _dist_direction_options else 0,
                         key=f"ddir_{i}",
                         help=f"Load {i+1} direction"
                     )
@@ -1473,26 +1515,6 @@ with tab1:
 with tab2:
     st.header("⚙️ Run Analysis")
     st.markdown("Execute finite element analysis on the defined structure.")
-
-    behavior_labels = STRUCTURAL_BEHAVIOR_TYPES
-    behavior_keys = list(behavior_labels.keys())
-    behavior_values = list(behavior_labels.values())
-    current_behavior = st.session_state.get("structural_behavior_mode", "frame")
-    if current_behavior not in behavior_values:
-        current_behavior = "frame"
-    selected_behavior_label = st.selectbox(
-        "Structural behavior",
-        options=behavior_keys,
-        index=behavior_values.index(current_behavior),
-        help="Choose which effects are kept in the assembled matrix.",
-    )
-    st.session_state["structural_behavior_mode"] = behavior_labels[selected_behavior_label]
-    st.info(
-        "ℹ️ **Behavior modes**\n"
-        "- **Truss**: keeps only axial response (tension/compression).\n"
-        "- **Beam**: keeps shear and bending response.\n"
-        "- **Frame**: keeps axial + shear + bending (default)."
-    )
 
     integration_mode_labels = {
         "Analytical (default)": "analytical",
@@ -1709,6 +1731,7 @@ with tab2:
 
                     # Display results preview
                     st.subheader("📊 Nodal Displacements")
+                    behavior_mode = st.session_state.get("structural_behavior_mode", "frame")
                     disp_data = []
                     for i, node in enumerate(mesh.nodes):
                         u = displacements[dpn*i]
@@ -1724,6 +1747,11 @@ with tab2:
                         }
                         if dpn == 4 and dpn*i+3 < len(displacements):
                             row["dv/dx"] = f"{displacements[dpn*i+3]:.6e}"
+                        if behavior_mode == "truss":
+                            row.pop("θ", None)
+                            row.pop("dv/dx", None)
+                        elif behavior_mode == "beam":
+                            row.pop("U", None)
                         disp_data.append(row)
                     
                     df_disp = pd.DataFrame(disp_data)
@@ -1794,11 +1822,18 @@ with tab3:
         # Diagrams
         with st.expander("📈 Force Diagrams", expanded=True):
             col1, col2 = st.columns([2, 1])
+            behavior_mode = st.session_state.get("structural_behavior_mode", "frame")
+            if behavior_mode == "truss":
+                diagram_options = ["Normal Force"]
+            elif behavior_mode == "beam":
+                diagram_options = ["Moment", "Shear"]
+            else:
+                diagram_options = ["Moment", "Shear", "Normal Force"]
             
             with col1:
                 diagram_type = st.selectbox(
                     "Select diagram type",
-                    options=["Moment", "Shear", "Normal Force"],
+                    options=diagram_options,
                     index=0,
                     help="Choose which force diagram to display"
                 )
@@ -2101,16 +2136,16 @@ with tab4:
       and cross-section geometry (rectangular, circular, I-beam, C-section, and more)
     - **Elements**: Connect nodes with beam elements, select element formulation, assign a property
       set, and choose the mesh refinement (number of sub-divisions per element)
+    - **Structural behavior**: Choose the analysis model:
+      - **Truss** for axial-only response
+      - **Beam** for shear + bending response
+      - **Frame** (default) for axial + shear + bending response
     - **Constraints**: Apply boundary conditions — fix translations and/or rotations at nodes,
       or prescribe non-zero displacements
     - **Point Loads**: Apply concentrated forces or moments at nodes
     - **Distributed Loads**: Apply loads distributed along elements (constant, linear, or custom function)
     
     #### 2. Run Analysis (Analysis Tab)
-    - Choose **Structural behavior**:
-      - **Truss** when members carry only axial forces (tension/compression)
-      - **Beam** when members carry shear forces and bending moments
-      - **Frame** (default) when members carry axial + shear + bending effects
     - Review the model summary (node/element counts, mesh node count)
     - Click **👁️ Preview Structure with Loads** to inspect the setup before solving
     - Click **🚀 Run Analysis** to perform the FEM calculation

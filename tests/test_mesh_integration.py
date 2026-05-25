@@ -825,6 +825,88 @@ def test_streamlit_app_structural_behavior_option_applied():
     print("✓ test_streamlit_app_structural_behavior_option_applied passed")
 
 
+def test_streamlit_app_structural_behavior_filters_inputs_and_outputs():
+    """Structural behavior should filter relevant input options and output views."""
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+    expected = {
+        "truss": {
+            "constraint_dofs": ["X displacement", "Y displacement"],
+            "point_dofs": ["X force", "Y force"],
+            "diagram_options": ["Normal Force"],
+            "disp_cols": {"Node", "X", "Y", "U", "V"},
+            "forbidden_disp_cols": {"θ", "dv/dx"},
+        },
+        "beam": {
+            "constraint_dofs": ["Y displacement", "Rotation"],
+            "point_dofs": ["Y force", "Moment"],
+            "diagram_options": ["Moment", "Shear"],
+            "disp_cols": {"Node", "X", "Y", "V", "θ"},
+            "forbidden_disp_cols": {"U", "dv/dx"},
+        },
+        "frame": {
+            "constraint_dofs": ["X displacement", "Y displacement", "Rotation"],
+            "point_dofs": ["X force", "Y force", "Moment"],
+            "diagram_options": ["Moment", "Shear", "Normal Force"],
+            "disp_cols": {"Node", "X", "Y", "U", "V", "θ"},
+            "forbidden_disp_cols": {"dv/dx"},
+        },
+    }
+
+    for behavior in ("truss", "beam", "frame"):
+        at = AppTest.from_file("app.py")
+        at.session_state["nodes"] = [(0.0, 0.0), (2.0, 0.0)]
+        at.session_state["properties"] = [{
+            "name": "Property_1",
+            "material": mat,
+            "mat_input_mode": "Calculate G (from E and ν)",
+            "section": sec,
+            "section_type": "rectangular_bar",
+            "section_kwargs": {"width": 0.05, "height": 0.1}
+        }]
+        at.session_state["elements"] = [(1, 2, "euler_bernoulli_2node", "Property_1", 1)]
+        if behavior == "truss":
+            at.session_state["constraints"] = [(1, 0, 0.0), (1, 1, 0.0)]
+            at.session_state["point_loads"] = [(2, 0, 1000.0)]
+        elif behavior == "beam":
+            at.session_state["constraints"] = [(1, 1, 0.0), (1, 2, 0.0)]
+            at.session_state["point_loads"] = [(2, 1, -1000.0)]
+        else:
+            at.session_state["constraints"] = [(1, 0, 0.0), (1, 1, 0.0), (1, 2, 0.0)]
+            at.session_state["point_loads"] = [(2, 0, 1000.0), (2, 1, -1000.0)]
+        at.session_state["distributed_loads"] = []
+        at.session_state["structural_behavior_mode"] = behavior
+
+        at.run(timeout=60)
+
+        dof_box = next(sb for sb in at.selectbox if sb.label == "DOF")
+        point_box = next(sb for sb in at.selectbox if sb.label == "Direction")
+
+        assert dof_box.options == expected[behavior]["constraint_dofs"]
+        assert point_box.options == expected[behavior]["point_dofs"]
+
+        run_analysis_button = next(btn for btn in at.button if btn.label == "🚀 Run Analysis")
+        run_analysis_button.click()
+        at.run(timeout=60)
+        errors = [err.value for err in at.error]
+        assert not any(msg.startswith("❌ Analysis failed") for msg in errors), (
+            f"Run Analysis failed for behavior={behavior}: {errors}"
+        )
+
+        diagram_box = next(sb for sb in at.selectbox if sb.label == "Select diagram type")
+        assert diagram_box.options == expected[behavior]["diagram_options"]
+
+        disp_df = at.dataframe[0].value
+        disp_cols = set(disp_df.columns)
+        assert disp_cols == expected[behavior]["disp_cols"], (
+            f"{behavior}: unexpected displacement columns {disp_cols}"
+        )
+        for forbidden_col in expected[behavior]["forbidden_disp_cols"]:
+            assert forbidden_col not in disp_cols, f"{behavior}: {forbidden_col} should not be shown"
+
+    print("✓ test_streamlit_app_structural_behavior_filters_inputs_and_outputs passed")
+
+
 def test_streamlit_app_force_diagram_resolution_slider_removed():
     """Force diagram tab should not expose manual points-per-element slider."""
     mat = Material(1, 210e9, 0.3)
@@ -885,6 +967,7 @@ def run_all_tests():
     test_streamlit_app_numerical_integration_option_applied_to_elements()
     test_structural_behavior_modes_supported_across_element_types()
     test_streamlit_app_structural_behavior_option_applied()
+    test_streamlit_app_structural_behavior_filters_inputs_and_outputs()
     test_streamlit_app_force_diagram_resolution_slider_removed()
     
     print("\n" + "="*60)
