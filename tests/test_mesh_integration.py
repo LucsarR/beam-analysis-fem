@@ -680,7 +680,7 @@ def test_streamlit_app_run_analysis_with_mixed_dofs():
         at.session_state["distributed_loads"] = []
 
         at.run(timeout=60)
-        run_analysis_button = next(btn for btn in at.button if btn.label == "🚀 Run Analysis")
+        run_analysis_button = next(btn for btn in at.button if btn.label == "Run Analysis")
         run_analysis_button.click()
         at.run(timeout=60)
 
@@ -715,7 +715,7 @@ def test_streamlit_app_numerical_integration_option_applied_to_elements():
     at.session_state["stiffness_integration_mode"] = "numerical"
 
     at.run(timeout=60)
-    run_analysis_button = next(btn for btn in at.button if btn.label == "🚀 Run Analysis")
+    run_analysis_button = next(btn for btn in at.button if btn.label == "Run Analysis")
     run_analysis_button.click()
     at.run(timeout=60)
 
@@ -798,7 +798,7 @@ def test_streamlit_app_structural_behavior_option_applied():
         at.session_state["structural_behavior_mode"] = behavior
 
         at.run(timeout=60)
-        run_analysis_button = next(btn for btn in at.button if btn.label == "🚀 Run Analysis")
+        run_analysis_button = next(btn for btn in at.button if btn.label == "Run Analysis")
         run_analysis_button.click()
         at.run(timeout=60)
 
@@ -885,7 +885,7 @@ def test_streamlit_app_structural_behavior_filters_inputs_and_outputs():
         assert dof_box.options == expected[behavior]["constraint_dofs"]
         assert point_box.options == expected[behavior]["point_dofs"]
 
-        run_analysis_button = next(btn for btn in at.button if btn.label == "🚀 Run Analysis")
+        run_analysis_button = next(btn for btn in at.button if btn.label == "Run Analysis")
         run_analysis_button.click()
         at.run(timeout=60)
         errors = [err.value for err in at.error]
@@ -928,7 +928,7 @@ def test_streamlit_app_force_diagram_resolution_slider_removed():
     at.session_state["distributed_loads"] = []
 
     at.run(timeout=60)
-    run_analysis_button = next(btn for btn in at.button if btn.label == "🚀 Run Analysis")
+    run_analysis_button = next(btn for btn in at.button if btn.label == "Run Analysis")
     run_analysis_button.click()
     at.run(timeout=60)
 
