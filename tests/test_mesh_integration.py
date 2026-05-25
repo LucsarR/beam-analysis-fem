@@ -727,6 +727,104 @@ def test_streamlit_app_numerical_integration_option_applied_to_elements():
     print("✓ test_streamlit_app_numerical_integration_option_applied_to_elements passed")
 
 
+def test_structural_behavior_modes_supported_across_element_types():
+    """Truss, beam, and frame behavior modes should solve across all element formulations."""
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+    element_types = (
+        "euler_bernoulli_2node",
+        "euler_bernoulli_3node",
+        "timoshenko_2node",
+        "timoshenko_3node",
+        "reddy_bickford_2node",
+    )
+
+    for element_type in element_types:
+        for behavior in ("truss", "beam", "frame"):
+            mesh = Mesh()
+            n1 = mesh.add_node(0.0, 0.0)
+            n2 = mesh.add_node(1.0, 0.0)
+            mesh.add_element(n1, n2, mat, sec, element_type=element_type)
+
+            if behavior == "truss":
+                mesh.constraints.add(Constraint(n1, 0, 0.0))
+                p = PointLoad(1000.0, 0)
+            else:
+                mesh.constraints.add(Constraint(n1, 0, 0.0))
+                mesh.constraints.add(Constraint(n1, 1, 0.0))
+                mesh.constraints.add(Constraint(n1, 2, 0.0))
+                if element_type == "reddy_bickford_2node":
+                    mesh.constraints.add(Constraint(n1, 3, 0.0))
+                p = PointLoad(-1000.0, 1)
+            p.node = n2
+            mesh.point_loads.append(p)
+
+            analysis = EulerBernoulliAnalysis(mesh, structural_behavior=behavior)
+            analysis.assemble()
+            displacements = analysis.solve()
+
+            assert np.all(np.isfinite(displacements)), (
+                f"Non-finite displacement for element={element_type}, behavior={behavior}"
+            )
+
+    print("✓ test_structural_behavior_modes_supported_across_element_types passed")
+
+
+def test_streamlit_app_structural_behavior_option_applied():
+    """Run Analysis should apply selected structural behavior mode."""
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+
+    for behavior in ("truss", "beam", "frame"):
+        at = AppTest.from_file("app.py")
+        at.session_state["nodes"] = [(0.0, 0.0), (2.0, 0.0)]
+        at.session_state["properties"] = [{
+            "name": "Property_1",
+            "material": mat,
+            "mat_input_mode": "Calculate G (from E and ν)",
+            "section": sec,
+            "section_type": "rectangular_bar",
+            "section_kwargs": {"width": 0.05, "height": 0.1}
+        }]
+        at.session_state["elements"] = [(1, 2, "euler_bernoulli_2node", "Property_1", 1)]
+        at.session_state["constraints"] = [(1, 0, 0.0), (1, 1, 0.0), (1, 2, 0.0)]
+        if behavior == "truss":
+            at.session_state["point_loads"] = [(2, 0, 1000.0)]
+        elif behavior == "beam":
+            at.session_state["point_loads"] = [(2, 1, -1000.0)]
+        else:
+            at.session_state["point_loads"] = [(2, 0, 1000.0), (2, 1, -1000.0)]
+        at.session_state["distributed_loads"] = []
+        at.session_state["structural_behavior_mode"] = behavior
+
+        at.run(timeout=60)
+        run_analysis_button = next(btn for btn in at.button if btn.label == "🚀 Run Analysis")
+        run_analysis_button.click()
+        at.run(timeout=60)
+
+        errors = [err.value for err in at.error]
+        assert not any(msg.startswith("❌ Analysis failed") for msg in errors), (
+            f"Run Analysis failed for behavior={behavior}: {errors}"
+        )
+
+        disp = at.session_state["displacements"]
+        dpn = at.session_state["dpn"]
+        base = dpn * (2 - 1)
+        u, v, theta = disp[base], disp[base + 1], disp[base + 2]
+        if behavior == "truss":
+            assert abs(u) > 1e-16
+            assert abs(v) < 1e-14
+            assert abs(theta) < 1e-14
+        elif behavior == "beam":
+            assert abs(u) < 1e-14
+            assert abs(v) > 1e-16
+        else:
+            assert abs(u) > 1e-16
+            assert abs(v) > 1e-16
+
+    print("✓ test_streamlit_app_structural_behavior_option_applied passed")
+
+
 def test_streamlit_app_force_diagram_resolution_slider_removed():
     """Force diagram tab should not expose manual points-per-element slider."""
     mat = Material(1, 210e9, 0.3)
@@ -785,6 +883,8 @@ def run_all_tests():
     test_internal_force_recovery_across_element_types()
     test_streamlit_app_run_analysis_with_mixed_dofs()
     test_streamlit_app_numerical_integration_option_applied_to_elements()
+    test_structural_behavior_modes_supported_across_element_types()
+    test_streamlit_app_structural_behavior_option_applied()
     test_streamlit_app_force_diagram_resolution_slider_removed()
     
     print("\n" + "="*60)

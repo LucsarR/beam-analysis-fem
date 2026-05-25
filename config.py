@@ -23,6 +23,13 @@ ELEMENT_TYPES = {
     "Reddy-Bickford 2-node": "reddy_bickford_2node"
 }
 
+# Supported structural behavior modes
+STRUCTURAL_BEHAVIOR_TYPES = {
+    "Frame (default) — axial + shear + bending": "frame",
+    "Truss — axial only": "truss",
+    "Beam — shear + bending only": "beam",
+}
+
 # Numerical tolerance
 TOL = 1e-8
 

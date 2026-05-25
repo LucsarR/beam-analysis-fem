@@ -20,7 +20,14 @@ from fem.section import create_section
 from fem.constraint import Constraint
 from fem.load import PointLoad, DistributedLoad
 from fem.analysis import EulerBernoulliAnalysis
-from config import DEFAULT_E, DEFAULT_NU, DEFAULT_G, SECTION_TYPES, ELEMENT_TYPES
+from config import (
+    DEFAULT_E,
+    DEFAULT_NU,
+    DEFAULT_G,
+    SECTION_TYPES,
+    ELEMENT_TYPES,
+    STRUCTURAL_BEHAVIOR_TYPES,
+)
 
 # --- Post-processing and Plotting ---
 from post_processing.forces import StructureResults
@@ -85,6 +92,7 @@ def save_project_to_dict():
             "created": datetime.now().isoformat(),
             "description": st.session_state.get("project_description", ""),
             "stiffness_integration_mode": st.session_state.get("stiffness_integration_mode", "analytical"),
+            "structural_behavior_mode": st.session_state.get("structural_behavior_mode", "frame"),
         },
         "nodes": st.session_state.get("nodes", []),
         "properties": [],
@@ -124,6 +132,7 @@ def load_project_from_dict(project_data):
         persistent_keys = {
             "nodes", "properties", "elements", "constraints", "point_loads",
             "distributed_loads", "project_description", "stiffness_integration_mode",
+            "structural_behavior_mode",
         }
         for k in list(st.session_state.keys()):
             if k not in persistent_keys:
@@ -136,6 +145,7 @@ def load_project_from_dict(project_data):
         st.session_state["distributed_loads"] = project_data.get("distributed_loads", [])
         st.session_state["project_description"] = project_data.get("metadata", {}).get("description", "")
         st.session_state["stiffness_integration_mode"] = project_data.get("metadata", {}).get("stiffness_integration_mode", "analytical")
+        st.session_state["structural_behavior_mode"] = project_data.get("metadata", {}).get("structural_behavior_mode", "frame")
         
         # Reconstruct properties
         properties = []
@@ -533,6 +543,8 @@ if "distributed_loads" not in st.session_state:
     st.session_state["distributed_loads"] = []
 if "stiffness_integration_mode" not in st.session_state:
     st.session_state["stiffness_integration_mode"] = "analytical"
+if "structural_behavior_mode" not in st.session_state:
+    st.session_state["structural_behavior_mode"] = "frame"
 
 # --- Main Content: Tabs for better organization ---
 tab1, tab2, tab3, tab4 = st.tabs(["📐 Structure Definition", "⚙️ Analysis", "📊 Results", "ℹ️ Help"])
@@ -1462,6 +1474,26 @@ with tab2:
     st.header("⚙️ Run Analysis")
     st.markdown("Execute finite element analysis on the defined structure.")
 
+    behavior_labels = STRUCTURAL_BEHAVIOR_TYPES
+    behavior_keys = list(behavior_labels.keys())
+    behavior_values = list(behavior_labels.values())
+    current_behavior = st.session_state.get("structural_behavior_mode", "frame")
+    if current_behavior not in behavior_values:
+        current_behavior = "frame"
+    selected_behavior_label = st.selectbox(
+        "Structural behavior",
+        options=behavior_keys,
+        index=behavior_values.index(current_behavior),
+        help="Choose which effects are kept in the assembled matrix.",
+    )
+    st.session_state["structural_behavior_mode"] = behavior_labels[selected_behavior_label]
+    st.info(
+        "ℹ️ **Behavior modes**\n"
+        "- **Truss**: keeps only axial response (tension/compression).\n"
+        "- **Beam**: keeps shear and bending response.\n"
+        "- **Frame**: keeps axial + shear + bending (default)."
+    )
+
     integration_mode_labels = {
         "Analytical (default)": "analytical",
         "Numerical integration": "numerical",
@@ -1646,7 +1678,10 @@ with tab2:
                     # Timoshenko, and mixed) through polymorphism. Each element implements its
                     # own stiffness_matrix() method according to its respective beam theory.
                     # For new code, consider using BeamAnalysis for clarity.
-                    analysis = EulerBernoulliAnalysis(mesh)
+                    analysis = EulerBernoulliAnalysis(
+                        mesh,
+                        structural_behavior=st.session_state["structural_behavior_mode"],
+                    )
                     analysis.assemble()
                     displacements = analysis.solve()
 
@@ -2072,6 +2107,10 @@ with tab4:
     - **Distributed Loads**: Apply loads distributed along elements (constant, linear, or custom function)
     
     #### 2. Run Analysis (Analysis Tab)
+    - Choose **Structural behavior**:
+      - **Truss** when members carry only axial forces (tension/compression)
+      - **Beam** when members carry shear forces and bending moments
+      - **Frame** (default) when members carry axial + shear + bending effects
     - Review the model summary (node/element counts, mesh node count)
     - Click **👁️ Preview Structure with Loads** to inspect the setup before solving
     - Click **🚀 Run Analysis** to perform the FEM calculation
