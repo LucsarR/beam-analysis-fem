@@ -59,10 +59,62 @@ class BeamAnalysis(Analysis):
       3-DOF nodes: [u, v, θ]          (Euler-Bernoulli, Timoshenko)
       4-DOF nodes: [u, v, θ, dv/dx]  (Reddy-Bickford)
     """
+    def __init__(self, mesh, structural_behavior="frame"):
+        super().__init__(mesh)
+        valid_behaviors = {"frame", "truss", "beam"}
+        if structural_behavior not in valid_behaviors:
+            raise ValueError(
+                f"Unsupported structural_behavior '{structural_behavior}'. "
+                f"Expected one of {sorted(valid_behaviors)}."
+            )
+        self.structural_behavior = structural_behavior
+        self.active_global_dofs = None
+
     def _dofs_per_node(self):
         """Return the number of DOFs per node for this mesh."""
         return max((getattr(el, 'dofs_per_node', 3)
                     for el in self.mesh.elements), default=3)
+
+    def _element_active_dof_mask(self, element, n_elem_dof):
+        """
+        Return a boolean mask selecting active local DOFs for the configured
+        structural behavior (frame/truss/beam).
+        """
+        if self.structural_behavior == "frame":
+            return np.ones(n_elem_dof, dtype=bool)
+
+        elem_dpn = getattr(element, 'dofs_per_node', 3)
+        n_nodes = 3 if hasattr(element, 'node_center') and element.node_center is not None else 2
+        mask = np.zeros(n_elem_dof, dtype=bool)
+
+        for node_i in range(n_nodes):
+            base = node_i * elem_dpn
+            if self.structural_behavior == "truss":
+                mask[base] = True  # u DOF
+            else:  # beam
+                if elem_dpn >= 2:
+                    mask[base + 1] = True  # v DOF
+                if elem_dpn >= 3:
+                    mask[base + 2:base + elem_dpn] = True  # rotation (+ higher-order bending DOFs)
+
+        return mask
+
+    def _apply_structural_behavior_to_element(self, element, k_local, fe_local):
+        """
+        Zero inactive DOF rows/cols and forces according to structural behavior.
+        """
+        n_elem_dof = len(fe_local)
+        mask = self._element_active_dof_mask(element, n_elem_dof)
+        if mask.all():
+            return k_local, fe_local, mask
+
+        k_filtered = np.array(k_local, copy=True)
+        f_filtered = np.array(fe_local, copy=True)
+        inactive = ~mask
+        k_filtered[inactive, :] = 0.0
+        k_filtered[:, inactive] = 0.0
+        f_filtered[inactive] = 0.0
+        return k_filtered, f_filtered, mask
 
     def _get_element_dof_indices(self, element, dpn):
         """Return global DOF index list for the given element.
@@ -83,13 +135,18 @@ class BeamAnalysis(Analysis):
         n_dof = dpn * n_nodes
         self.K_global = np.zeros((n_dof, n_dof))
         self.F_global = np.zeros(n_dof)
+        self.active_global_dofs = np.zeros(n_dof, dtype=bool)
 
         # Assemble element matrices
         for element in self.mesh.elements:
             k_local = element.stiffness_matrix()
             fe_local = element.force_vector()
+            k_local, fe_local, active_mask = self._apply_structural_behavior_to_element(
+                element, k_local, fe_local
+            )
             dof_indices = self._get_element_dof_indices(element, dpn)
             n_elem_dof = len(dof_indices)
+            self.active_global_dofs[np.asarray(dof_indices)[active_mask]] = True
             for i in range(n_elem_dof):
                 for j in range(n_elem_dof):
                     self.K_global[dof_indices[i], dof_indices[j]] += k_local[i, j]
@@ -97,6 +154,18 @@ class BeamAnalysis(Analysis):
 
         # Apply point loads
         for load in getattr(self.mesh, "point_loads", []):
+            idx = dpn * (load.node.id - 1) + load.direction
+            if (
+                self.structural_behavior != "frame"
+                and self.active_global_dofs is not None
+                and 0 <= idx < len(self.active_global_dofs)
+                and not self.active_global_dofs[idx]
+                and abs(load.magnitude) > 0.0
+            ):
+                raise ValueError(
+                    f"Point load applied to inactive DOF {load.direction} at node {load.node.id} "
+                    f"for structural behavior '{self.structural_behavior}'."
+                )
             load.apply(self.F_global, load.node, dpn)
 
         # Apply distributed loads
@@ -104,6 +173,9 @@ class BeamAnalysis(Analysis):
             el = load.element
             fe_global = load.apply(el)
             dof_indices = self._get_element_dof_indices(el, dpn)
+            _, fe_global, _ = self._apply_structural_behavior_to_element(
+                el, np.zeros((len(fe_global), len(fe_global))), fe_global
+            )
             n_elem_dof = len(dof_indices)
             for i in range(n_elem_dof):
                 self.F_global[dof_indices[i]] += fe_global[i]
