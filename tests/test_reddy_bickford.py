@@ -787,6 +787,113 @@ def test_beam_theory_polynomial_distributed_loads():
 
 
 # ===========================================================================
+# Test 12 – Interpolation-order effects on polynomial-load force recovery
+# ===========================================================================
+def test_polynomial_load_interpolation_order_effects():
+    """
+    Verify that, for polynomial distributed loads on a coarse mesh:
+      - Higher-order interpolation (3-node) improves force-diagram fidelity
+        within the same beam-theory family.
+      - Different beam theories with similar interpolation order keep comparable
+        resultant-force trends (especially for statically determinate cases).
+    """
+    print("\n" + "=" * 60)
+    print("Test 12: Interpolation Order Effects (Polynomial Loads, Coarse Mesh)")
+    print("=" * 60)
+
+    n = 2  # intentionally coarse to highlight interpolation-order differences
+    h = H_THICK
+
+    def _analytical_reactions(a0, a1, a2):
+        total = a0 * L_BEAM + a1 * L_BEAM**2 / 2 + a2 * L_BEAM**3 / 3
+        first_moment = a0 * L_BEAM**2 / 2 + a1 * L_BEAM**3 / 3 + a2 * L_BEAM**4 / 4
+        r_right = -first_moment / L_BEAM
+        r_left = -total - r_right
+        return r_left, r_right
+
+    def _analytical_moment(x, r_left, a0, a1, a2):
+        return r_left * x + a0 * x**2 / 2 + a1 * x**3 / 6 + a2 * x**4 / 12
+
+    def _analytical_shear(x, r_left, a0, a1, a2):
+        return r_left + a0 * x + a1 * x**2 / 2 + a2 * x**3 / 3
+
+    load_cases = [
+        ("Linear", -1000.0, -250.0, 0.0),
+        ("Quadratic", -1000.0, -250.0, -80.0),
+    ]
+
+    for case_name, a0, a1, a2 in load_cases:
+        print(f"\n  Case: {case_name} load (coarse mesh, n={n})")
+        r_left_ana, r_right_ana = _analytical_reactions(a0, a1, a2)
+        func = f"({a0}) + ({a1})*x + ({a2})*x**2"
+        xs = np.linspace(0.1 * L_BEAM, 0.9 * L_BEAM, 31)
+
+        m_ref = max(abs(_analytical_moment(x, r_left_ana, a0, a1, a2)) for x in xs)
+        v_ref = max(abs(_analytical_shear(x, r_left_ana, a0, a1, a2)) for x in xs)
+
+        errors = {}
+        etypes = [
+            "euler_bernoulli_2node",
+            "euler_bernoulli_3node",
+            "timoshenko_2node",
+            "timoshenko_3node",
+            "reddy_bickford_2node",
+        ]
+
+        for etype in etypes:
+            mesh, nodes = _make_simply_supported(n, h, etype=etype)
+            for element in mesh.elements:
+                load = DistributedLoad(direction="y", func=func)
+                load.element = element
+                mesh.distributed_loads.append(load)
+
+            displacements, results = _solve(mesh)
+            ry_left, ry_right = _get_reactions(mesh, nodes, displacements)
+
+            rel_left = abs((ry_left - r_left_ana) / r_left_ana)
+            rel_right = abs((ry_right - r_right_ana) / r_right_ana)
+            assert rel_left < 6e-3 and rel_right < 6e-3, (
+                f"{etype}: support reactions should remain accurate even on coarse mesh"
+            )
+
+            m_err = max(
+                abs(results.M(float(x)) - _analytical_moment(float(x), r_left_ana, a0, a1, a2))
+                for x in xs
+            ) / m_ref
+            v_err = max(
+                abs(results.V(float(x)) - _analytical_shear(float(x), r_left_ana, a0, a1, a2))
+                for x in xs
+            ) / v_ref
+            errors[etype] = (m_err, v_err)
+
+            print(f"    {etype:>21}: M err={m_err*100:.2f}%, V err={v_err*100:.2f}%")
+
+        # Euler-Bernoulli: 3-node (higher-order interpolation) should capture
+        # polynomial-force trends much better than 2-node on coarse meshes.
+        assert errors["euler_bernoulli_3node"][0] < 0.25 * errors["euler_bernoulli_2node"][0], \
+            "Euler-Bernoulli 3-node should reduce moment error versus 2-node"
+        assert errors["euler_bernoulli_3node"][1] < 0.25 * errors["euler_bernoulli_2node"][1], \
+            "Euler-Bernoulli 3-node should reduce shear error versus 2-node"
+
+        # Timoshenko: higher-order element mainly improves recovered shear curve.
+        assert errors["timoshenko_3node"][1] < 0.75 * errors["timoshenko_2node"][1], \
+            "Timoshenko 3-node should improve shear-force recovery versus 2-node"
+
+        # Across 2-node theories, moment errors remain of similar order since
+        # static resultants dominate and interpolation order is comparable.
+        m_errs_2node = [
+            errors["euler_bernoulli_2node"][0],
+            errors["timoshenko_2node"][0],
+            errors["reddy_bickford_2node"][0],
+        ]
+        assert max(m_errs_2node) < 1.25 * min(m_errs_2node), \
+            "2-node EB/Timoshenko/Reddy moment-error levels should remain comparable"
+
+    print("OK Higher-order interpolation improves polynomial-load force recovery as expected")
+    return True
+
+
+# ===========================================================================
 # Main test runner
 # ===========================================================================
 if __name__ == "__main__":
@@ -802,6 +909,7 @@ if __name__ == "__main__":
         test_shear_force_recovery,
         test_normal_force_recovery,
         test_beam_theory_polynomial_distributed_loads,
+        test_polynomial_load_interpolation_order_effects,
     ]
 
     print("\n" + "=" * 70)
