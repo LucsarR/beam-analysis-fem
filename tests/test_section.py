@@ -334,9 +334,9 @@ def test_csection_shear_coefficient():
     """CSection: kappa ≈ A_web / A_total"""
     h, b, tw, tf = 0.15, 0.07, 0.008, 0.012
     s = CSection(1, h=h, b=b, tw=tw, tf=tf)
-    area_web = tw * h
-    area_total = area_web + 2 * b * tf
-    assert _close(s.shear_coefficient, area_web / area_total), f"kappa={s.shear_coefficient}"
+    area_total = tw * h + 2 * b * tf
+    shear_web_area = tw * (h - 2 * tf)
+    assert _close(s.shear_coefficient, shear_web_area / area_total), f"kappa={s.shear_coefficient}"
 
 
 # =============================================================================
@@ -422,9 +422,9 @@ def test_zsection_shear_coefficient():
     """ZSection: kappa ≈ A_web / A_total"""
     h, b, tw, tf = 0.15, 0.07, 0.008, 0.012
     s = ZSection(1, h=h, b=b, tw=tw, tf=tf)
-    area_web = tw * h
-    area_total = area_web + 2 * b * tf
-    assert _close(s.shear_coefficient, area_web / area_total), f"kappa={s.shear_coefficient}"
+    area_total = tw * h + 2 * b * tf
+    shear_web_area = tw * (h - 2 * tf)
+    assert _close(s.shear_coefficient, shear_web_area / area_total), f"kappa={s.shear_coefficient}"
 
 
 # =============================================================================
@@ -453,9 +453,9 @@ def test_hatsection_shear_coefficient():
     """HatSection: kappa ≈ A_web / A_total"""
     h, b, tw, tf = 0.12, 0.06, 0.007, 0.010
     s = HatSection(1, h=h, b=b, tw=tw, tf=tf)
-    area_web = tw * h
-    area_total = area_web + 2 * b * tf
-    assert _close(s.shear_coefficient, area_web / area_total), f"kappa={s.shear_coefficient}"
+    area_total = tw * h + 2 * b * tf
+    shear_web_area = tw * (h - 2 * tf)
+    assert _close(s.shear_coefficient, shear_web_area / area_total), f"kappa={s.shear_coefficient}"
 
 
 # =============================================================================
