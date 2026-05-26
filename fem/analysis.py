@@ -180,6 +180,27 @@ class BeamAnalysis(Analysis):
             for i in range(n_elem_dof):
                 self.F_global[dof_indices[i]] += fe_global[i]
 
+        # Apply nodal springs
+        for node in self.mesh.nodes:
+            for spring in getattr(node, "springs", []):
+                idx = dpn * (spring.node.id - 1) + spring.direction
+                if idx < 0 or idx >= n_dof:
+                    raise ValueError(
+                        f"Spring DOF {spring.direction} at node {spring.node.id} is out of bounds "
+                        f"for dofs_per_node={dpn}."
+                    )
+                if (
+                    self.structural_behavior != "frame"
+                    and self.active_global_dofs is not None
+                    and not self.active_global_dofs[idx]
+                    and abs(spring.stiffness) > 0.0
+                ):
+                    raise ValueError(
+                        f"Spring applied to inactive DOF {spring.direction} at node {spring.node.id} "
+                        f"for structural behavior '{self.structural_behavior}'."
+                    )
+                spring.apply(self.K_global, dpn)
+
     def _stabilize_inactive_dofs(self, tol=1e-12):
         """Pin unused global DOFs so mixed-DOF meshes remain solvable.
 

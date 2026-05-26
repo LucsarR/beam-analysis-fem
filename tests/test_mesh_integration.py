@@ -387,6 +387,66 @@ def test_node_attributes():
     print("✓ test_node_attributes passed")
 
 
+def test_linear_spring_support():
+    """Test translational spring support contribution and displacement response."""
+    mesh = Mesh()
+    n1 = mesh.add_node(0, 0)
+
+    k_linear = 2.0e5
+    p_axial = 500.0
+
+    mesh.constraints.add(Constraint(n1, 1, 0.0))
+    mesh.constraints.add(Constraint(n1, 2, 0.0))
+
+    load = PointLoad(p_axial, 0)
+    load.node = n1
+    mesh.point_loads.append(load)
+
+    n1.springs.append(Spring(n1, k_linear, 0))
+
+    analysis = EulerBernoulliAnalysis(mesh)
+    analysis.assemble()
+    assert np.isclose(analysis.K_global[0, 0], k_linear), "Linear spring stiffness not assembled"
+
+    displacements = analysis.solve()
+    expected_u = p_axial / k_linear
+    assert np.isclose(displacements[0], expected_u), (
+        f"Axial displacement mismatch: {displacements[0]} vs {expected_u}"
+    )
+
+    print("✓ test_linear_spring_support passed")
+
+
+def test_torsional_spring_support():
+    """Test torsional spring support contribution and rotation response."""
+    mesh = Mesh()
+    n1 = mesh.add_node(0, 0)
+
+    k_torsion = 4.0e4
+    m_applied = 120.0
+
+    mesh.constraints.add(Constraint(n1, 0, 0.0))
+    mesh.constraints.add(Constraint(n1, 1, 0.0))
+
+    load = PointLoad(m_applied, 2)
+    load.node = n1
+    mesh.point_loads.append(load)
+
+    n1.springs.append(Spring(n1, k_torsion, 2))
+
+    analysis = EulerBernoulliAnalysis(mesh)
+    analysis.assemble()
+    assert np.isclose(analysis.K_global[2, 2], k_torsion), "Torsional spring stiffness not assembled"
+
+    displacements = analysis.solve()
+    expected_theta = m_applied / k_torsion
+    assert np.isclose(displacements[2], expected_theta), (
+        f"Rotation mismatch: {displacements[2]} vs {expected_theta}"
+    )
+
+    print("✓ test_torsional_spring_support passed")
+
+
 def test_element_geometry():
     """Test element geometry calculations for inclined elements."""
     mesh = Mesh()
@@ -957,6 +1017,8 @@ def run_all_tests():
     test_get_element_by_id()
     test_export_mesh()
     test_node_attributes()
+    test_linear_spring_support()
+    test_torsional_spring_support()
     test_element_geometry()
     test_structure_results_integration()
     test_timoshenko_structure_results()
