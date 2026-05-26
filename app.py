@@ -62,18 +62,33 @@ def _func_str_to_latex(func_str: str) -> str:
 # --- Page Configuration ---
 st.set_page_config(
     page_title="FEM Beam Analysis Tool",
-    page_icon="🔧",
+    page_icon="📐",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-st.title("🔧 FEM Beam Analysis Tool")
-st.markdown("_A finite element analysis tool for beam structures_")
+st.title("FEM Beam Analysis Tool")
+st.markdown("Finite element analysis for beam structures.")
 
 # --- Hide number-input step buttons for float/coordinate fields where arbitrary values
 #     are entered, but keep +/- controls for integer fields (step=1). ---
 st.markdown("""
 <style>
+section.main > div.block-container {
+    max-width: 1200px;
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+}
+div[data-testid="stSidebar"] {
+    border-right: 1px solid rgba(49, 51, 63, 0.15);
+}
+div[data-testid="stExpander"] {
+    border: 1px solid rgba(49, 51, 63, 0.12);
+    border-radius: 8px;
+}
+div[role="tablist"] button p {
+    font-weight: 500;
+}
 div[data-testid="stNumberInput"] button {
     display: none !important;
 }
@@ -462,7 +477,7 @@ def create_section_preview(section_type, **kwargs):
 
 # --- Sidebar for Project Management ---
 with st.sidebar:
-    st.header("📁 Project Management")
+    st.header("Project")
     
     # Project Description
     project_desc = st.text_area(
@@ -476,14 +491,14 @@ with st.sidebar:
     st.divider()
     
     # Save Project
-    st.subheader("💾 Save Project")
+    st.subheader("Save")
     project_name = st.text_input("Project Name", value="my_project", key="save_project_name")
-    if st.button("📥 Save to File", use_container_width=True):
+    if st.button("Save to File", use_container_width=True):
         if project_name:
             project_data = save_project_to_dict()
             json_str = json.dumps(project_data, indent=2)
             st.download_button(
-                label="⬇️ Download Project File",
+                label="Download Project File",
                 data=json_str,
                 file_name=f"{project_name}.json",
                 mime="application/json",
@@ -496,14 +511,14 @@ with st.sidebar:
     st.divider()
     
     # Load Project
-    st.subheader("📂 Load Project")
+    st.subheader("Load")
     uploaded_file = st.file_uploader(
         "Choose a project file",
         type=["json"],
         help="Upload a previously saved project JSON file",
         key="project_loader"
     )
-    if st.button("📂 Load Project File", use_container_width=True, disabled=uploaded_file is None):
+    if st.button("Load Project File", use_container_width=True, disabled=uploaded_file is None):
         try:
             project_data = json.loads(uploaded_file.getvalue().decode("utf-8"))
             if load_project_from_dict(project_data):
@@ -516,7 +531,7 @@ with st.sidebar:
     st.divider()
     
     # New Project
-    if st.button("🆕 New Project", use_container_width=True):
+    if st.button("New Project", use_container_width=True):
         # Clear all session state so widget values reset to their defaults
         st.session_state.clear()
         st.success("✅ New project created!")
@@ -524,7 +539,7 @@ with st.sidebar:
     
     st.divider()
     st.markdown("---")
-    st.markdown("### ℹ️ About")
+    st.markdown("### About")
     st.markdown("**Version:** 1.0")
     st.markdown("**Author:** Lucas Sarmento")
 
@@ -547,7 +562,7 @@ if "structural_behavior_mode" not in st.session_state:
     st.session_state["structural_behavior_mode"] = "frame"
 
 # --- Main Content: Tabs for better organization ---
-tab1, tab2, tab3, tab4 = st.tabs(["📐 Structure Definition", "⚙️ Analysis", "📊 Results", "ℹ️ Help"])
+tab1, tab2, tab3, tab4 = st.tabs(["Structure Definition", "Analysis", "Results", "Help"])
 
 with tab1:
     behavior_labels = STRUCTURAL_BEHAVIOR_TYPES
@@ -557,7 +572,7 @@ with tab1:
     if current_behavior not in behavior_values:
         current_behavior = "frame"
 
-    with st.expander("🧩 Structural Behavior", expanded=True):
+    with st.expander("Structural Behavior", expanded=True):
         st.markdown("Choose the structural model before defining constraints and loads.")
         selected_behavior_label = st.selectbox(
             "Structural behavior",
@@ -574,7 +589,7 @@ with tab1:
         )
 
     # --- Input: Nodes ---
-    with st.expander("🔵 Nodes", expanded=True):
+    with st.expander("Nodes", expanded=True):
         st.markdown("Define the nodal points of your structure.")
         
         n_nodes = st.number_input(
@@ -629,7 +644,7 @@ with tab1:
         st.session_state["nodes"] = nodes
 
     # --- Input: Properties (Material + Section) ---
-    with st.expander("🔧 Properties (Material + Section)", expanded=True):
+    with st.expander("Properties (Material + Section)", expanded=True):
         st.markdown("Define material and section properties for your elements.")
         
         n_properties = st.number_input(
@@ -1183,7 +1198,7 @@ with tab1:
         st.success(f"✅ {n_properties} property set(s) defined successfully.")
 
     # --- Input: Elements ---
-    with st.expander("🔗 Elements", expanded=True):
+    with st.expander("Elements", expanded=True):
         st.markdown("Define beam elements connecting nodes.")
         
         if not properties:
@@ -1260,7 +1275,7 @@ with tab1:
             st.success(f"✅ {n_elements} element(s) defined successfully.")
 
     # --- Input: Constraints ---
-    with st.expander("🔒 Constraints (Boundary Conditions)", expanded=True):
+    with st.expander("Constraints (Boundary Conditions)", expanded=True):
         st.markdown("Define fixed or prescribed displacements and rotations.")
 
         # Detect whether any Reddy-Bickford element is in use (needs 4 DOFs/node)
@@ -1330,7 +1345,7 @@ with tab1:
             st.info("ℹ️ No constraints defined. The structure may be unstable without proper boundary conditions.")
 
     # --- Input: Point Loads ---
-    with st.expander("⬇️ Point Loads", expanded=True):
+    with st.expander("Point Loads", expanded=True):
         st.markdown("Define concentrated forces and moments at nodes.")
 
         # Detect Reddy elements (computed above for constraints, re-used here)
@@ -1397,7 +1412,7 @@ with tab1:
             st.info("ℹ️ No point loads defined.")
 
     # --- Input: Distributed Loads ---
-    with st.expander("📏 Distributed Loads", expanded=True):
+    with st.expander("Distributed Loads", expanded=True):
         st.markdown("Define distributed loads along elements.")
         if _behavior == "truss":
             st.caption("Truss mode accepts only axial distributed loads (local axial direction).")
@@ -1513,7 +1528,7 @@ with tab1:
 
 
 with tab2:
-    st.header("⚙️ Run Analysis")
+    st.header("Run Analysis")
     st.markdown("Execute finite element analysis on the defined structure.")
 
     integration_mode_labels = {
@@ -1529,7 +1544,7 @@ with tab2:
     st.session_state["stiffness_integration_mode"] = integration_mode_labels[selected_label]
     
     # Summary of model
-    with st.expander("📋 Model Summary", expanded=True):
+    with st.expander("Model Summary", expanded=True):
         col1, col2, col3 = st.columns(3)
         col1.metric("Nodes", len(nodes))
         col2.metric("Elements", len(st.session_state.get("elements", [])))
@@ -1586,7 +1601,7 @@ with tab2:
     
     if can_analyze:
         # Preview button - shows structure with loads before analysis
-        if st.button("👁️ Preview Structure with Loads", use_container_width=True):
+        if st.button("Preview Structure with Loads", use_container_width=True):
             with st.spinner("Generating structure preview..."):
                 try:
                     preview_fig = plot_structure_preview(
@@ -1605,7 +1620,7 @@ with tab2:
         
         st.divider()
         
-        if st.button("🚀 Run Analysis", type="primary", use_container_width=True):
+        if st.button("Run Analysis", type="primary", use_container_width=True):
             with st.spinner("Running finite element analysis..."):
                 try:
                     mesh = Mesh()
@@ -1730,7 +1745,7 @@ with tab2:
                     st.success("✅ Analysis completed successfully!")
 
                     # Display results preview
-                    st.subheader("📊 Nodal Displacements")
+                    st.subheader("Nodal Displacements")
                     behavior_mode = st.session_state.get("structural_behavior_mode", "frame")
                     disp_data = []
                     for i, node in enumerate(mesh.nodes):
@@ -1769,7 +1784,7 @@ with tab2:
                     
                     # Display reactions at constraints
                     if reactions:
-                        st.subheader("⚙️ Reaction Forces at Constraints")
+                        st.subheader("Reaction Forces at Constraints")
                         
                         # Map direction to labels
                         direction_labels = {0: "X", 1: "Y", 2: "Rotation", 3: "Slope (dv/dx)"}
@@ -1813,14 +1828,14 @@ with tab2:
         st.error("❌ Cannot run analysis. Please fix the validation errors above.")
 
 with tab3:
-    st.header("📊 Results Visualization")
+    st.header("Results Visualization")
     
     # Use session state for post-processing and plotting
     if "structure_results" in st.session_state:
         structure_results = st.session_state["structure_results"]
         
         # Diagrams
-        with st.expander("📈 Force Diagrams", expanded=True):
+        with st.expander("Force Diagrams", expanded=True):
             col1, col2 = st.columns([2, 1])
             behavior_mode = st.session_state.get("structural_behavior_mode", "frame")
             if behavior_mode == "truss":
@@ -1889,7 +1904,7 @@ with tab3:
                 )
             
             # --- Extract force value at an exact global position ----------
-            st.markdown("##### 📍 Extract value at exact position")
+            st.markdown("##### Extract value at exact position")
             use_query = st.checkbox(
                 "Query a specific (x, y) position",
                 value=False,
@@ -1923,7 +1938,7 @@ with tab3:
                 "Normal Force": "normal"
             }
             
-            if st.button("📊 Generate Diagram", use_container_width=True):
+            if st.button("Generate Diagram", use_container_width=True):
                 st.session_state["force_diagram_generated"] = True
             
             if st.session_state.get("force_diagram_generated", False):
@@ -1969,7 +1984,7 @@ with tab3:
                     st.error(f"Error generating diagram: {e}")
         
         # Normal Stress Distribution - Cross Section and Side View
-        with st.expander("🔍 Normal Stress Distribution - Cross Section & Side View", expanded=False):
+        with st.expander("Normal Stress Distribution - Cross Section & Side View", expanded=False):
             element_ids = [el.id for el in st.session_state["mesh"].elements]
             
             if element_ids:
@@ -2057,7 +2072,7 @@ with tab3:
                         )
                 
                 # --- Section-point query ------------------------------------------------
-                st.markdown("##### 📍 Extract stress at specific section position")
+                st.markdown("##### Extract stress at specific section position")
                 use_section_query = st.checkbox(
                     "Query a specific y-position in the cross-section",
                     value=False,
@@ -2078,7 +2093,7 @@ with tab3:
                     )
                 
                 if selected_element_result is not None and st.button(
-                    "🔍 Show Stress Distribution (Both Views)", use_container_width=True
+                    "Show Stress Distribution (Both Views)", use_container_width=True
                 ):
                     st.session_state["stress_dist_generated"] = True
                 
@@ -2096,7 +2111,7 @@ with tab3:
                             )
                         
                         # Display cross-section view (front view)
-                        st.subheader("📐 Cross-Section View (Front)")
+                        st.subheader("Cross-Section View (Front)")
                         fig_cross = plot_normal_stress_distribution(
                             selected_element_result,
                             x_pos,
@@ -2125,10 +2140,10 @@ with tab3:
         st.info("ℹ️ Please run the analysis first in the 'Analysis' tab.")
 
 with tab4:
-    st.header("ℹ️ Help & Instructions")
+    st.header("Help & Instructions")
     
     st.markdown("""
-    ### 🚀 Quick Start Guide
+    ### Quick Start Guide
     
     #### 1. Define Structure (Structure Definition Tab)
     - **Nodes**: Define the nodal points of your beam structure (x, y coordinates)
@@ -2147,8 +2162,8 @@ with tab4:
     
     #### 2. Run Analysis (Analysis Tab)
     - Review the model summary (node/element counts, mesh node count)
-    - Click **👁️ Preview Structure with Loads** to inspect the setup before solving
-    - Click **🚀 Run Analysis** to perform the FEM calculation
+    - Click **Preview Structure with Loads** to inspect the setup before solving
+    - Click **Run Analysis** to perform the FEM calculation
     - View nodal displacements and reaction forces at constrained DOFs
     - Download displacements and reactions as CSV files
     
