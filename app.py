@@ -18,6 +18,7 @@ from fem.mesh import Mesh
 from fem.material import Material
 from fem.section import create_section
 from fem.constraint import Constraint
+from fem.spring import Spring
 from fem.load import PointLoad, DistributedLoad
 from fem.analysis import EulerBernoulliAnalysis
 from config import (
@@ -113,6 +114,7 @@ def save_project_to_dict():
         "properties": [],
         "elements": st.session_state.get("elements", []),
         "constraints": st.session_state.get("constraints", []),
+        "springs": st.session_state.get("springs", []),
         "point_loads": st.session_state.get("point_loads", []),
         "distributed_loads": st.session_state.get("distributed_loads", [])
     }
@@ -146,7 +148,7 @@ def load_project_from_dict(project_data):
         # 'value' argument computed from the freshly loaded project data.
         persistent_keys = {
             "nodes", "properties", "elements", "constraints", "point_loads",
-            "distributed_loads", "project_description", "stiffness_integration_mode",
+            "distributed_loads", "springs", "project_description", "stiffness_integration_mode",
             "structural_behavior_mode",
         }
         for k in list(st.session_state.keys()):
@@ -156,6 +158,7 @@ def load_project_from_dict(project_data):
         st.session_state["nodes"] = project_data.get("nodes", [])
         st.session_state["elements"] = project_data.get("elements", [])
         st.session_state["constraints"] = project_data.get("constraints", [])
+        st.session_state["springs"] = project_data.get("springs", [])
         st.session_state["point_loads"] = project_data.get("point_loads", [])
         st.session_state["distributed_loads"] = project_data.get("distributed_loads", [])
         st.session_state["project_description"] = project_data.get("metadata", {}).get("description", "")
@@ -552,6 +555,8 @@ if "elements" not in st.session_state:
     st.session_state["elements"] = []
 if "constraints" not in st.session_state:
     st.session_state["constraints"] = []
+if "springs" not in st.session_state:
+    st.session_state["springs"] = []
 if "point_loads" not in st.session_state:
     st.session_state["point_loads"] = []
 if "distributed_loads" not in st.session_state:
@@ -1344,6 +1349,67 @@ with tab1:
         else:
             st.info("ℹ️ No constraints defined. The structure may be unstable without proper boundary conditions.")
 
+    # --- Input: Springs ---
+    with st.expander("Springs (Elastic Supports)", expanded=True):
+        st.markdown("Define linear and torsional nodal springs.")
+
+        if _behavior == "truss":
+            _dof_options_s = [0, 1]
+        elif _behavior == "beam":
+            _dof_options_s = [1, 2, 3] if _has_reddy else [1, 2]
+        else:
+            _dof_options_s = [0, 1, 2, 3] if _has_reddy else [0, 1, 2]
+        _dof_labels_s = ["X spring", "Y spring", "Torsional spring", "Slope spring (dv/dx)"]
+
+        n_springs = st.number_input(
+            "Number of springs",
+            min_value=0,
+            max_value=n_nodes * (4 if _has_reddy else 3),
+            value=len(st.session_state.get("springs", [])),
+            help="Define elastic supports by DOF stiffness."
+        )
+
+        springs = []
+        if n_springs > 0:
+            for i in range(n_springs):
+                with st.container(border=True):
+                    col1, col2, col3 = st.columns([2, 2, 2])
+                    existing_spring = st.session_state.get("springs", [])[i] if i < len(st.session_state.get("springs", [])) else None
+
+                    node_id = int(col1.number_input(
+                        "Node",
+                        min_value=1,
+                        max_value=n_nodes,
+                        value=existing_spring[0] if existing_spring else 1,
+                        key=f"snode_{i}",
+                        help=f"Spring {i+1} node"
+                    ))
+                    _existing_sdir = existing_spring[1] if existing_spring and len(existing_spring) > 1 else _dof_options_s[0]
+                    _sdir_default = _existing_sdir if _existing_sdir in _dof_options_s else _dof_options_s[0]
+                    _sdir_index = _dof_options_s.index(_sdir_default)
+                    direction = int(col2.selectbox(
+                        "DOF",
+                        options=_dof_options_s,
+                        format_func=lambda x: _dof_labels_s[x],
+                        index=_sdir_index,
+                        key=f"sdir_{i}",
+                        help=f"Spring {i+1} direction"
+                    ))
+                    stiffness = col3.number_input(
+                        "Stiffness",
+                        min_value=0.0,
+                        value=existing_spring[2] if existing_spring and len(existing_spring) > 2 else 0.0,
+                        format="%.6f",
+                        key=f"sk_{i}",
+                        help=f"Spring {i+1} stiffness"
+                    )
+                    springs.append((node_id, direction, stiffness))
+
+            st.session_state["springs"] = springs
+            st.success(f"✅ {n_springs} spring(s) defined successfully.")
+        else:
+            st.info("ℹ️ No springs defined.")
+
     # --- Input: Point Loads ---
     with st.expander("Point Loads", expanded=True):
         st.markdown("Define concentrated forces and moments at nodes.")
@@ -1550,10 +1616,11 @@ with tab2:
         col2.metric("Elements", len(st.session_state.get("elements", [])))
         col3.metric("Properties", len(st.session_state.get("properties", [])))
         
-        col4, col5, col6 = st.columns(3)
+        col4, col5, col6, col7 = st.columns(4)
         col4.metric("Constraints", len(st.session_state.get("constraints", [])))
-        col5.metric("Point Loads", len(st.session_state.get("point_loads", [])))
-        col6.metric("Distributed Loads", len(st.session_state.get("distributed_loads", [])))
+        col5.metric("Springs", len(st.session_state.get("springs", [])))
+        col6.metric("Point Loads", len(st.session_state.get("point_loads", [])))
+        col7.metric("Distributed Loads", len(st.session_state.get("distributed_loads", [])))
 
         # Show total number of mesh nodal points (including subdivision nodes)
         mesh_obj = st.session_state.get("mesh", None)
@@ -1684,6 +1751,11 @@ with tab2:
                     # Add constraints
                     for node_id, direction, value in st.session_state["constraints"]:
                         mesh.constraints.add(Constraint(mesh.get_node_by_id(node_id), direction, value))
+
+                    # Add springs
+                    for node_id, direction, stiffness in st.session_state.get("springs", []):
+                        node = mesh.get_node_by_id(node_id)
+                        node.springs.append(Spring(node, stiffness, direction))
                     
                     # Add point loads
                     for node_id, direction, magnitude in st.session_state["point_loads"]:

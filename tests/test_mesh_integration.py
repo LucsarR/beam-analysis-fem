@@ -787,6 +787,43 @@ def test_streamlit_app_numerical_integration_option_applied_to_elements():
     print("✓ test_streamlit_app_numerical_integration_option_applied_to_elements passed")
 
 
+def test_streamlit_app_applies_linear_and_torsional_springs():
+    """Run Analysis should transfer spring definitions from session state to mesh nodes."""
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+
+    at = AppTest.from_file("app.py")
+    at.session_state["nodes"] = [(0.0, 0.0), (1.0, 0.0)]
+    at.session_state["properties"] = [{
+        "name": "Property_1",
+        "material": mat,
+        "mat_input_mode": "Calculate G (from E and ν)",
+        "section": sec,
+        "section_type": "rectangular_bar",
+        "section_kwargs": {"width": 0.05, "height": 0.1}
+    }]
+    at.session_state["elements"] = [(1, 2, "euler_bernoulli_2node", "Property_1", 1)]
+    at.session_state["constraints"] = [(1, 0, 0.0), (1, 1, 0.0), (1, 2, 0.0)]
+    at.session_state["springs"] = [(2, 1, 1.5e5), (2, 2, 8.0e4)]
+    at.session_state["point_loads"] = [(2, 1, -1000.0)]
+    at.session_state["distributed_loads"] = []
+
+    at.run(timeout=60)
+    run_analysis_button = next(btn for btn in at.button if btn.label == "Run Analysis")
+    run_analysis_button.click()
+    at.run(timeout=60)
+
+    errors = [err.value for err in at.error]
+    assert not any(msg.startswith("❌ Analysis failed") for msg in errors), (
+        f"Run Analysis failed with springs: {errors}"
+    )
+
+    mesh_node = at.session_state["mesh"].get_node_by_id(2)
+    assert len(mesh_node.springs) == 2
+    assert {(sp.direction, sp.stiffness) for sp in mesh_node.springs} == {(1, 1.5e5), (2, 8.0e4)}
+    print("✓ test_streamlit_app_applies_linear_and_torsional_springs passed")
+
+
 def test_structural_behavior_modes_supported_across_element_types():
     """Truss, beam, and frame behavior modes should solve across all element formulations."""
     mat = Material(1, 210e9, 0.3)
@@ -1027,6 +1064,7 @@ def run_all_tests():
     test_internal_force_recovery_across_element_types()
     test_streamlit_app_run_analysis_with_mixed_dofs()
     test_streamlit_app_numerical_integration_option_applied_to_elements()
+    test_streamlit_app_applies_linear_and_torsional_springs()
     test_structural_behavior_modes_supported_across_element_types()
     test_streamlit_app_structural_behavior_option_applied()
     test_streamlit_app_structural_behavior_filters_inputs_and_outputs()
