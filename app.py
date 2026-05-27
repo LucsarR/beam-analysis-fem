@@ -1811,6 +1811,7 @@ with tab2:
                     # Prepare post-processing
                     structure_results = StructureResults(mesh, displacements, reactions, dpn)
                     st.session_state["structure_results"] = structure_results
+                    st.session_state["original_to_mesh_elements"] = original_to_mesh_elements
                     # Reset diagram visibility flags so new results are shown cleanly
                     st.session_state["force_diagram_generated"] = False
                     st.session_state["stress_dist_generated"] = False
@@ -2058,9 +2059,16 @@ with tab3:
         
         # Normal Stress Distribution - Cross Section and Side View
         with st.expander("Normal Stress Distribution - Cross Section & Side View", expanded=False):
-            element_ids = [el.id for el in st.session_state["mesh"].elements]
+            # Build a mapping from original element index to subelement IDs.
+            # When the mesh was built, original_to_mesh_elements was stored in session state.
+            # Fall back to a 1-to-1 mapping (mesh element id → itself) when not available.
+            original_to_mesh = st.session_state.get("original_to_mesh_elements", {})
+            if original_to_mesh:
+                orig_element_ids = sorted(original_to_mesh.keys())
+            else:
+                orig_element_ids = [el.id for el in st.session_state["mesh"].elements]
             
-            if element_ids:
+            if orig_element_ids:
                 # ---- Position selection mode --------------------------------
                 use_global_pos = st.checkbox(
                     "Use global (x, y) position to select element automatically",
@@ -2121,28 +2129,46 @@ with tab3:
                     col1, col2 = st.columns(2)
                     
                     with col1:
-                        selected_element_id = st.selectbox(
+                        selected_orig_id = st.selectbox(
                             "Select element",
-                            element_ids,
+                            orig_element_ids,
                             help="Choose element to analyze",
                             key="stress_element_selector"
                         )
                     
-                    selected_element_result = next(
-                        er for er in structure_results.element_results
-                        if er.element.id == selected_element_id
+                    # Resolve original element → subelements → ElementResults, sorted in order
+                    if original_to_mesh:
+                        sub_el_ids = original_to_mesh[selected_orig_id]
+                    else:
+                        sub_el_ids = [selected_orig_id]
+                    sub_el_results = sorted(
+                        (er for er in structure_results.element_results if er.element.id in sub_el_ids),
+                        key=lambda er: sub_el_ids.index(er.element.id),
                     )
+                    total_element_length = sum(er.length for er in sub_el_results)
                     
                     with col2:
-                        x_pos = st.slider(
+                        x_pos_global = st.slider(
                             "Position along element",
                             min_value=0.0,
-                            max_value=float(selected_element_result.length),
+                            max_value=float(total_element_length),
                             value=0.0,
                             step=0.01,
                             help="Select position along element to view stress",
                             key="stress_position_slider"
                         )
+                    
+                    # Map the global position along the original element to the
+                    # corresponding subelement and its local x coordinate.
+                    cumulative = 0.0
+                    selected_element_result = sub_el_results[-1]
+                    x_pos = float(sub_el_results[-1].length)
+                    for er in sub_el_results:
+                        if x_pos_global <= cumulative + er.length + 1e-12:
+                            selected_element_result = er
+                            x_pos = x_pos_global - cumulative
+                            break
+                        cumulative += er.length
                 
                 # --- Section-point query ------------------------------------------------
                 st.markdown("##### Extract stress at specific section position")
