@@ -1,23 +1,20 @@
 # Project To-Do List
 
-- [ ] Tentar fazer com integracao numerica como uma solucao paralela da matriz de rigidez
 - [ ] Testar 3node para ambos (Euler e Timo)
 - [ ] Shear Stress Distribution in Cross Section
-- [ ] Testar Springs com restricao rotacional tbm
 - [ ] Procurar por codigo duplicado(deixar mais clean)
 - [ ] Verificar distribuicao shear diagram esta estranho para femap_test
 - [ ] verificar timoshenko com subdivisions
 - [ ] verificar shear force e normal force com subdivision. Era para formar escada?
 - [ ] O numero do elemento ao exolher nas forcas nao tem limite
 - [ ] tem secoes sem desenho ainda tipo a z
+- [ ] Ao mostrar o normal stress distribution, os quanto tem subelementos atrapalha, fazer com que mostre o resultado do elemento inteiro, e nao de cada subelemento
 
 # Ajuste do front-end
 - [ ] Point Loads inicia em Y force arrumar
-- [ ] Load project buga ao tentar usar duas vezes ou modificar uma valor na mao
 
 # Ajuste finais
 - [ ] Atualizar README's (tanto do workspace quanto do tests)
 - [ ] Atualizar pagina do Github
-- [ ] Atualizar GUI para ter um ar mais moderno
 - [ ] Adicionar prints de tela no readme
 - [ ] PyInstaller para criar .exe
