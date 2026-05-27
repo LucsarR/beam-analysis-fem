@@ -35,6 +35,7 @@ from post_processing.forces import StructureResults
 from post_processing.plotter import (
     plot_structure_diagram,
     plot_normal_stress_distribution,
+    plot_shear_stress_distribution,
     plot_normal_stress_side_view,
     plot_structure_preview,
     find_position_on_structure,
@@ -2222,12 +2223,21 @@ with tab3:
                         st.subheader("↔️ Side View")
                         fig_side = plot_normal_stress_side_view(selected_element_result, x_pos)
                         st.plotly_chart(fig_side, use_container_width=True)
+
+                        # Display shear stress in cross-section
+                        st.subheader("Shear Stress Distribution (Cross-Section)")
+                        fig_shear_cross = plot_shear_stress_distribution(
+                            selected_element_result,
+                            x_pos,
+                        )
+                        st.plotly_chart(fig_shear_cross, use_container_width=True)
                         
                         # Add information box
                         st.info(
                             "💡 **How to interpret the views:**\n"
                             "- **Cross-Section View (Front)**: Shows stress distribution across the section at the cut position\n"
-                            "- **Side View**: Shows stress profile along the beam height with arrows indicating magnitude and direction"
+                            "- **Side View**: Shows stress profile along the beam height with arrows indicating magnitude and direction\n"
+                            "- **Shear Stress Distribution (Cross-Section)**: Shows the transverse shear-stress field from V at the cut (assuming load passes through the shear center)"
                         )
                     except Exception as e:
                         st.error(f"Error: {e}")
@@ -2272,6 +2282,7 @@ with tab4:
     - **Point Query**: Read the force/moment value at any position along the structure
     - **Normal Stress Distribution**: Examine the stress field across the cross-section
       at any cut position (cross-sectional view) and along the beam length (side view)
+    - **Shear Stress Distribution**: Inspect the cross-sectional shear-stress contour at any cut position
     
     #### 4. Save/Load Projects (Sidebar)
     - **Save**: Download the full project as a JSON file

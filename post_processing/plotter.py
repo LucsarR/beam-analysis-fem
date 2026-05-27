@@ -870,6 +870,117 @@ def plot_normal_stress_distribution(element_result, x, n_points=100, query_y=Non
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     return fig
 
+def plot_shear_stress_distribution(element_result, x, n_points=100):
+    """
+    Interactive Plotly plot: approximate 2D contour of shear stress over the
+    section shape at position x along the element.
+
+    Assumes transverse shear force is applied through the shear center
+    (no torsional shear component) and uses a row-wise Jourawski estimate:
+    tau(y) = V * Q(y) / (I * b(y)).
+    """
+    section = element_result.element.section
+    if not hasattr(section, "xy_grid"):
+        raise ValueError("Section type does not support 2D stress contour plotting.")
+
+    X, Y, mask = section.xy_grid(n_points)
+    V = element_result.shear_force(x)
+
+    if section.inertia is None or abs(section.inertia) < 1e-18:
+        raise ValueError("Section inertia must be defined to compute shear stress.")
+
+    n_rows = Y.shape[0]
+    if n_rows > 1:
+        dy = abs(float(np.mean(np.diff(Y[:, 0]))))
+    else:
+        dy = 1.0
+
+    row_width = np.zeros(n_rows)
+    row_first_moment = np.zeros(n_rows)
+    valid_rows = np.zeros(n_rows, dtype=bool)
+
+    for i in range(n_rows):
+        row_mask = mask[i, :]
+        if not np.any(row_mask):
+            continue
+        xi = np.sort(X[i, row_mask])
+        if xi.size > 1:
+            dx = float(np.mean(np.diff(xi)))
+        else:
+            x_full = X[i, :]
+            dx = float((np.max(x_full) - np.min(x_full)) / max(len(x_full) - 1, 1))
+        if dx <= 0:
+            continue
+
+        row_area = row_mask.sum() * dx * dy
+        row_y = float(np.mean(Y[i, row_mask]))
+        row_width[i] = row_mask.sum() * dx
+        row_first_moment[i] = row_y * row_area
+        valid_rows[i] = True
+
+    Q = np.zeros(n_rows)
+    running_Q = 0.0
+    for i in range(n_rows - 1, -1, -1):
+        if not valid_rows[i]:
+            continue
+        running_Q += row_first_moment[i]
+        Q[i] = running_Q
+
+    tau_rows = np.zeros(n_rows)
+    for i in range(n_rows):
+        if valid_rows[i] and row_width[i] > 1e-12:
+            tau_rows[i] = V * Q[i] / (section.inertia * row_width[i])
+
+    TAU = np.full_like(X, np.nan, dtype=float)
+    for i in range(n_rows):
+        if valid_rows[i]:
+            TAU[i, mask[i, :]] = tau_rows[i]
+
+    X_flat = X.flatten()
+    Y_flat = Y.flatten()
+    TAU_flat = TAU.flatten()
+    mask_flat = mask.flatten()
+    X_plot = X_flat[mask_flat]
+    Y_plot = Y_flat[mask_flat]
+    TAU_plot = TAU_flat[mask_flat]
+
+    fig = go.Figure(data=go.Scatter(
+        x=X_plot,
+        y=Y_plot,
+        mode='markers',
+        marker=dict(
+            size=6,
+            color=TAU_plot,
+            colorscale="RdBu",
+            colorbar=dict(title="Shear Stress"),
+            showscale=True
+        ),
+        text=[f"x={xv:.3f}<br>y={yv:.3f}<br>τ={tv:.3f}" for xv, yv, tv in zip(X_plot, Y_plot, TAU_plot)],
+        hoverinfo='text'
+    ))
+
+    x_min, x_max = np.min(X_plot), np.max(X_plot)
+    x_margin = 0.1 * (x_max - x_min)
+    fig.add_trace(go.Scatter(
+        x=[x_min - x_margin, x_max + x_margin],
+        y=[0.0, 0.0],
+        mode='lines',
+        line=dict(color='black', dash='dot', width=2),
+        hoverinfo='skip',
+        showlegend=False
+    ))
+
+    fig.update_layout(
+        title=f"Shear Stress Contour at x={x:.2f}",
+        xaxis_title="Section x",
+        yaxis_title="Section y",
+        width=600,
+        height=500,
+        showlegend=False
+    )
+    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    return fig
+
 def plot_normal_stress_side_view(element_result, x, n_points=30):
     """
     Interactive Plotly plot: Side view of normal stress distribution along the element height.
