@@ -168,6 +168,35 @@ def test_arrow_scaling():
 
     return True
 
+def test_spring_symbols():
+    """Test preview includes linear and torsional spring symbols"""
+    print("\n[TEST 7] Spring Symbols")
+    print("-" * 70)
+
+    nodes = [(0.0, 0.0), (1.0, 0.0)]
+    elements = [(1, 2, "euler_bernoulli_2node", "P1", 1)]
+    properties = [{"name": "P1", "material": None, "section": None}]
+    constraints = []
+    point_loads = []
+    distributed_loads = []
+    springs = [
+        (1, 1, 1000.0),  # linear spring
+        (2, 2, 500.0),   # torsional spring
+    ]
+
+    fig = plot_structure_preview(
+        nodes, elements, properties, constraints, point_loads, distributed_loads, springs=springs
+    )
+
+    assert isinstance(fig, go.Figure), "Should return a Plotly Figure object"
+    linear_traces = [tr for tr in fig.data if tr.name == "Linear Spring"]
+    torsional_traces = [tr for tr in fig.data if tr.name == "Torsional Spring"]
+    assert len(linear_traces) == 1, "Should include one linear spring symbol"
+    assert len(torsional_traces) == 1, "Should include one torsional spring symbol"
+
+    print("  ✓ Spring symbols rendered successfully")
+    return True
+
 
 def run_all_tests():
     """Run all tests for the preview function"""
@@ -182,6 +211,7 @@ def run_all_tests():
         test_angled_structure,
         test_invalid_node_ids,
         test_arrow_scaling,
+        test_spring_symbols,
     ]
     
     passed = 0

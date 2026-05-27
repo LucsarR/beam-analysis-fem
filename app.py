@@ -1677,7 +1677,8 @@ with tab2:
                         properties=st.session_state.get("properties", []),
                         constraints=st.session_state.get("constraints", []),
                         point_loads=st.session_state.get("point_loads", []),
-                        distributed_loads=st.session_state.get("distributed_loads", [])
+                        distributed_loads=st.session_state.get("distributed_loads", []),
+                        springs=st.session_state.get("springs", [])
                     )
                     st.plotly_chart(preview_fig, use_container_width=True)
                     st.success("✅ Structure preview generated successfully! Review your setup before running the analysis.")
