@@ -3,7 +3,7 @@ import plotly.graph_objects as go
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 
-def plot_structure_preview(nodes, elements, properties, constraints, point_loads, distributed_loads):
+def plot_structure_preview(nodes, elements, properties, constraints, point_loads, distributed_loads, springs=None):
     """
     Interactive Plotly plot: structure preview showing nodes, elements, loads, and constraints
     BEFORE analysis is run. This allows users to verify their setup before running the analysis.
@@ -15,6 +15,7 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
         constraints: List of (node_id, direction, value) tuples where direction is 0=x, 1=y, 2=rotation
         point_loads: List of (node_id, direction, magnitude) tuples where direction is 0=x, 1=y, 2=moment
         distributed_loads: List of (element_id, magnitude_start, magnitude_end, direction, func_str, load_type) tuples
+        springs: List of (node_id, direction, stiffness) tuples where direction is 0=x, 1=y, 2=torsion
     
     Returns:
         Plotly figure object
@@ -26,6 +27,7 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
         - Scaling automatically adjusts for structures with zero range (e.g., vertical/horizontal beams)
     """
     fig = go.Figure()
+    springs = springs or []
     
     # Plot nodes
     node_xs = [node[0] for node in nodes]
@@ -99,6 +101,61 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
             name=f'{constraint_labels.get(direction, "Unknown")}',
             hovertemplate=f'Constraint<br>Node: {node_id}<br>DOF: {constraint_labels.get(direction, "Unknown")}<br>Value: {value:.3f}<extra></extra>',
             showlegend=False
+        ))
+
+    # Plot springs (elastic supports)
+    spring_labels = {0: 'X spring', 1: 'Y spring', 2: 'Torsional spring', 3: 'Slope spring'}
+    for node_id, direction, stiffness in springs:
+        # Skip springs with invalid node IDs
+        if node_id < 1 or node_id > len(nodes):
+            continue
+
+        x, y = nodes[node_id-1]
+        label = spring_labels.get(direction, f'DOF {direction} spring')
+
+        if direction == 2:
+            # Draw a small spiral to represent torsional spring
+            theta = np.linspace(0.0, 2.5 * np.pi, 40)
+            r = np.linspace(scale * 0.04, scale * 0.22, len(theta))
+            spiral_x = x + r * np.cos(theta)
+            spiral_y = y + r * np.sin(theta)
+            fig.add_trace(go.Scatter(
+                x=spiral_x,
+                y=spiral_y,
+                mode='lines',
+                line=dict(color='teal', width=2),
+                name='Torsional Spring',
+                hovertemplate=f'{label}<br>Node: {node_id}<br>Stiffness: {stiffness:.3f}<extra></extra>',
+                showlegend=False,
+            ))
+            continue
+
+        # Draw a zig-zag line to represent linear spring
+        if direction == 0:
+            vx, vy = 1.0, 0.0
+        else:
+            vx, vy = 0.0, 1.0
+        px, py = -vy, vx
+
+        n_segments = 8
+        ts = np.linspace(0.0, 1.0, n_segments + 1)
+        spring_len = scale * 0.85
+        spring_amp = scale * 0.10
+        spring_x = []
+        spring_y = []
+        for i, t in enumerate(ts):
+            offset = 0.0 if i in (0, len(ts) - 1) else spring_amp * (1 if i % 2 else -1)
+            spring_x.append(x + vx * spring_len * t + px * offset)
+            spring_y.append(y + vy * spring_len * t + py * offset)
+
+        fig.add_trace(go.Scatter(
+            x=spring_x,
+            y=spring_y,
+            mode='lines',
+            line=dict(color='teal', width=2),
+            name='Linear Spring',
+            hovertemplate=f'{label}<br>Node: {node_id}<br>Stiffness: {stiffness:.3f}<extra></extra>',
+            showlegend=False,
         ))
     
     # Plot point loads as arrows
