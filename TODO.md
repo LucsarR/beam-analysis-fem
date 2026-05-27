@@ -8,7 +8,6 @@
 - [ ] verificar shear force e normal force com subdivision. Era para formar escada?
 - [ ] O numero do elemento ao exolher nas forcas nao tem limite
 - [ ] tem secoes sem desenho ainda tipo a z
-- [ ] Ao mostrar o normal stress distribution, os quanto tem subelementos atrapalha, fazer com que mostre o resultado do elemento inteiro, e nao de cada subelemento
 
 # Ajuste do front-end
 - [ ] Point Loads inicia em Y force arrumar
