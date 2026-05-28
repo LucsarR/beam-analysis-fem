@@ -1,0 +1,75 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "created": "2026-05-28T17:16:03.890455",
+    "description": "",
+    "stiffness_integration_mode": "analytical",
+    "structural_behavior_mode": "frame"
+  },
+  "nodes": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      5.0,
+      0.0
+    ]
+  ],
+  "properties": [
+    {
+      "name": "Property_1",
+      "material": {
+        "E": 1000000000.0,
+        "G": 384615384.6153846,
+        "nu": 0.3,
+        "input_mode": "Calculate G (from E and \u03bd)"
+      },
+      "section": {
+        "type": "general",
+        "kwargs": {
+          "area": 0.001,
+          "inertia": 1e-06
+        }
+      }
+    }
+  ],
+  "elements": [
+    [
+      1,
+      2,
+      "euler_bernoulli_3node",
+      "Property_1",
+      1
+    ]
+  ],
+  "constraints": [
+    [
+      1,
+      0,
+      0.0
+    ],
+    [
+      1,
+      1,
+      0.0
+    ],
+    [
+      1,
+      2,
+      0.0
+    ]
+  ],
+  "springs": [],
+  "point_loads": [],
+  "distributed_loads": [
+    [
+      1,
+      10.0,
+      0.0,
+      "y",
+      null,
+      "linear"
+    ]
+  ]
+}

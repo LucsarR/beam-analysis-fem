@@ -6,6 +6,7 @@
 - [ ] verificar shear force e normal force com subdivision. Era para formar escada?
 - [ ] O numero do elemento ao exolher nas forcas nao tem limite
 - [ ] tem secoes sem desenho ainda tipo a z
+- [ ] timoshenko 3-node ta usando polinomio quintuplo? no app aparece o momento linear, L=5, q_0=10.json
 
 # Ajuste do front-end
 - [ ] when adding a new Point Load at Point Loads the default direction that appers in app is the Y force. Make it the X force

@@ -1166,14 +1166,14 @@ with tab1:
                     
                     elif section_type == "general":
                         area = st.number_input(
-                            "Cross-sectional Area (m²)",
+                            "Cross-sectional Area",
                             value=existing_kwargs.get("area", 0.001),
                             format="%.6f",
                             min_value=0.000001,
                             key=f"area_{i}"
                         )
                         inertia = st.number_input(
-                            "Moment of Inertia (m⁴)",
+                            "Moment of Inertia",
                             value=existing_kwargs.get("inertia", 1e-6),
                             format="%.6e",
                             min_value=1e-12,
