@@ -1192,3 +1192,193 @@ def plot_normal_stress_side_view(element_result, x, n_points=30, display_x=None,
     )
     
     return fig
+
+
+def plot_deformed_shape(
+    structure_results,
+    scale_factor=None,
+    n_points=20,
+    show_original=True,
+    show_subdivision_nodes=True,
+    n_original_nodes=None,
+):
+    """
+    Interactive Plotly plot: original and deformed (scaled) shape of the structure.
+
+    The deformed positions are computed by adding the scaled local displacements
+    (transformed to global coordinates) to the original nodal positions.
+    Shape functions are used to interpolate displacements between nodes so that
+    the deformation curve is smooth.
+
+    Parameters
+    ----------
+    structure_results : StructureResults
+    scale_factor : float or None
+        Amplification applied to the computed displacements for visualisation.
+        When None the factor is chosen automatically so that the maximum
+        visible displacement equals 10 % of the overall structure size.
+    n_points : int
+        Number of sample points per element for the deformed curve.
+    show_original : bool
+        When True, the undeformed structure is drawn as a grey dashed line.
+    show_subdivision_nodes : bool
+        When False, only nodes with id ≤ n_original_nodes are labelled.
+    n_original_nodes : int or None
+        Number of user-defined (non-subdivision) nodes.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+    """
+    fig = go.Figure()
+
+    mesh = structure_results.mesh
+
+    # Overall structure bounds for auto-scaling
+    all_node_xs = [n.x for n in mesh.nodes]
+    all_node_ys = [n.y for n in mesh.nodes]
+    x_range = max(all_node_xs) - min(all_node_xs)
+    y_range = max(all_node_ys) - min(all_node_ys)
+    structure_size = max(x_range, y_range, 1.0)
+
+    # Find maximum nodal displacement magnitude for auto-scaling
+    max_disp = 0.0
+    for er in structure_results.element_results:
+        el = er.element
+        c, s = el.c, el.s
+        for x_local in np.linspace(0, er.length, n_points):
+            u_loc = er.axial_displacement(x_local)
+            v_loc = er.transverse_displacement(x_local)
+            disp_glob = np.sqrt((c * u_loc - s * v_loc) ** 2 + (s * u_loc + c * v_loc) ** 2)
+            if disp_glob > max_disp:
+                max_disp = disp_glob
+
+    if scale_factor is None:
+        if max_disp > 1e-14:
+            scale_factor = 0.10 * structure_size / max_disp
+        else:
+            scale_factor = 1.0
+
+    # --- Original structure (dashed grey) -----------------------------------
+    if show_original:
+        for er in structure_results.element_results:
+            n1 = er.element.node_start
+            n2 = er.element.node_end
+            fig.add_trace(go.Scatter(
+                x=[n1.x, n2.x],
+                y=[n1.y, n2.y],
+                mode='lines',
+                line=dict(color='lightgrey', width=2, dash='dash'),
+                hoverinfo='skip',
+                showlegend=False,
+                name='Original',
+            ))
+
+    # --- Deformed shape per element -----------------------------------------
+    first_deformed = True
+    for er in structure_results.element_results:
+        el = er.element
+        c, s = el.c, el.s
+        x1, y1 = el.node_start.x, el.node_start.y
+
+        xs_local = np.linspace(0, er.length, n_points)
+        ts = xs_local / er.length if er.length > 1e-14 else np.zeros(n_points)
+
+        # Undeformed global positions along element axis
+        x2, y2 = el.node_end.x, el.node_end.y
+        pxs = x1 + ts * (x2 - x1)
+        pys = y1 + ts * (y2 - y1)
+
+        # Displacement in global frame
+        u_locs = np.array([er.axial_displacement(xl) for xl in xs_local])
+        v_locs = np.array([er.transverse_displacement(xl) for xl in xs_local])
+        dx_glob = c * u_locs - s * v_locs
+        dy_glob = s * u_locs + c * v_locs
+
+        pxs_def = pxs + scale_factor * dx_glob
+        pys_def = pys + scale_factor * dy_glob
+
+        disp_magnitudes = np.sqrt(dx_glob**2 + dy_glob**2)
+
+        fig.add_trace(go.Scatter(
+            x=pxs_def.tolist(),
+            y=pys_def.tolist(),
+            mode='lines',
+            line=dict(color='royalblue', width=3),
+            customdata=np.column_stack([disp_magnitudes, dx_glob, dy_glob]),
+            hovertemplate=(
+                'x<sub>def</sub>=%{x:.4f}, y<sub>def</sub>=%{y:.4f}<br>'
+                '|u|=%{customdata[0]:.6g}<br>'
+                'Δx=%{customdata[1]:.6g}, Δy=%{customdata[2]:.6g}'
+                '<extra></extra>'
+            ),
+            showlegend=first_deformed,
+            name='Deformed shape',
+        ))
+        first_deformed = False
+
+    # --- Node markers on deformed shape -------------------------------------
+    for node in mesh.nodes:
+        if not show_subdivision_nodes and n_original_nodes is not None:
+            if node.id > n_original_nodes:
+                continue
+
+        # Find the ElementResult whose node_start matches this node to get displacement
+        u_node, v_node = 0.0, 0.0
+        c_node, s_node = 1.0, 0.0
+        for er in structure_results.element_results:
+            if er.element.node_start is node:
+                u_node = er.axial_displacement(0.0)
+                v_node = er.transverse_displacement(0.0)
+                c_node, s_node = er.element.c, er.element.s
+                break
+            elif er.element.node_end is node:
+                u_node = er.axial_displacement(er.length)
+                v_node = er.transverse_displacement(er.length)
+                c_node, s_node = er.element.c, er.element.s
+                break
+
+        dx_n = c_node * u_node - s_node * v_node
+        dy_n = s_node * u_node + c_node * v_node
+        xd = node.x + scale_factor * dx_n
+        yd = node.y + scale_factor * dy_n
+
+        fig.add_trace(go.Scatter(
+            x=[xd], y=[yd],
+            mode='markers+text',
+            marker=dict(color='royalblue', size=9, symbol='circle'),
+            text=[str(node.id)],
+            textposition='top right',
+            name=f'Node {node.id}',
+            hovertemplate=(
+                f'Node {node.id}<br>'
+                f'Deformed: ({xd:.4f}, {yd:.4f})<br>'
+                f'Original: ({node.x:.4f}, {node.y:.4f})<br>'
+                f'Δx={dx_n:.6g}, Δy={dy_n:.6g}'
+                f'<extra></extra>'
+            ),
+            showlegend=False,
+        ))
+
+    # --- Legend entries for original / deformed ------------------------------
+    if show_original:
+        fig.add_trace(go.Scatter(
+            x=[None], y=[None],
+            mode='lines',
+            line=dict(color='lightgrey', width=2, dash='dash'),
+            name='Original shape',
+            showlegend=True,
+        ))
+
+    fig.update_layout(
+        title=f"Deformed Shape (scale factor = {scale_factor:.4g}×)",
+        xaxis_title="x",
+        yaxis_title="y",
+        showlegend=True,
+        width=900,
+        height=600,
+        legend=dict(x=0.01, y=0.99, bgcolor='rgba(255,255,255,0.8)'),
+    )
+    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+
+    return fig, scale_factor

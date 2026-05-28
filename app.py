@@ -39,6 +39,7 @@ from post_processing.plotter import (
     plot_normal_stress_side_view,
     plot_structure_preview,
     find_position_on_structure,
+    plot_deformed_shape,
 )
 
 
@@ -2058,6 +2059,66 @@ with tab3:
                 except Exception as e:
                     st.error(f"Error generating diagram: {e}")
         
+        # Deformed shape
+        with st.expander("Deformed Shape", expanded=False):
+            n_orig = st.session_state.get("n_original_nodes", None)
+            behavior_mode = st.session_state.get("structural_behavior_mode", "frame")
+
+            col_sf, col_hide = st.columns(2)
+            with col_sf:
+                use_auto_scale = st.checkbox(
+                    "Auto scale factor",
+                    value=True,
+                    help=(
+                        "Automatically choose a scale factor so that the largest "
+                        "displacement is 10 % of the overall structure size."
+                    ),
+                    key="deformed_auto_scale",
+                )
+            with col_hide:
+                hide_subdiv_def = st.checkbox(
+                    "Hide subdivision nodes",
+                    value=False,
+                    help="Show only the original user-defined nodes on the deformed shape.",
+                    key="deformed_hide_subdiv",
+                )
+
+            user_scale = None
+            if not use_auto_scale:
+                user_scale = st.number_input(
+                    "Scale factor",
+                    min_value=0.0,
+                    value=1.0,
+                    format="%.4g",
+                    help="Amplification factor applied to the computed displacements.",
+                    key="deformed_scale_factor",
+                )
+
+            show_original = st.checkbox(
+                "Show original (undeformed) shape",
+                value=True,
+                help="Overlay the undeformed structure as a grey dashed line.",
+                key="deformed_show_original",
+            )
+
+            if st.button("Plot Deformed Shape", use_container_width=True, key="deformed_plot_btn"):
+                st.session_state["deformed_shape_generated"] = True
+
+            if st.session_state.get("deformed_shape_generated", False):
+                try:
+                    sf = user_scale if not use_auto_scale else None
+                    fig_def, applied_sf = plot_deformed_shape(
+                        structure_results,
+                        scale_factor=sf,
+                        show_original=show_original,
+                        show_subdivision_nodes=not hide_subdiv_def,
+                        n_original_nodes=n_orig,
+                    )
+                    st.info(f"Scale factor applied: **{applied_sf:.4g}×**")
+                    st.plotly_chart(fig_def, use_container_width=True)
+                except Exception as e:
+                    st.error(f"Error generating deformed shape: {e}")
+
         # Stress distribution views (cross-section and side)
         with st.expander("Stress Distribution Views (Cross-Section & Side View)", expanded=False):
             # Build a mapping from original element index to subelement IDs.
@@ -2295,6 +2356,8 @@ with tab4:
     - **Force Diagrams**: Plot bending moment, shear force, or normal force diagrams
       with optional fill, color, and transparency controls
     - **Point Query**: Read the force/moment value at any position along the structure
+    - **Deformed Shape**: Visualise the displaced structure overlaid on the original geometry,
+      with an automatic or user-defined amplification scale factor
     - **Normal Stress Distribution**: Examine the stress field across the cross-section
       at any cut position (cross-sectional view) and along the beam length (side view)
     - **Shear Stress Distribution**: Inspect the cross-sectional shear-stress contour at any cut position
