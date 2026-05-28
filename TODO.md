@@ -1,16 +1,15 @@
 # Project To-Do List
 
 - [ ] Testar 3node para ambos (Euler e Timo)
-- [ ] Shear Stress Distribution in Cross Section
 - [ ] Procurar por codigo duplicado(deixar mais clean)
 - [ ] Verificar distribuicao shear diagram esta estranho para femap_test
-- [ ] verificar timoshenko com subdivisions
 - [ ] verificar shear force e normal force com subdivision. Era para formar escada?
 - [ ] O numero do elemento ao exolher nas forcas nao tem limite
 - [ ] tem secoes sem desenho ainda tipo a z
 
 # Ajuste do front-end
-- [ ] Point Loads inicia em Y force arrumar
+- [ ] when adding a new Point Load at Point Loads the default direction that appers in app is the Y force. Make it the X force
+- [ ] at "Stress Distribution Views (Cross-Section & Side View)" "Shear Stress Distribution (Cross-Section)" the text Shear Stress Counter at x =. the number is considering the subelement. Update it to consider the element like the Normal Stress Counter
 
 # Ajuste finais
 - [ ] Atualizar README's (tanto do workspace quanto do tests)
