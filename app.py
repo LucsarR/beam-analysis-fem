@@ -2060,7 +2060,7 @@ with tab3:
                     st.error(f"Error generating diagram: {e}")
         
         # Deformed shape
-        with st.expander("Deformed Shape", expanded=False):
+        with st.expander("Deformed Shape", expanded=True):
             n_orig = st.session_state.get("n_original_nodes", None)
             behavior_mode = st.session_state.get("structural_behavior_mode", "frame")
 
@@ -2120,7 +2120,7 @@ with tab3:
                     st.error(f"Error generating deformed shape: {e}")
 
         # Stress distribution views (cross-section and side)
-        with st.expander("Stress Distribution Views (Cross-Section & Side View)", expanded=False):
+        with st.expander("Stress Distribution Views (Cross-Section & Side View)", expanded=True):
             # Build a mapping from original element index to subelement IDs.
             # When the mesh was built, original_to_mesh_elements was stored in session state.
             # Fall back to a 1-to-1 mapping (mesh element id → itself) when not available.
