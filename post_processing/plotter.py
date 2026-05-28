@@ -981,7 +981,7 @@ def plot_shear_stress_distribution(element_result, x, n_points=100):
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     return fig
 
-def plot_normal_stress_side_view(element_result, x, n_points=30):
+def plot_normal_stress_side_view(element_result, x, n_points=30, display_x=None, display_length=None):
     """
     Interactive Plotly plot: Side view of normal stress distribution along the element height.
     Shows:
@@ -991,8 +991,10 @@ def plot_normal_stress_side_view(element_result, x, n_points=30):
     
     Args:
         element_result: ElementResults object
-        x: Position along element where to show stress
+        x: Local position in the active element where stress is evaluated
         n_points: Number of points to sample along the section height
+        display_x: Optional x-position used for visualization labels/cut marker
+        display_length: Optional full length used for side-view axis
     
     Returns:
         Plotly figure object
@@ -1028,8 +1030,13 @@ def plot_normal_stress_side_view(element_result, x, n_points=30):
     # Create figure
     fig = go.Figure()
     
-    # Element length
+    # Element length for side-view display
     L = element_result.length
+    if display_length is not None and display_length > 0:
+        L = float(display_length)
+
+    x_view = float(x if display_x is None else display_x)
+    x_view = float(np.clip(x_view, 0.0, L))
     
     # Draw beam element as horizontal line (side view)
     fig.add_trace(go.Scatter(
@@ -1046,13 +1053,13 @@ def plot_normal_stress_side_view(element_result, x, n_points=30):
     # Draw vertical line at cut position
     section_height = y_max - y_min
     fig.add_trace(go.Scatter(
-        x=[x, x],
+        x=[x_view, x_view],
         y=[-section_height*0.6, section_height*0.6],
         mode='lines',
         line=dict(color='red', width=3, dash='dash'),
         name='Cut Position',
         hoverinfo='text',
-        text=[f'Cut at x={x:.3f}', ''],
+        text=[f'Cut at x={x_view:.3f}', ''],
         showlegend=False
     ))
     
@@ -1076,8 +1083,8 @@ def plot_normal_stress_side_view(element_result, x, n_points=30):
         color_hex = mcolors.to_hex(color_rgba)
         
         # Arrow position: starts at cut line, extends based on stress
-        x_start = x
-        x_end = x + arrow_length
+        x_start = x_view
+        x_end = x_view + arrow_length
         
         # Draw arrow line
         fig.add_trace(go.Scatter(
@@ -1171,7 +1178,7 @@ def plot_normal_stress_side_view(element_result, x, n_points=30):
     
     # Update layout
     fig.update_layout(
-        title=f"Normal Stress Profile - Side View at x={x:.2f}",
+        title=f"Normal Stress Profile - Side View at x={x_view:.2f}",
         xaxis_title="Position along element",
         yaxis_title="Section height",
         width=900,
