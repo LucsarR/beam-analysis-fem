@@ -1778,9 +1778,43 @@ with tab2:
                                 f"which was not found in the mesh. "
                                 f"Valid element indices are: {list(original_to_mesh_elements.keys())}"
                             )
+
+                        # Determine original element endpoints so we can interpolate
+                        # linear magnitudes correctly for each subdivided mesh element.
+                        orig_elem = st.session_state["elements"][element_id - 1]
+                        orig_n1, orig_n2 = orig_elem[0], orig_elem[1]
+                        node_orig_start = mesh.get_node_by_id(orig_n1)
+                        node_orig_end = mesh.get_node_by_id(orig_n2)
+                        L_orig = np.hypot(node_orig_end.x - node_orig_start.x, node_orig_end.y - node_orig_start.y)
+
                         for mesh_el_id in mesh_el_ids:
                             el = mesh.get_element_by_id(mesh_el_id)
-                            load = DistributedLoad(magnitude_start, magnitude_end, direction, func=func_str)
+
+                            # If the load was provided as a function string, keep using it
+                            if func_str:
+                                load = DistributedLoad(None, None, direction, func=func_str)
+                            elif magnitude_start is not None and magnitude_end is not None:
+                                # Interpolate magnitudes at subelement endpoints along the
+                                # original element line so the partitioned loads integrate
+                                # to the same total as the original linear load.
+                                x1, y1 = node_orig_start.x, node_orig_start.y
+                                x2, y2 = node_orig_end.x, node_orig_end.y
+                                dx = x2 - x1
+                                dy = y2 - y1
+                                def frac_along_original(xg, yg):
+                                    if L_orig == 0:
+                                        return 0.0
+                                    return ((xg - x1) * dx + (yg - y1) * dy) / (L_orig**2)
+
+                                a_sub = float(magnitude_start) + (float(magnitude_end) - float(magnitude_start)) * frac_along_original(el.node_start.x, el.node_start.y)
+                                b_sub = float(magnitude_start) + (float(magnitude_end) - float(magnitude_start)) * frac_along_original(el.node_end.x, el.node_end.y)
+                                load = DistributedLoad(a_sub, b_sub, direction, func=None)
+                            elif magnitude_start is not None:
+                                # Constant load given by magnitude_start
+                                load = DistributedLoad(float(magnitude_start), float(magnitude_start), direction, func=None)
+                            else:
+                                load = DistributedLoad(None, None, direction, func=None)
+
                             load.element = el
                             mesh.distributed_loads.append(load)
                     
