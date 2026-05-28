@@ -2070,6 +2070,8 @@ with tab3:
                 orig_element_ids = [el.id for el in st.session_state["mesh"].elements]
             
             if orig_element_ids:
+                x_pos_global = None
+                total_element_length = None
                 # ---- Position selection mode --------------------------------
                 use_global_pos = st.checkbox(
                     "Use global (x, y) position to select element automatically",
@@ -2170,6 +2172,12 @@ with tab3:
                             x_pos = x_pos_global - cumulative
                             break
                         cumulative += er.length
+
+                side_view_x_pos = float(x_pos)
+                side_view_length = float(selected_element_result.length) if selected_element_result is not None else 0.0
+                if (not use_global_pos) and x_pos_global is not None and total_element_length is not None:
+                    side_view_x_pos = float(x_pos_global)
+                    side_view_length = float(total_element_length)
                 
                 # --- Section-point query ------------------------------------------------
                 st.markdown("##### Extract stress at specific section position")
@@ -2210,34 +2218,40 @@ with tab3:
                                 f"σ = **{sigma_val:.4f}**"
                             )
                         
-                        # Display cross-section view (front view)
-                        st.subheader("Cross-Section View (Front)")
-                        fig_cross = plot_normal_stress_distribution(
+                        st.subheader("Normal Stress Distribution - Cross Section & Side View")
+                        st.markdown("##### ↔️ Side View (Position Along Element)")
+                        fig_side = plot_normal_stress_side_view(
                             selected_element_result,
                             x_pos,
-                            query_y=section_query_y if use_section_query else None,
+                            display_x=side_view_x_pos,
+                            display_length=side_view_length,
                         )
-                        st.plotly_chart(fig_cross, use_container_width=True)
-                        
-                        # Display side view
-                        st.subheader("↔️ Side View")
-                        fig_side = plot_normal_stress_side_view(selected_element_result, x_pos)
                         st.plotly_chart(fig_side, use_container_width=True)
 
-                        # Display shear stress in cross-section
-                        st.subheader("Shear Stress Distribution (Cross-Section)")
-                        fig_shear_cross = plot_shear_stress_distribution(
-                            selected_element_result,
-                            x_pos,
-                        )
-                        st.plotly_chart(fig_shear_cross, use_container_width=True)
+                        cross_col, shear_col = st.columns(2)
+                        with cross_col:
+                            st.markdown("##### Cross-Section View (Front)")
+                            fig_cross = plot_normal_stress_distribution(
+                                selected_element_result,
+                                x_pos,
+                                query_y=section_query_y if use_section_query else None,
+                            )
+                            st.plotly_chart(fig_cross, use_container_width=True)
+
+                        with shear_col:
+                            st.markdown("##### Shear Stress Distribution (Cross-Section)")
+                            fig_shear_cross = plot_shear_stress_distribution(
+                                selected_element_result,
+                                x_pos,
+                            )
+                            st.plotly_chart(fig_shear_cross, use_container_width=True)
                         
                         # Add information box
                         st.info(
                             "💡 **How to interpret the views:**\n"
-                            "- **Cross-Section View (Front)**: Shows stress distribution across the section at the cut position\n"
-                            "- **Side View**: Shows stress profile along the beam height with arrows indicating magnitude and direction\n"
-                            "- **Shear Stress Distribution (Cross-Section)**: Shows the transverse shear-stress field from V at the cut (assuming load passes through the shear center)"
+                            "- **Side View (Position Along Element)**: Shows where the selected cut is located along the element\n"
+                            "- **Cross-Section View (Front)**: Shows normal-stress distribution across the section at that cut\n"
+                            "- **Shear Stress Distribution (Cross-Section)**: Shows the transverse shear-stress field at the same cut (assuming load passes through the shear center)"
                         )
                     except Exception as e:
                         st.error(f"Error: {e}")
