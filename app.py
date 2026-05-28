@@ -2058,8 +2058,8 @@ with tab3:
                 except Exception as e:
                     st.error(f"Error generating diagram: {e}")
         
-        # Normal Stress Distribution - Cross Section and Side View
-        with st.expander("Normal Stress Distribution - Cross Section & Side View", expanded=False):
+        # Stress distribution views (cross-section and side)
+        with st.expander("Stress Distribution Views (Cross-Section & Side View)", expanded=False):
             # Build a mapping from original element index to subelement IDs.
             # When the mesh was built, original_to_mesh_elements was stored in session state.
             # Fall back to a 1-to-1 mapping (mesh element id → itself) when not available.
@@ -2218,23 +2218,15 @@ with tab3:
                                 f"σ = **{sigma_val:.4f}**"
                             )
                         
-                        st.subheader("Normal Stress Distribution - Cross Section & Side View")
-                        st.markdown("##### ↔️ Side View (Position Along Element)")
-                        fig_side = plot_normal_stress_side_view(
-                            selected_element_result,
-                            x_pos,
-                            display_x=side_view_x_pos,
-                            display_length=side_view_length,
-                        )
-                        st.plotly_chart(fig_side, use_container_width=True)
-
+                        st.subheader("Stress Distribution Views (Cross-Section & Side View)")
                         cross_col, shear_col = st.columns(2)
                         with cross_col:
-                            st.markdown("##### Cross-Section View (Front)")
+                            st.markdown("##### Normal Stress Distribution (Cross-Section)")
                             fig_cross = plot_normal_stress_distribution(
                                 selected_element_result,
                                 x_pos,
                                 query_y=section_query_y if use_section_query else None,
+                                display_x=x_pos_global if (not use_global_pos) else x_pos,
                             )
                             st.plotly_chart(fig_cross, use_container_width=True)
 
@@ -2245,12 +2237,21 @@ with tab3:
                                 x_pos,
                             )
                             st.plotly_chart(fig_shear_cross, use_container_width=True)
+
+                        st.markdown("##### Normal Stress Distribution (Side View)")
+                        fig_side = plot_normal_stress_side_view(
+                            selected_element_result,
+                            x_pos,
+                            display_x=side_view_x_pos,
+                            display_length=side_view_length,
+                        )
+                        st.plotly_chart(fig_side, use_container_width=True)
                         
                         # Add information box
                         st.info(
                             "💡 **How to interpret the views:**\n"
-                            "- **Side View (Position Along Element)**: Shows where the selected cut is located along the element\n"
-                            "- **Cross-Section View (Front)**: Shows normal-stress distribution across the section at that cut\n"
+                            "- **Normal Stress Distribution (Cross-Section)**: Shows normal-stress distribution across the section at the selected cut\n"
+                            "- **Normal Stress Distribution (Side View)**: Shows where the selected cut is located along the element\n"
                             "- **Shear Stress Distribution (Cross-Section)**: Shows the transverse shear-stress field at the same cut (assuming load passes through the shear center)"
                         )
                     except Exception as e:
