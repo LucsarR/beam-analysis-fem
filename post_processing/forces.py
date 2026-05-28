@@ -1,5 +1,6 @@
 import numpy as np
 from fem.analysis import get_element_dof_indices
+from fem.element import _quadratic_shape_functions_3node, _quintic_bending_shapes_3node
 
 class ElementResults:
     """
@@ -28,6 +29,59 @@ class ElementResults:
     def normal_force(self, x):
         # Return normal force at position x along the element
         return self.element.normal_force(x, self.displacements)
+
+    def axial_displacement(self, x):
+        """Return local axial displacement u(x) at position x along the element."""
+        L = self.length
+        xi = x / L if L > 1e-14 else 0.0
+        d = self.displacements
+        class_name = type(self.element).__name__
+
+        if "3Node" in class_name:
+            # 9 DOFs: [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3]
+            u1, u2, u3 = d[0], d[3], d[6]
+            n1, n2, n3 = _quadratic_shape_functions_3node(xi)
+            return float(n1 * u1 + n2 * u2 + n3 * u3)
+        elif "ReddyBickford" in class_name:
+            # 8 DOFs: [u1, v1, θ1, (dv/dx)1, u2, v2, θ2, (dv/dx)2]
+            u1, u2 = d[0], d[4]
+            return float((1.0 - xi) * u1 + xi * u2)
+        else:
+            # 6 DOFs: [u1, v1, θ1, u2, v2, θ2]
+            u1, u2 = d[0], d[3]
+            return float((1.0 - xi) * u1 + xi * u2)
+
+    def transverse_displacement(self, x):
+        """Return local transverse displacement v(x) at position x along the element."""
+        L = self.length
+        xi = x / L if L > 1e-14 else 0.0
+        d = self.displacements
+        class_name = type(self.element).__name__
+
+        if "3Node" in class_name:
+            # 9 DOFs: [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3] – quintic Hermite
+            bending_dofs = np.array([d[1], d[2], d[4], d[5], d[7], d[8]])
+            n_w, _, _, _, _, _ = _quintic_bending_shapes_3node(xi, L)
+            return float(np.dot(n_w, bending_dofs))
+        elif "ReddyBickford" in class_name:
+            # 8 DOFs: [u1, v1, θ1, (dv/dx)1, u2, v2, θ2, (dv/dx)2]
+            # Cubic Hermite using the (dv/dx) DOFs at each node
+            v1, dvdx1 = d[1], d[3]
+            v2, dvdx2 = d[5], d[7]
+            H1 = 1.0 - 3.0 * xi**2 + 2.0 * xi**3
+            H2 = L * xi * (1.0 - xi)**2
+            H3 = 3.0 * xi**2 - 2.0 * xi**3
+            H4 = L * xi**2 * (xi - 1.0)
+            return float(H1 * v1 + H2 * dvdx1 + H3 * v2 + H4 * dvdx2)
+        else:
+            # 6 DOFs: [u1, v1, θ1, u2, v2, θ2] – cubic Hermite
+            v1, theta1 = d[1], d[2]
+            v2, theta2 = d[4], d[5]
+            H1 = 1.0 - 3.0 * xi**2 + 2.0 * xi**3
+            H2 = L * xi * (1.0 - xi)**2
+            H3 = 3.0 * xi**2 - 2.0 * xi**3
+            H4 = L * xi**2 * (xi - 1.0)
+            return float(H1 * v1 + H2 * theta1 + H3 * v2 + H4 * theta2)
 
 class StructureResults:
     """

@@ -5,4 +5,5 @@ from .plotter import (
     plot_shear_stress_distribution,
     plot_normal_stress_side_view,
     find_position_on_structure,
+    plot_deformed_shape,
 )
