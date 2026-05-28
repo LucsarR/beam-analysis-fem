@@ -768,7 +768,7 @@ def plot_structure_diagram(
 
     return fig
 
-def plot_normal_stress_distribution(element_result, x, n_points=100, query_y=None):
+def plot_normal_stress_distribution(element_result, x, n_points=100, query_y=None, display_x=None):
     """
     Interactive Plotly plot: 2D contour of normal stress over the section shape at position x along the element.
 
@@ -777,6 +777,8 @@ def plot_normal_stress_distribution(element_result, x, n_points=100, query_y=Non
 
     query_y: optional float – if provided, a horizontal marker line is drawn at that
              section-y position to highlight the queried point.
+    display_x: optional float – if provided, used in the plot title to show the
+               element-level cut position.
     """
     section = element_result.element.section
     if not hasattr(section, "xy_grid"):
@@ -859,8 +861,10 @@ def plot_normal_stress_distribution(element_result, x, n_points=100, query_y=Non
             hoverinfo='skip',
         ))
 
+    x_title = x if display_x is None else float(display_x)
+
     fig.update_layout(
-        title=f"Normal Stress Contour at x={x:.2f}",
+        title=f"Normal Stress Contour at x={x_title:.2f}",
         xaxis_title="Section x",
         yaxis_title="Section y",
         width=600,
