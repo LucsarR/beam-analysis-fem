@@ -1,0 +1,91 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "created": "2026-05-28T21:16:35.381144",
+    "description": "",
+    "stiffness_integration_mode": "analytical",
+    "structural_behavior_mode": "frame"
+  },
+  "nodes": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      1.0,
+      0.0
+    ]
+  ],
+  "properties": [
+    {
+      "name": "Property_1",
+      "material": {
+        "E": 10000000.0,
+        "G": 3846153.846153846,
+        "nu": 0.3,
+        "input_mode": "Calculate G (from E and \u03bd)"
+      },
+      "section": {
+        "type": "rectangular_bar",
+        "kwargs": {
+          "width": 0.5,
+          "height": 0.1
+        }
+      }
+    }
+  ],
+  "elements": [
+    [
+      1,
+      2,
+      "reddy_bickford_2node",
+      "Property_1",
+      40
+    ]
+  ],
+  "constraints": [
+    [
+      1,
+      0,
+      0.0
+    ],
+    [
+      1,
+      1,
+      0.0
+    ],
+    [
+      1,
+      2,
+      0.0
+    ],
+    [
+      1,
+      3,
+      0.0
+    ]
+  ],
+  "springs": [],
+  "point_loads": [
+    [
+      2,
+      1,
+      -1030.0
+    ],
+    [
+      2,
+      2,
+      1.03
+    ]
+  ],
+  "distributed_loads": [
+    [
+      1,
+      0.0,
+      null,
+      "x",
+      null,
+      "constant"
+    ]
+  ]
+}

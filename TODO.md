@@ -12,6 +12,7 @@
 # Ajuste do front-end
 - [ ] when adding a new Point Load at Point Loads the default direction that appers in app is the Y force. Make it the X force
 - [ ] at "Stress Distribution Views (Cross-Section & Side View)" "Shear Stress Distribution (Cross-Section)" the text Shear Stress Counter at x =. the number is considering the subelement. Update it to consider the element like the Normal Stress Counter
+- [ ] no preview structure verificar orientação do momento nodal
 
 # Ajuste finais
 - [ ] Atualizar README's (tanto do workspace quanto do tests)
