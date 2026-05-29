@@ -8,6 +8,7 @@
 - [ ] tem secoes sem desenho ainda tipo a z
 - [ ] timoshenko 3-node ta usando polinomio quintuplo? no app aparece o momento linear, L=5, q_0=10.json
 - [ ] run the test suite and verify if the tests are up to date
+- [ ] Extract stress at specific section position colocar para sair o Shear Stress Distribution (Cross-Section) tbm
 
 # Ajuste do front-end
 - [ ] when adding a new Point Load at Point Loads the default direction that appers in app is the Y force. Make it the X force
