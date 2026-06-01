@@ -479,6 +479,55 @@ def test_beam_theory_comparison():
 
 
 # ===========================================================================
+# Test 6b – Modified Reddy-Bickford (MRBT) behavior
+# ===========================================================================
+def test_modified_reddy_bickford_behavior():
+    """
+    Verify MRBT is available and gives a shear-flexible response for thick beams.
+
+    Expected trend for a cantilever with end load:
+      |w_EB| < |w_MRBT| ≈ |w_Timoshenko|
+    """
+    print("\n" + "=" * 60)
+    print("Test 6b: Modified Reddy-Bickford (MRBT) Behavior")
+    print("=" * 60)
+
+    P = -1000.0
+    h = H_THICK
+
+    mesh_mrbt, nodes_mrbt = _make_cantilever(4, h, etype="modified_reddy_bickford_2node")
+    load = PointLoad(P, 1)
+    load.node = nodes_mrbt[-1]
+    mesh_mrbt.point_loads.append(load)
+    disp_mrbt, _ = _solve(mesh_mrbt)
+    w_mrbt = disp_mrbt[(nodes_mrbt[-1].id - 1) * 3 + 1]
+
+    mesh_eb, nodes_eb = _make_cantilever(4, h, etype="euler_bernoulli_2node")
+    load_eb = PointLoad(P, 1)
+    load_eb.node = nodes_eb[-1]
+    mesh_eb.point_loads.append(load_eb)
+    disp_eb, _ = _solve(mesh_eb)
+    w_eb = disp_eb[(nodes_eb[-1].id - 1) * 3 + 1]
+
+    mesh_timo, nodes_timo = _make_cantilever(4, h, etype="timoshenko_2node")
+    load_t = PointLoad(P, 1)
+    load_t.node = nodes_timo[-1]
+    mesh_timo.point_loads.append(load_t)
+    disp_timo, _ = _solve(mesh_timo)
+    w_timo = disp_timo[(nodes_timo[-1].id - 1) * 3 + 1]
+
+    print(f"  EB deflection:    {w_eb:.6e} m")
+    print(f"  MRBT deflection:  {w_mrbt:.6e} m")
+    print(f"  Timo deflection:  {w_timo:.6e} m")
+
+    assert abs(w_mrbt) > abs(w_eb), "MRBT should be more flexible than Euler-Bernoulli"
+    assert abs(w_mrbt - w_timo) / abs(w_timo) < 0.10, "MRBT should remain close to Timoshenko for thick beam"
+
+    print("OK MRBT element is available and shear-flexible")
+    return True
+
+
+# ===========================================================================
 # Test 7 – Mesh convergence for Reddy-Bickford
 # ===========================================================================
 def test_mesh_convergence():
@@ -1015,6 +1064,7 @@ if __name__ == "__main__":
         test_cantilever_point_load_single_element,
         test_simply_supported_uniform_load,
         test_beam_theory_comparison,
+        test_modified_reddy_bickford_behavior,
         test_mesh_convergence,
         test_bending_moment_recovery,
         test_shear_force_recovery,

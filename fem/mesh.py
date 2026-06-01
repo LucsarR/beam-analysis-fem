@@ -66,6 +66,8 @@ class Mesh:
                 - "euler_bernoulli_3node": 3-node Euler-Bernoulli beam
                 - "timoshenko_2node": 2-node Timoshenko beam
                 - "timoshenko_3node": 3-node Timoshenko beam
+                - "reddy_bickford_2node": 2-node Reddy-Bickford (RBT, 4 DOFs/node)
+                - "modified_reddy_bickford_2node": 2-node Modified Reddy-Bickford (MRBT)
             stiffness_integration (str): Stiffness matrix formulation ("analytical" or "numerical")
                 
         Returns:
@@ -74,7 +76,14 @@ class Mesh:
         Raises:
             NotImplementedError: If element_type is not supported
         """
-        from fem.element import EulerBernoulliElement2Node, EulerBernoulliElement3Node, TimoshenkoElement2Node, TimoshenkoElement3Node, ReddyBickfordElement2Node
+        from fem.element import (
+            EulerBernoulliElement2Node,
+            EulerBernoulliElement3Node,
+            TimoshenkoElement2Node,
+            TimoshenkoElement3Node,
+            ReddyBickfordElement2Node,
+            ModifiedReddyBickfordElement2Node,
+        )
         if element_type == "euler_bernoulli_2node":
             element = EulerBernoulliElement2Node(
                 self.element_id_counter, node_start, node_end, material, section,
@@ -113,6 +122,8 @@ class Mesh:
             element = TimoshenkoElement3Node(self.element_id_counter, node_start, node_end, material, section, node_center)
         elif element_type == "reddy_bickford_2node":
             element = ReddyBickfordElement2Node(self.element_id_counter, node_start, node_end, material, section)
+        elif element_type == "modified_reddy_bickford_2node":
+            element = ModifiedReddyBickfordElement2Node(self.element_id_counter, node_start, node_end, material, section)
         else:
             raise NotImplementedError(f"Element type '{element_type}' not implemented.")
         self.elements.append(element)

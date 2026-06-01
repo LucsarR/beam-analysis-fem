@@ -2302,6 +2302,18 @@ with tab3:
                 
                 if st.session_state.get("stress_dist_generated", False) and selected_element_result is not None:
                     try:
+                        shear_method_label = st.radio(
+                            "Shear stress method",
+                            options=["Jourawski", "Reddy-Bickford", "Compare both"],
+                            horizontal=True,
+                            key="shear_stress_method",
+                        )
+                        shear_method_map = {
+                            "Jourawski": "jourawski",
+                            "Reddy-Bickford": "reddy_bickford",
+                            "Compare both": "compare",
+                        }
+
                         # If a section-y query is active, compute and show the stress value
                         if use_section_query and section_query_y is not None:
                             N_val = selected_element_result.normal_force(x_pos)
@@ -2330,6 +2342,7 @@ with tab3:
                             fig_shear_cross = plot_shear_stress_distribution(
                                 selected_element_result,
                                 x_pos,
+                                method=shear_method_map[shear_method_label],
                             )
                             st.plotly_chart(fig_shear_cross, use_container_width=True)
 
@@ -2406,11 +2419,11 @@ with tab4:
     - Validation messages will guide you through errors before running the analysis
     - The **Section Preview** diagram shows dimension labels for the selected cross-section type
     - The app is **unit-agnostic** — choose any consistent unit system (see table below)
-    - For Reddy-Bickford elements, a fourth DOF per node (curvature) is automatically activated
+    - For Reddy-Bickford **RBT** elements, a fourth DOF per node (slope dv/dx) is automatically activated
     
     ### 🔧 Supported Features
     - **Element Formulations**: Euler-Bernoulli (2-node, 3-node), Timoshenko (2-node, 3-node),
-      Reddy-Bickford (2-node)
+      Reddy-Bickford RBT (2-node), Reddy-Bickford MRBT (2-node)
     - **Section Types**: Rectangular bar/tube, Circular bar/tube, Trapezoidal bar/tube,
       Hexagonal bar/tube, I-beam, C-section, L-section, T-section, Z-section, Hat section, General
     - **Load Types**: Point loads and moments, distributed loads (constant, linear, custom functions

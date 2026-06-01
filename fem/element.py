@@ -1361,123 +1361,73 @@ class ReddyBickfordElement2Node(Element):
         convention used throughout the assembly, so direction 2 = rotation
         remains consistent with the Euler-Bernoulli / Timoshenko elements.)
         """
+        return self.R @ self._local_stiffness_matrix() @ self.R.T
+
+    def _local_stiffness_matrix(self):
+        """
+        Build local 8x8 stiffness matrix using standard FEM numerical integration.
+
+        Bending DOF ordering in the integrated sub-matrix is:
+        [v1, theta1, (dv/dx)1, v2, theta2, (dv/dx)2], mapped to local
+        element indices [1, 2, 3, 5, 6, 7].
+        """
         E = self.material.E
         A = self.section.area
         L = self.length
-        R = self.R
-
         D1, E1, F1, G1 = self._get_reddy_params()
 
-        # ------------------------------------------------------------------
-        # 8×8 local stiffness matrix K_local.
-        # The 6×6 bending sub-matrix K_b is derived analytically from the
-        # Reddy TSDT strain energy:
-        #   U_bend = ½∫[D1·(θ')² − 2E1·θ'·v'' + F1·(v'')² + G1·(θ+v')²] dx
-        #
-        # Hermite cubic shape functions for v: H1…H4
-        # Linear shape functions for θ:       N1 = 1−ξ, N2 = ξ  (ξ = x/L)
-        #
-        # K_b DOF ordering (bending-only, 6×6):
-        #   b0 = v₁,  b1 = v₁' = (dv/dx)₁,  b2 = θ₁,
-        #   b3 = v₂,  b4 = v₂' = (dv/dx)₂,  b5 = θ₂
-        #
-        # In the 8×8 matrix these bending indices map to:
-        #   b0=v₁  → 1,  b1=(dv/dx)₁ → 3,  b2=θ₁  → 2,
-        #   b3=v₂  → 5,  b4=(dv/dx)₂ → 7,  b5=θ₂  → 6
-        # ------------------------------------------------------------------
-        b_dofs = [1, 3, 2, 5, 7, 6]   # map bending index → 8×8 index
-
-        K_b = np.zeros((6, 6))
-
-        # --- D1 term: ψ'·ψ'^T where ψ' = dθ/dx = (θ₂−θ₁)/L (constant) ---
-        K_b[2, 2] += D1 / L
-        K_b[2, 5] += -D1 / L
-        K_b[5, 2] += -D1 / L
-        K_b[5, 5] += D1 / L
-
-        # --- F1 term: v''·v''^T  (standard Euler-Bernoulli stiffness form) ---
-        f = F1 / L ** 3
-        K_b[0, 0] += 12.0 * f;  K_b[0, 1] += 6.0 * L * f
-        K_b[0, 3] += -12.0 * f; K_b[0, 4] += 6.0 * L * f
-        K_b[1, 0] += 6.0 * L * f;  K_b[1, 1] += 4.0 * L ** 2 * f
-        K_b[1, 3] += -6.0 * L * f; K_b[1, 4] += 2.0 * L ** 2 * f
-        K_b[3, 0] += -12.0 * f; K_b[3, 1] += -6.0 * L * f
-        K_b[3, 3] += 12.0 * f;  K_b[3, 4] += -6.0 * L * f
-        K_b[4, 0] += 6.0 * L * f;  K_b[4, 1] += 2.0 * L ** 2 * f
-        K_b[4, 3] += -6.0 * L * f; K_b[4, 4] += 4.0 * L ** 2 * f
-
-        # --- E1 cross term: −E1·(ψ'·κ^T + κ·ψ'^T) ---
-        # From −E1·∫dθ/dx·d²v/dx² dx, analytically integrated:
-        #   K[v₁', θ₁] = K[θ₁, v₁'] = −E1/L
-        #   K[v₁', θ₂] = K[θ₂, v₁'] = +E1/L
-        #   K[θ₁, v₂'] = K[v₂', θ₁] = +E1/L
-        #   K[v₂', θ₂] = K[θ₂, v₂'] = −E1/L
-        # b-index mapping: v₁'=1, θ₁=2, v₂'=4, θ₂=5
-        K_b[1, 2] += -E1 / L;   K_b[2, 1] += -E1 / L
-        K_b[1, 5] += E1 / L;    K_b[5, 1] += E1 / L
-        K_b[2, 4] += E1 / L;    K_b[4, 2] += E1 / L
-        K_b[4, 5] += -E1 / L;   K_b[5, 4] += -E1 / L
-
-        # --- G1 shear term: G1·L·∫γᵢ·γⱼ dξ ---
-        # γ = [N_θ,ᵢ + dN_v,ᵢ/dx] – see analytical integral table in derivation.
-        K_b[0, 0] += 6.0 * G1 / (5.0 * L)
-        K_b[0, 1] += G1 / 10.0
-        K_b[0, 2] += -G1 / 2.0
-        K_b[0, 3] += -6.0 * G1 / (5.0 * L)
-        K_b[0, 4] += G1 / 10.0
-        K_b[0, 5] += -G1 / 2.0
-
-        K_b[1, 0] += G1 / 10.0
-        K_b[1, 1] += 2.0 * G1 * L / 15.0
-        K_b[1, 2] += G1 * L / 12.0
-        K_b[1, 3] += -G1 / 10.0
-        K_b[1, 4] += -G1 * L / 30.0
-        K_b[1, 5] += -G1 * L / 12.0
-
-        K_b[2, 0] += -G1 / 2.0
-        K_b[2, 1] += G1 * L / 12.0
-        K_b[2, 2] += G1 * L / 3.0
-        K_b[2, 3] += G1 / 2.0
-        K_b[2, 4] += -G1 * L / 12.0
-        K_b[2, 5] += G1 * L / 6.0
-
-        K_b[3, 0] += -6.0 * G1 / (5.0 * L)
-        K_b[3, 1] += -G1 / 10.0
-        K_b[3, 2] += G1 / 2.0
-        K_b[3, 3] += 6.0 * G1 / (5.0 * L)
-        K_b[3, 4] += -G1 / 10.0
-        K_b[3, 5] += G1 / 2.0
-
-        K_b[4, 0] += G1 / 10.0
-        K_b[4, 1] += -G1 * L / 30.0
-        K_b[4, 2] += -G1 * L / 12.0
-        K_b[4, 3] += -G1 / 10.0
-        K_b[4, 4] += 2.0 * G1 * L / 15.0
-        K_b[4, 5] += G1 * L / 12.0
-
-        K_b[5, 0] += -G1 / 2.0
-        K_b[5, 1] += -G1 * L / 12.0
-        K_b[5, 2] += G1 * L / 6.0
-        K_b[5, 3] += G1 / 2.0
-        K_b[5, 4] += G1 * L / 12.0
-        K_b[5, 5] += G1 * L / 3.0
-
-        # Build the full 8×8 local stiffness matrix
         k_local = np.zeros((8, 8))
-
-        # Axial part (DOFs 0 and 4)
         k_local[0, 0] = E * A / L
         k_local[0, 4] = -E * A / L
         k_local[4, 0] = -E * A / L
         k_local[4, 4] = E * A / L
 
-        # Map bending sub-matrix into full 8×8
-        for i_b, i_g in enumerate(b_dofs):
-            for j_b, j_g in enumerate(b_dofs):
-                k_local[i_g, j_g] = K_b[i_b, j_b]
+        k_bb = np.zeros((6, 6))
+        gauss_xi, gauss_w = np.polynomial.legendre.leggauss(5)
+        for xi_g, w_g in zip(gauss_xi, gauss_w):
+            xi = 0.5 * (xi_g + 1.0)
+            jac = 0.5 * L
 
-        # Transform to global coordinates: K_global = R · K_local · R^T
-        return R @ k_local @ R.T
+            n1 = 1.0 - xi
+            n2 = xi
+
+            dtheta_dx = np.array([0.0, -1.0 / L, 0.0, 0.0, 1.0 / L, 0.0], dtype=float)
+
+            dv_dx = np.array([
+                (-6.0 * xi + 6.0 * xi**2) / L,
+                0.0,
+                1.0 - 4.0 * xi + 3.0 * xi**2,
+                (6.0 * xi - 6.0 * xi**2) / L,
+                0.0,
+                -2.0 * xi + 3.0 * xi**2,
+            ], dtype=float)
+
+            d2v_dx2 = np.array([
+                (-6.0 + 12.0 * xi) / L**2,
+                0.0,
+                (-4.0 + 6.0 * xi) / L,
+                (6.0 - 12.0 * xi) / L**2,
+                0.0,
+                (-2.0 + 6.0 * xi) / L,
+            ], dtype=float)
+
+            theta = np.array([0.0, n1, 0.0, 0.0, n2, 0.0], dtype=float)
+            gamma = theta + dv_dx
+
+            integrand = (
+                D1 * np.outer(dtheta_dx, dtheta_dx)
+                - E1 * (np.outer(dtheta_dx, d2v_dx2) + np.outer(d2v_dx2, dtheta_dx))
+                + F1 * np.outer(d2v_dx2, d2v_dx2)
+                + G1 * np.outer(gamma, gamma)
+            )
+            k_bb += integrand * jac * w_g
+
+        bb_to_local = [1, 2, 3, 5, 6, 7]
+        for i_b, i_l in enumerate(bb_to_local):
+            for j_b, j_l in enumerate(bb_to_local):
+                k_local[i_l, j_l] = k_bb[i_b, j_b]
+
+        return 0.5 * (k_local + k_local.T)
 
     def force_vector(self, q_ini=0, q_fim=0, p_ini=0, p_fim=0):
         """
@@ -1623,94 +1573,7 @@ class ReddyBickfordElement2Node(Element):
         """
         L = self.length
         xi = x / L
-
-        # Compute local element stiffness matrix
-        # (Extract just the local matrix, before transformation)
-        E = self.material.E
-        A = self.section.area
-        D1, E1, F1, G1 = self._get_reddy_params()
-
-        # Build 8×8 local stiffness (same as in stiffness_matrix but without R transformation)
-        b_dofs = [1, 3, 2, 5, 7, 6]
-        K_b = np.zeros((6, 6))
-
-        # D1 term
-        K_b[2, 2] += D1 / L
-        K_b[2, 5] += -D1 / L
-        K_b[5, 2] += -D1 / L
-        K_b[5, 5] += D1 / L
-
-        # F1 term
-        f = F1 / L ** 3
-        K_b[0, 0] += 12.0 * f;  K_b[0, 1] += 6.0 * L * f
-        K_b[0, 3] += -12.0 * f; K_b[0, 4] += 6.0 * L * f
-        K_b[1, 0] += 6.0 * L * f;  K_b[1, 1] += 4.0 * L ** 2 * f
-        K_b[1, 3] += -6.0 * L * f; K_b[1, 4] += 2.0 * L ** 2 * f
-        K_b[3, 0] += -12.0 * f; K_b[3, 1] += -6.0 * L * f
-        K_b[3, 3] += 12.0 * f;  K_b[3, 4] += -6.0 * L * f
-        K_b[4, 0] += 6.0 * L * f;  K_b[4, 1] += 2.0 * L ** 2 * f
-        K_b[4, 3] += -6.0 * L * f; K_b[4, 4] += 4.0 * L ** 2 * f
-
-        # E1 term
-        K_b[1, 2] += -E1 / L;   K_b[2, 1] += -E1 / L
-        K_b[1, 5] += E1 / L;    K_b[5, 1] += E1 / L
-        K_b[2, 4] += E1 / L;    K_b[4, 2] += E1 / L
-        K_b[4, 5] += -E1 / L;   K_b[5, 4] += -E1 / L
-
-        # G1 term
-        K_b[0, 0] += 6.0 * G1 / (5.0 * L)
-        K_b[0, 1] += G1 / 10.0
-        K_b[0, 2] += -G1 / 2.0
-        K_b[0, 3] += -6.0 * G1 / (5.0 * L)
-        K_b[0, 4] += G1 / 10.0
-        K_b[0, 5] += -G1 / 2.0
-
-        K_b[1, 0] += G1 / 10.0
-        K_b[1, 1] += 2.0 * G1 * L / 15.0
-        K_b[1, 2] += G1 * L / 12.0
-        K_b[1, 3] += -G1 / 10.0
-        K_b[1, 4] += -G1 * L / 30.0
-        K_b[1, 5] += -G1 * L / 12.0
-
-        K_b[2, 0] += -G1 / 2.0
-        K_b[2, 1] += G1 * L / 12.0
-        K_b[2, 2] += G1 * L / 3.0
-        K_b[2, 3] += G1 / 2.0
-        K_b[2, 4] += -G1 * L / 12.0
-        K_b[2, 5] += G1 * L / 6.0
-
-        K_b[3, 0] += -6.0 * G1 / (5.0 * L)
-        K_b[3, 1] += -G1 / 10.0
-        K_b[3, 2] += G1 / 2.0
-        K_b[3, 3] += 6.0 * G1 / (5.0 * L)
-        K_b[3, 4] += -G1 / 10.0
-        K_b[3, 5] += G1 / 2.0
-
-        K_b[4, 0] += G1 / 10.0
-        K_b[4, 1] += -G1 * L / 30.0
-        K_b[4, 2] += -G1 * L / 12.0
-        K_b[4, 3] += -G1 / 10.0
-        K_b[4, 4] += 2.0 * G1 * L / 15.0
-        K_b[4, 5] += G1 * L / 12.0
-
-        K_b[5, 0] += -G1 / 2.0
-        K_b[5, 1] += -G1 * L / 12.0
-        K_b[5, 2] += G1 * L / 6.0
-        K_b[5, 3] += G1 / 2.0
-        K_b[5, 4] += G1 * L / 12.0
-        K_b[5, 5] += G1 * L / 3.0
-
-        k_local = np.zeros((8, 8))
-        k_local[0, 0] = E * A / L
-        k_local[0, 4] = -E * A / L
-        k_local[4, 0] = -E * A / L
-        k_local[4, 4] = E * A / L
-
-        for i_b, i_g in enumerate(b_dofs):
-            for j_b, j_g in enumerate(b_dofs):
-                k_local[i_g, j_g] = K_b[i_b, j_b]
-
-        # Compute nodal forces
+        k_local = self._local_stiffness_matrix()
         f = k_local @ displacements
 
         # Extract moments at left and right ends
@@ -1721,6 +1584,23 @@ class ReddyBickfordElement2Node(Element):
 
         # Linear interpolation
         return M_left * (1.0 - xi) + M_right * xi
+
+    def theta_and_slope(self, x, displacements):
+        """Return θ(x) and dv/dx(x) in local coordinates."""
+        L = self.length
+        xi = np.clip(x / L, 0.0, 1.0)
+
+        theta1, theta2 = displacements[2], displacements[6]
+        theta = (1.0 - xi) * theta1 + xi * theta2
+
+        v1, dvdx1 = displacements[1], displacements[3]
+        v2, dvdx2 = displacements[5], displacements[7]
+        dH1dx = (-6.0 * xi + 6.0 * xi ** 2) / L
+        dH2dx = 1.0 - 4.0 * xi + 3.0 * xi ** 2
+        dH3dx = (6.0 * xi - 6.0 * xi ** 2) / L
+        dH4dx = -2.0 * xi + 3.0 * xi ** 2
+        slope = dH1dx * v1 + dH2dx * dvdx1 + dH3dx * v2 + dH4dx * dvdx2
+        return float(theta), float(slope)
 
     def shear_force(self, x, displacements):
         """
@@ -1737,90 +1617,7 @@ class ReddyBickfordElement2Node(Element):
         [u₁, v₁, θ₁, (dv/dx)₁, u₂, v₂, θ₂, (dv/dx)₂]
         """
         L = self.length
-
-        # Compute local element stiffness matrix (same as in bending_moment)
-        E = self.material.E
-        A = self.section.area
-        D1, E1, F1, G1 = self._get_reddy_params()
-
-        b_dofs = [1, 3, 2, 5, 7, 6]
-        K_b = np.zeros((6, 6))
-
-        # D1 term
-        K_b[2, 2] += D1 / L
-        K_b[2, 5] += -D1 / L
-        K_b[5, 2] += -D1 / L
-        K_b[5, 5] += D1 / L
-
-        # F1 term
-        f = F1 / L ** 3
-        K_b[0, 0] += 12.0 * f;  K_b[0, 1] += 6.0 * L * f
-        K_b[0, 3] += -12.0 * f; K_b[0, 4] += 6.0 * L * f
-        K_b[1, 0] += 6.0 * L * f;  K_b[1, 1] += 4.0 * L ** 2 * f
-        K_b[1, 3] += -6.0 * L * f; K_b[1, 4] += 2.0 * L ** 2 * f
-        K_b[3, 0] += -12.0 * f; K_b[3, 1] += -6.0 * L * f
-        K_b[3, 3] += 12.0 * f;  K_b[3, 4] += -6.0 * L * f
-        K_b[4, 0] += 6.0 * L * f;  K_b[4, 1] += 2.0 * L ** 2 * f
-        K_b[4, 3] += -6.0 * L * f; K_b[4, 4] += 4.0 * L ** 2 * f
-
-        # E1 term
-        K_b[1, 2] += -E1 / L;   K_b[2, 1] += -E1 / L
-        K_b[1, 5] += E1 / L;    K_b[5, 1] += E1 / L
-        K_b[2, 4] += E1 / L;    K_b[4, 2] += E1 / L
-        K_b[4, 5] += -E1 / L;   K_b[5, 4] += -E1 / L
-
-        # G1 term
-        K_b[0, 0] += 6.0 * G1 / (5.0 * L)
-        K_b[0, 1] += G1 / 10.0
-        K_b[0, 2] += -G1 / 2.0
-        K_b[0, 3] += -6.0 * G1 / (5.0 * L)
-        K_b[0, 4] += G1 / 10.0
-        K_b[0, 5] += -G1 / 2.0
-
-        K_b[1, 0] += G1 / 10.0
-        K_b[1, 1] += 2.0 * G1 * L / 15.0
-        K_b[1, 2] += G1 * L / 12.0
-        K_b[1, 3] += -G1 / 10.0
-        K_b[1, 4] += -G1 * L / 30.0
-        K_b[1, 5] += -G1 * L / 12.0
-
-        K_b[2, 0] += -G1 / 2.0
-        K_b[2, 1] += G1 * L / 12.0
-        K_b[2, 2] += G1 * L / 3.0
-        K_b[2, 3] += G1 / 2.0
-        K_b[2, 4] += -G1 * L / 12.0
-        K_b[2, 5] += G1 * L / 6.0
-
-        K_b[3, 0] += -6.0 * G1 / (5.0 * L)
-        K_b[3, 1] += -G1 / 10.0
-        K_b[3, 2] += G1 / 2.0
-        K_b[3, 3] += 6.0 * G1 / (5.0 * L)
-        K_b[3, 4] += -G1 / 10.0
-        K_b[3, 5] += G1 / 2.0
-
-        K_b[4, 0] += G1 / 10.0
-        K_b[4, 1] += -G1 * L / 30.0
-        K_b[4, 2] += -G1 * L / 12.0
-        K_b[4, 3] += -G1 / 10.0
-        K_b[4, 4] += 2.0 * G1 * L / 15.0
-        K_b[4, 5] += G1 * L / 12.0
-
-        K_b[5, 0] += -G1 / 2.0
-        K_b[5, 1] += -G1 * L / 12.0
-        K_b[5, 2] += G1 * L / 6.0
-        K_b[5, 3] += G1 / 2.0
-        K_b[5, 4] += G1 * L / 12.0
-        K_b[5, 5] += G1 * L / 3.0
-
-        k_local = np.zeros((8, 8))
-        k_local[0, 0] = E * A / L
-        k_local[0, 4] = -E * A / L
-        k_local[4, 0] = -E * A / L
-        k_local[4, 4] = E * A / L
-
-        for i_b, i_g in enumerate(b_dofs):
-            for j_b, j_g in enumerate(b_dofs):
-                k_local[i_g, j_g] = K_b[i_b, j_b]
+        k_local = self._local_stiffness_matrix()
 
         # Compute nodal forces
         f_vec = k_local @ displacements
@@ -1843,6 +1640,128 @@ class ReddyBickfordElement2Node(Element):
         u1 = displacements[0]
         u2 = displacements[4]
         return E * A * (u2 - u1) / L
+
+
+class ModifiedReddyBickfordElement2Node(TimoshenkoElement2Node):
+    """
+    2-node Modified Reddy-Bickford beam element (MRBT).
+
+    Uses a 6-DOF interpolation layout [u1, v1, θ1, u2, v2, θ2] and an
+    equivalent shear-flexible stiffness matrix with Reddy-consistent
+    constitutive parameters for rectangular sections.
+    """
+
+    def _get_height(self):
+        sec = self.section
+        if hasattr(sec, "height"):
+            return float(sec.height)
+        return float(np.sqrt(12.0 * sec.inertia / sec.area))
+
+    def _get_reddy_params(self):
+        E = self.material.E
+        G = self.material.G
+        A = self.section.area
+        I = self.section.inertia
+        h = self._get_height()
+        b = A / h
+
+        c1 = 4.0 / (3.0 * h ** 2)
+        c3 = 3.0 * c1
+        I4 = b * h ** 5 / 80.0
+        I6 = b * h ** 7 / 448.0
+        A_bar = A - 2.0 * c3 * I + c3 ** 2 * I4
+
+        D1 = E * (I - 2.0 * c1 * I4 + c1 ** 2 * I6)
+        F1 = E * c1 ** 2 * I6
+        G1 = G * A_bar
+        return D1, F1, G1
+
+    def _mrbt_rigidities(self):
+        _, _, G1 = self._get_reddy_params()
+        d_flex = self.material.E * self.section.inertia
+        phi = 12.0 * d_flex / (G1 * self.length ** 2)
+        return d_flex, phi
+
+    def stiffness_matrix(self):
+        E = self.material.E
+        A = self.section.area
+        L = self.length
+        R = self.R
+        d_flex, phi = self._mrbt_rigidities()
+
+        k_local = np.zeros((6, 6))
+        k_local[0, 0] = E * A / L
+        k_local[0, 3] = -E * A / L
+        k_local[3, 0] = -E * A / L
+        k_local[3, 3] = E * A / L
+
+        k_local[1, 1] = 12.0 * d_flex / (L ** 3 * (1.0 + phi))
+        k_local[1, 2] = 6.0 * d_flex / (L ** 2 * (1.0 + phi))
+        k_local[1, 4] = -12.0 * d_flex / (L ** 3 * (1.0 + phi))
+        k_local[1, 5] = 6.0 * d_flex / (L ** 2 * (1.0 + phi))
+
+        k_local[2, 1] = 6.0 * d_flex / (L ** 2 * (1.0 + phi))
+        k_local[2, 2] = (4.0 + phi) * d_flex / (L * (1.0 + phi))
+        k_local[2, 4] = -6.0 * d_flex / (L ** 2 * (1.0 + phi))
+        k_local[2, 5] = (2.0 - phi) * d_flex / (L * (1.0 + phi))
+
+        k_local[4, 1] = -12.0 * d_flex / (L ** 3 * (1.0 + phi))
+        k_local[4, 2] = -6.0 * d_flex / (L ** 2 * (1.0 + phi))
+        k_local[4, 4] = 12.0 * d_flex / (L ** 3 * (1.0 + phi))
+        k_local[4, 5] = -6.0 * d_flex / (L ** 2 * (1.0 + phi))
+
+        k_local[5, 1] = 6.0 * d_flex / (L ** 2 * (1.0 + phi))
+        k_local[5, 2] = (2.0 - phi) * d_flex / (L * (1.0 + phi))
+        k_local[5, 4] = -6.0 * d_flex / (L ** 2 * (1.0 + phi))
+        k_local[5, 5] = (4.0 + phi) * d_flex / (L * (1.0 + phi))
+
+        return R @ k_local @ R.T
+
+    def force_vector(self, q_ini=0, q_fim=0, p_ini=0, p_fim=0):
+        return TimoshenkoElement2Node.force_vector(self, q_ini=q_ini, q_fim=q_fim, p_ini=p_ini, p_fim=p_fim)
+
+    def compute_equivalent_nodal_loads(self, distributed_load, n_gauss=5):
+        return TimoshenkoElement2Node.compute_equivalent_nodal_loads(self, distributed_load, n_gauss=n_gauss)
+
+    def theta_and_slope(self, x, displacements):
+        L = self.length
+        xi = np.clip(x / L, 0.0, 1.0)
+        v1, theta1 = displacements[1], displacements[2]
+        v2, theta2 = displacements[4], displacements[5]
+        theta = (1.0 - xi) * theta1 + xi * theta2
+        dH1dx = (-6.0 * xi + 6.0 * xi ** 2) / L
+        dH2dx = 1.0 - 4.0 * xi + 3.0 * xi ** 2
+        dH3dx = (6.0 * xi - 6.0 * xi ** 2) / L
+        dH4dx = -2.0 * xi + 3.0 * xi ** 2
+        slope = dH1dx * v1 + dH2dx * theta1 + dH3dx * v2 + dH4dx * theta2
+        return float(theta), float(slope)
+
+    def bending_moment(self, x, displacements):
+        L = self.length
+        v1 = displacements[1]
+        theta1 = displacements[2]
+        v2 = displacements[4]
+        theta2 = displacements[5]
+        d_flex, phi = self._mrbt_rigidities()
+
+        coeff = d_flex / (L * (1.0 + phi))
+        f2 = coeff * (6.0 / L * (v1 - v2) + (4.0 + phi) * theta1 + (2.0 - phi) * theta2)
+        f5 = coeff * (6.0 / L * (v1 - v2) + (2.0 - phi) * theta1 + (4.0 + phi) * theta2)
+        m0 = -f2
+        ml = f5
+        xi = x / L
+        return m0 * (1.0 - xi) + ml * xi
+
+    def shear_force(self, x, displacements):
+        del x
+        L = self.length
+        v1 = displacements[1]
+        theta1 = displacements[2]
+        v2 = displacements[4]
+        theta2 = displacements[5]
+        d_flex, phi = self._mrbt_rigidities()
+        return (12.0 * d_flex / (L ** 3 * (1.0 + phi))) * (v1 - v2) + \
+               (6.0 * d_flex / (L ** 2 * (1.0 + phi))) * (theta1 + theta2)
 
 
 class ElementResults:

@@ -36,13 +36,14 @@ class ElementResults:
         xi = x / L if L > 1e-14 else 0.0
         d = self.displacements
         class_name = type(self.element).__name__
+        dofs_per_node = getattr(self.element, "dofs_per_node", 3)
 
         if "3Node" in class_name:
             # 9 DOFs: [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3]
             u1, u2, u3 = d[0], d[3], d[6]
             n1, n2, n3 = _quadratic_shape_functions_3node(xi)
             return float(n1 * u1 + n2 * u2 + n3 * u3)
-        elif "ReddyBickford" in class_name:
+        elif dofs_per_node == 4:
             # 8 DOFs: [u1, v1, θ1, (dv/dx)1, u2, v2, θ2, (dv/dx)2]
             u1, u2 = d[0], d[4]
             return float((1.0 - xi) * u1 + xi * u2)
@@ -57,13 +58,14 @@ class ElementResults:
         xi = x / L if L > 1e-14 else 0.0
         d = self.displacements
         class_name = type(self.element).__name__
+        dofs_per_node = getattr(self.element, "dofs_per_node", 3)
 
         if "3Node" in class_name:
             # 9 DOFs: [u1, v1, θ1, u2, v2, θ2, u3, v3, θ3] – quintic Hermite
             bending_dofs = np.array([d[1], d[2], d[4], d[5], d[7], d[8]])
             n_w, _, _, _, _, _ = _quintic_bending_shapes_3node(xi, L)
             return float(np.dot(n_w, bending_dofs))
-        elif "ReddyBickford" in class_name:
+        elif dofs_per_node == 4:
             # 8 DOFs: [u1, v1, θ1, (dv/dx)1, u2, v2, θ2, (dv/dx)2]
             # Cubic Hermite using the (dv/dx) DOFs at each node
             v1, dvdx1 = d[1], d[3]

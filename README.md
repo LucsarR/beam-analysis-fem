@@ -12,7 +12,8 @@ This tool performs finite element analysis on beams using three different formul
   * **Euler-Bernoulli 3-node**: Enhanced element with central node for improved accuracy with distributed loads
   * **Timoshenko 2-node**: Includes shear deformation effects
   * **Timoshenko 3-node**: Enhanced element with central node for improved accuracy with distributed loads and shear deformation
-  * **Reddy-Bickford 2-node**: Third-order shear deformation theory element
+  * **Reddy-Bickford RBT 2-node**: Third-order shear deformation theory element
+  * **Reddy-Bickford MRBT 2-node**: Modified Reddy formulation with coupled shear-flexibility terms
 * Interactive web interface for setting up simulations
 * Visualization of displacement, shear force, bending moment, and normal force diagrams
 * Support for point loads and distributed loads (constant, linear, and custom functions)

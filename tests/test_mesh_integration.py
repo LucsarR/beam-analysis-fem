@@ -659,6 +659,7 @@ def test_internal_force_recovery_across_element_types():
         "timoshenko_2node",
         "timoshenko_3node",
         "reddy_bickford_2node",
+        "modified_reddy_bickford_2node",
     ]
 
     E = 210e9
@@ -834,6 +835,7 @@ def test_structural_behavior_modes_supported_across_element_types():
         "timoshenko_2node",
         "timoshenko_3node",
         "reddy_bickford_2node",
+        "modified_reddy_bickford_2node",
     )
 
     for element_type in element_types:

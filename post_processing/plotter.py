@@ -874,14 +874,15 @@ def plot_normal_stress_distribution(element_result, x, n_points=100, query_y=Non
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     return fig
 
-def plot_shear_stress_distribution(element_result, x, n_points=100):
+def plot_shear_stress_distribution(element_result, x, n_points=100, method="jourawski"):
     """
     Interactive Plotly plot: approximate 2D contour of shear stress over the
     section shape at position x along the element.
 
-    Assumes transverse shear force is applied through the shear center
-    (no torsional shear component) and uses a row-wise Jourawski estimate:
-    tau(y) = V * Q(y) / (I * b(y)).
+    Methods:
+      - "jourawski": row-wise Jourawski estimate tau(y) = V*Q/(I*b)
+      - "reddy_bickford": tau_xy = G*(theta - dv/dx)*(3*alpha*y^2 - 1)
+      - "compare": through-height comparison of both methods
     """
     section = element_result.element.section
     if not hasattr(section, "xy_grid"):
@@ -889,6 +890,7 @@ def plot_shear_stress_distribution(element_result, x, n_points=100):
 
     X, Y, mask = section.xy_grid(n_points)
     V = element_result.shear_force(x)
+    method = (method or "jourawski").lower()
 
     if section.inertia is None or abs(section.inertia) < 1e-18:
         raise ValueError("Section inertia must be defined to compute shear stress.")
@@ -930,15 +932,91 @@ def plot_shear_stress_distribution(element_result, x, n_points=100):
         running_Q += row_first_moment[i]
         Q[i] = running_Q
 
-    tau_rows = np.zeros(n_rows)
+    tau_rows_jourawski = np.zeros(n_rows)
     for i in range(n_rows):
         if valid_rows[i] and row_width[i] > 1e-12:
-            tau_rows[i] = V * Q[i] / (section.inertia * row_width[i])
+            tau_rows_jourawski[i] = V * Q[i] / (section.inertia * row_width[i])
 
-    TAU = np.full_like(X, np.nan, dtype=float)
+    TAU_j = np.full_like(X, np.nan, dtype=float)
     for i in range(n_rows):
         if valid_rows[i]:
-            TAU[i, mask[i, :]] = tau_rows[i]
+            TAU_j[i, mask[i, :]] = tau_rows_jourawski[i]
+
+    tau_rows_reddy = None
+    TAU_r = None
+    if method in ("reddy_bickford", "compare"):
+        if section.area is None or section.area <= 0:
+            raise ValueError("Section area must be defined to compute Reddy-Bickford shear stress.")
+        if hasattr(section, "height"):
+            h = float(section.height)
+        elif hasattr(section, "diameter"):
+            h = float(section.diameter)
+        else:
+            h = float(np.sqrt(12.0 * section.inertia / section.area))
+        if h <= 0:
+            raise ValueError("Section height must be positive for Reddy-Bickford shear stress.")
+
+        if hasattr(element_result.element, "theta_and_slope"):
+            theta_x, slope_x = element_result.element.theta_and_slope(x, element_result.displacements)
+        else:
+            L = element_result.length
+            xi = np.clip(x / L if L > 1e-14 else 0.0, 0.0, 1.0)
+            d = element_result.displacements
+            theta1, theta2 = d[2], d[5]
+            theta_x = (1.0 - xi) * theta1 + xi * theta2
+            v1, v2 = d[1], d[4]
+            dH1dx = (-6.0 * xi + 6.0 * xi ** 2) / L
+            dH2dx = 1.0 - 4.0 * xi + 3.0 * xi ** 2
+            dH3dx = (6.0 * xi - 6.0 * xi ** 2) / L
+            dH4dx = -2.0 * xi + 3.0 * xi ** 2
+            slope_x = dH1dx * v1 + dH2dx * theta1 + dH3dx * v2 + dH4dx * theta2
+
+        alpha = 4.0 / (3.0 * h ** 2)
+        gamma0 = theta_x - slope_x
+        tau_rows_reddy = np.zeros(n_rows)
+        row_y = np.zeros(n_rows)
+        for i in range(n_rows):
+            if not valid_rows[i]:
+                continue
+            row_y[i] = float(np.mean(Y[i, mask[i, :]]))
+            tau_rows_reddy[i] = element_result.element.material.G * gamma0 * (3.0 * alpha * row_y[i] ** 2 - 1.0)
+
+        TAU_r = np.full_like(X, np.nan, dtype=float)
+        for i in range(n_rows):
+            if valid_rows[i]:
+                TAU_r[i, mask[i, :]] = tau_rows_reddy[i]
+
+    if method == "compare":
+        y_vals = []
+        tau_j_vals = []
+        tau_r_vals = []
+        for i in range(n_rows):
+            if valid_rows[i]:
+                y_avg = float(np.mean(Y[i, mask[i, :]]))
+                y_vals.append(y_avg)
+                tau_j_vals.append(tau_rows_jourawski[i])
+                tau_r_vals.append(tau_rows_reddy[i])
+        order = np.argsort(y_vals)
+        y_sorted = np.asarray(y_vals)[order]
+        tau_j_sorted = np.asarray(tau_j_vals)[order]
+        tau_r_sorted = np.asarray(tau_r_vals)[order]
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=tau_j_sorted, y=y_sorted, mode="lines", name="Jourawski"))
+        fig.add_trace(go.Scatter(x=tau_r_sorted, y=y_sorted, mode="lines", name="Reddy-Bickford"))
+        fig.update_layout(
+            title=f"Shear Stress Through-Height Comparison at x={x:.2f}",
+            xaxis_title="Shear Stress",
+            yaxis_title="Section y",
+            width=600,
+            height=500,
+            showlegend=True,
+        )
+        return fig
+
+    TAU = TAU_j if method == "jourawski" else TAU_r
+    method_name = "Jourawski" if method == "jourawski" else "Reddy-Bickford"
+    colorbar_title = f"{method_name} τ"
 
     X_flat = X.flatten()
     Y_flat = Y.flatten()
@@ -956,9 +1034,10 @@ def plot_shear_stress_distribution(element_result, x, n_points=100):
             size=6,
             color=TAU_plot,
             colorscale="RdBu",
-            colorbar=dict(title="Shear Stress"),
+            colorbar=dict(title=colorbar_title),
             showscale=True
         ),
+        name=method_name,
         text=[f"x={xv:.3f}<br>y={yv:.3f}<br>τ={tv:.3f}" for xv, yv, tv in zip(X_plot, Y_plot, TAU_plot)],
         hoverinfo='text'
     ))
@@ -975,7 +1054,7 @@ def plot_shear_stress_distribution(element_result, x, n_points=100):
     ))
 
     fig.update_layout(
-        title=f"Shear Stress Contour at x={x:.2f}",
+        title=f"{method_name} Shear Stress Contour at x={x:.2f}",
         xaxis_title="Section x",
         yaxis_title="Section y",
         width=600,
