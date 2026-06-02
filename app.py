@@ -36,6 +36,8 @@ from post_processing.plotter import (
     plot_structure_diagram,
     plot_normal_stress_distribution,
     plot_shear_stress_distribution,
+    plot_reddy_shear_stress_distribution,
+    plot_shear_stress_comparison,
     plot_normal_stress_side_view,
     plot_structure_preview,
     find_position_on_structure,
@@ -1287,7 +1289,7 @@ with tab1:
 
         # Detect whether any Reddy-Bickford element is in use (needs 4 DOFs/node)
         _has_reddy = any(
-            e[2] == "reddy_bickford_2node"
+            e[2] in ["reddy_bickford_2node", "mrbt_2node"]
             for e in st.session_state.get("elements", [])
         )
         _behavior = st.session_state.get("structural_behavior_mode", "frame")
@@ -2327,10 +2329,36 @@ with tab3:
 
                         with shear_col:
                             st.markdown("##### Shear Stress Distribution (Cross-Section)")
-                            fig_shear_cross = plot_shear_stress_distribution(
-                                selected_element_result,
-                                x_pos,
-                            )
+                            class_name = type(selected_element_result.element).__name__
+                            is_reddy = "ReddyBickford" in class_name or "MRBT" in class_name
+                            
+                            if is_reddy:
+                                shear_theory = st.radio(
+                                    "Shear Stress View",
+                                    ["Jourawski (classical)", "Reddy-Bickford (parabolic TSDT)", "Compare Both"],
+                                    horizontal=True,
+                                    key="shear_theory_selector"
+                                )
+                                if shear_theory == "Jourawski (classical)":
+                                    fig_shear_cross = plot_shear_stress_distribution(
+                                        selected_element_result,
+                                        x_pos,
+                                    )
+                                elif shear_theory == "Reddy-Bickford (parabolic TSDT)":
+                                    fig_shear_cross = plot_reddy_shear_stress_distribution(
+                                        selected_element_result,
+                                        x_pos,
+                                    )
+                                else:
+                                    fig_shear_cross = plot_shear_stress_comparison(
+                                        selected_element_result,
+                                        x_pos,
+                                    )
+                            else:
+                                fig_shear_cross = plot_shear_stress_distribution(
+                                    selected_element_result,
+                                    x_pos,
+                                )
                             st.plotly_chart(fig_shear_cross, use_container_width=True)
 
                         st.markdown("##### Normal Stress Distribution (Side View)")

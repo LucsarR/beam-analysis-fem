@@ -3,6 +3,8 @@ from .plotter import (
     plot_structure_diagram,
     plot_normal_stress_distribution,
     plot_shear_stress_distribution,
+    plot_reddy_shear_stress_distribution,
+    plot_shear_stress_comparison,
     plot_normal_stress_side_view,
     find_position_on_structure,
     plot_deformed_shape,

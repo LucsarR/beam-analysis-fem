@@ -42,7 +42,7 @@ class ElementResults:
             u1, u2, u3 = d[0], d[3], d[6]
             n1, n2, n3 = _quadratic_shape_functions_3node(xi)
             return float(n1 * u1 + n2 * u2 + n3 * u3)
-        elif "ReddyBickford" in class_name:
+        elif "ReddyBickford" in class_name or "MRBT" in class_name:
             # 8 DOFs: [u1, v1, θ1, (dv/dx)1, u2, v2, θ2, (dv/dx)2]
             u1, u2 = d[0], d[4]
             return float((1.0 - xi) * u1 + xi * u2)
@@ -63,7 +63,7 @@ class ElementResults:
             bending_dofs = np.array([d[1], d[2], d[4], d[5], d[7], d[8]])
             n_w, _, _, _, _, _ = _quintic_bending_shapes_3node(xi, L)
             return float(np.dot(n_w, bending_dofs))
-        elif "ReddyBickford" in class_name:
+        elif "ReddyBickford" in class_name or "MRBT" in class_name:
             # 8 DOFs: [u1, v1, θ1, (dv/dx)1, u2, v2, θ2, (dv/dx)2]
             # Cubic Hermite using the (dv/dx) DOFs at each node
             v1, dvdx1 = d[1], d[3]
@@ -82,6 +82,38 @@ class ElementResults:
             H3 = 3.0 * xi**2 - 2.0 * xi**3
             H4 = L * xi**2 * (xi - 1.0)
             return float(H1 * v1 + H2 * theta1 + H3 * v2 + H4 * theta2)
+
+    def _reddy_gamma_factor(self, x):
+        """
+        Compute (θ(x) - dv₀/dx(x)) using shape function interpolation.
+        Returns 0.0 if not a Reddy element.
+        """
+        class_name = type(self.element).__name__
+        if "ReddyBickford" not in class_name and "MRBT" not in class_name:
+            return 0.0
+            
+        # displacements in LOCAL coordinates:
+        local_disps = self.displacements
+        
+        theta = self.element.interpolate_theta(x, local_disps)
+        dv_dx = self.element.interpolate_dv_dx(x, local_disps)
+        
+        return theta - dv_dx
+
+    def reddy_shear_stress(self, x, y):
+        """
+        Compute τ_xy(x,y) = G·(θ(x) − dv₀/dx(x))·(3αy² − 1) for Reddy elements.
+        """
+        class_name = type(self.element).__name__
+        if "ReddyBickford" not in class_name and "MRBT" not in class_name:
+            return 0.0
+            
+        G = self.element.material.G
+        h = self.element._get_height()
+        alpha = 4.0 / (3.0 * h**2)
+        
+        gamma = self._reddy_gamma_factor(x)
+        return G * gamma * (3.0 * alpha * y**2 - 1.0)
 
 class StructureResults:
     """

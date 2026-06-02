@@ -79,6 +79,13 @@ class Element(ABC):
     def force_vector(self, q_ini=0, q_fim=0, p_ini=0, p_fim=0):
         pass
 
+    def _recover_local_nodal_forces(self, displacements):
+        """Recover local nodal force vector f_local = K_local · d_local."""
+        d_local = np.asarray(displacements, dtype=float)
+        k_local = self.R.T @ self.stiffness_matrix() @ self.R
+        return k_local @ d_local
+
+
 class EulerBernoulliElement2Node(Element):
     dofs_per_node = 3  # Each node has [u, v, θ] DOFs
 
@@ -1254,21 +1261,14 @@ class TimoshenkoElement3Node(Element):
         dN3 = (-1 + 4*xi) / L
         
         # du/dx
-        epsilon = dN1 * u1 + dN2 * u2 + dN3 * u3
-        
-        return E * A * epsilon
-
-    def _recover_local_nodal_forces(self, displacements):
-        """Recover local nodal force vector f_local = K_local · d_local."""
-        d_local = np.asarray(displacements, dtype=float)
-        k_local = self.R.T @ self.stiffness_matrix() @ self.R
-        return k_local @ d_local
-
 class ReddyBickfordElement2Node(Element):
     """
-    2-node Reddy-Bickford (modified Reddy) beam element.
+    2-node Reddy-Bickford (RBT) beam element.
 
-    Based on Reddy's third-order shear deformation theory (TSDT).
+    Based on Reddy's third-order shear deformation theory (TSDT) with
+    *independent* (uncoupled) interpolations: Hermite cubics for transverse
+    displacement v and linear shape functions for the rotation θ.
+
     Each node has 4 DOFs in global ordering [u, v, θ, dv/dx]:
       - u     : axial displacement
       - v     : transverse displacement
@@ -1294,8 +1294,7 @@ class ReddyBickfordElement2Node(Element):
         L = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
         c = (x2 - x1) / L
         s = (y2 - y1) / L
-        # 8×8 transformation matrix: [u,v] rotate as a vector; θ and dv/dx are
-        # scalar quantities that do not change under coordinate transformation.
+        # 8×8 transformation matrix
         R = np.array([
             [c, -s, 0, 0, 0,  0, 0, 0],
             [s,  c, 0, 0, 0,  0, 0, 0],
@@ -1316,34 +1315,26 @@ class ReddyBickfordElement2Node(Element):
         sec = self.section
         if hasattr(sec, 'height'):
             return float(sec.height)
-        # Fallback: equivalent height for rectangular section (I = A·h²/12)
         return float(np.sqrt(12.0 * sec.inertia / sec.area))
 
     def _get_reddy_params(self):
         """
         Compute the four modified stiffness parameters for the Reddy TSDT.
-
-        Assumes a rectangular cross-section of width b = A/h and height h.
-        Returns (D1, E1, F1, G1) where:
-          D1 = E·(I − 2c₁·I₄ + c₁²·I₆)   [modified bending, 68EI/105 for rect.]
-          E1 = E·c₁·(I₄ − c₁·I₆)           [coupling term,   16EI/105 for rect.]
-          F1 = E·c₁²·I₆                      [higher-order,     EI/21   for rect.]
-          G1 = G·Ā  where Ā = A−2c₃·I+c₃²·I₄ [eff. shear,   8GA/15  for rect.]
         """
         E = self.material.E
         G = self.material.G
         A = self.section.area
         I = self.section.inertia
         h = self._get_height()
-        b = A / h                            # effective width
+        b = A / h
 
-        c1 = 4.0 / (3.0 * h ** 2)           # Reddy c₁ parameter
-        c3 = 3.0 * c1                        # = 4/h²
+        c1 = 4.0 / (3.0 * h ** 2)
+        c3 = 3.0 * c1
 
-        I4 = b * h ** 5 / 80.0              # ∫z⁴ dA (rectangular)
-        I6 = b * h ** 7 / 448.0             # ∫z⁶ dA (rectangular)
+        I4 = b * h ** 5 / 80.0
+        I6 = b * h ** 7 / 448.0
 
-        A_bar = A - 2.0 * c3 * I + c3 ** 2 * I4  # effective shear area (= 8A/15 rect.)
+        A_bar = A - 2.0 * c3 * I + c3 ** 2 * I4
 
         D1 = E * (I - 2.0 * c1 * I4 + c1 ** 2 * I6)
         E1 = E * c1 * (I4 - c1 * I6)
@@ -1352,132 +1343,117 @@ class ReddyBickfordElement2Node(Element):
 
         return D1, E1, F1, G1
 
-    def stiffness_matrix(self):
+    # ------------------------------------------------------------------
+    # Core stiffness assembly – extracted into a single method so that
+    # subclasses (MRBTElement2Node) can override only this while inheriting
+    # all other behaviour (force vectors, moment / shear recovery, etc.).
+    # ------------------------------------------------------------------
+
+    def _build_local_stiffness(self):
         """
-        Build the 8×8 element stiffness matrix in global coordinates.
+        Build and return the full 8×8 LOCAL stiffness matrix (before rotation).
 
         Local DOF ordering: [u₁, v₁, θ₁, (dv/dx)₁, u₂, v₂, θ₂, (dv/dx)₂]
-        (index 2 = θ, index 3 = dv/dx  – matches the global 4-DOF-per-node
-        convention used throughout the assembly, so direction 2 = rotation
-        remains consistent with the Euler-Bernoulli / Timoshenko elements.)
+
+        The 6×6 bending sub-matrix K_b uses the sequential node-grouped DOF ordering:
+          [v₁, θ₁, (dv/dx)₁, v₂, θ₂, (dv/dx)₂]
+        and is scattered into the 8×8 via b_dofs = [1, 2, 3, 5, 6, 7].
+
+        Strain energy terms:
+          U = ½∫[D1·(θ')² − 2E1·θ'·v'' + F1·(v'')² + G1·(θ − v')²] dx
         """
         E = self.material.E
         A = self.section.area
         L = self.length
-        R = self.R
 
-        D1, E1, F1, G1 = self._get_reddy_params()
+        D1, E1_param, F1, G1 = self._get_reddy_params()
 
-        # ------------------------------------------------------------------
-        # 8×8 local stiffness matrix K_local.
-        # The 6×6 bending sub-matrix K_b is derived analytically from the
-        # Reddy TSDT strain energy:
-        #   U_bend = ½∫[D1·(θ')² − 2E1·θ'·v'' + F1·(v'')² + G1·(θ+v')²] dx
-        #
-        # Hermite cubic shape functions for v: H1…H4
-        # Linear shape functions for θ:       N1 = 1−ξ, N2 = ξ  (ξ = x/L)
-        #
-        # K_b DOF ordering (bending-only, 6×6):
-        #   b0 = v₁,  b1 = v₁' = (dv/dx)₁,  b2 = θ₁,
-        #   b3 = v₂,  b4 = v₂' = (dv/dx)₂,  b5 = θ₂
-        #
-        # In the 8×8 matrix these bending indices map to:
-        #   b0=v₁  → 1,  b1=(dv/dx)₁ → 3,  b2=θ₁  → 2,
-        #   b3=v₂  → 5,  b4=(dv/dx)₂ → 7,  b5=θ₂  → 6
-        # ------------------------------------------------------------------
-        b_dofs = [1, 3, 2, 5, 7, 6]   # map bending index → 8×8 index
-
+        # Sequential bending DOF ordering → 8×8 index mapping
+        b_dofs = [1, 2, 3, 5, 6, 7]
         K_b = np.zeros((6, 6))
 
-        # --- D1 term: ψ'·ψ'^T where ψ' = dθ/dx = (θ₂−θ₁)/L (constant) ---
-        K_b[2, 2] += D1 / L
-        K_b[2, 5] += -D1 / L
-        K_b[5, 2] += -D1 / L
-        K_b[5, 5] += D1 / L
+        # --- D1 term: ∫D1·(dθ/dx)² dx  (linear θ → constant derivative) ---
+        K_b[1, 1] += D1 / L
+        K_b[1, 4] += -D1 / L
+        K_b[4, 1] += -D1 / L
+        K_b[4, 4] += D1 / L
 
-        # --- F1 term: v''·v''^T  (standard Euler-Bernoulli stiffness form) ---
+        # --- F1 term: ∫F1·(v'')² dx  (Hermite cubic → EB-like 4×4 mapped to 0, 2, 3, 5) ---
         f = F1 / L ** 3
-        K_b[0, 0] += 12.0 * f;  K_b[0, 1] += 6.0 * L * f
-        K_b[0, 3] += -12.0 * f; K_b[0, 4] += 6.0 * L * f
-        K_b[1, 0] += 6.0 * L * f;  K_b[1, 1] += 4.0 * L ** 2 * f
-        K_b[1, 3] += -6.0 * L * f; K_b[1, 4] += 2.0 * L ** 2 * f
-        K_b[3, 0] += -12.0 * f; K_b[3, 1] += -6.0 * L * f
-        K_b[3, 3] += 12.0 * f;  K_b[3, 4] += -6.0 * L * f
-        K_b[4, 0] += 6.0 * L * f;  K_b[4, 1] += 2.0 * L ** 2 * f
-        K_b[4, 3] += -6.0 * L * f; K_b[4, 4] += 4.0 * L ** 2 * f
+        K_b[0, 0] += 12.0 * f;  K_b[0, 2] += 6.0 * L * f
+        K_b[0, 3] += -12.0 * f; K_b[0, 5] += 6.0 * L * f
+        K_b[2, 0] += 6.0 * L * f;  K_b[2, 2] += 4.0 * L ** 2 * f
+        K_b[2, 3] += -6.0 * L * f; K_b[2, 5] += 2.0 * L ** 2 * f
+        K_b[3, 0] += -12.0 * f; K_b[3, 2] += -6.0 * L * f
+        K_b[3, 3] += 12.0 * f;  K_b[3, 5] += -6.0 * L * f
+        K_b[5, 0] += 6.0 * L * f;  K_b[5, 2] += 2.0 * L ** 2 * f
+        K_b[5, 3] += -6.0 * L * f; K_b[5, 5] += 4.0 * L ** 2 * f
 
-        # --- E1 cross term: −E1·(ψ'·κ^T + κ·ψ'^T) ---
-        # From −E1·∫dθ/dx·d²v/dx² dx, analytically integrated:
-        #   K[v₁', θ₁] = K[θ₁, v₁'] = −E1/L
-        #   K[v₁', θ₂] = K[θ₂, v₁'] = +E1/L
-        #   K[θ₁, v₂'] = K[v₂', θ₁] = +E1/L
-        #   K[v₂', θ₂] = K[θ₂, v₂'] = −E1/L
-        # b-index mapping: v₁'=1, θ₁=2, v₂'=4, θ₂=5
-        K_b[1, 2] += -E1 / L;   K_b[2, 1] += -E1 / L
-        K_b[1, 5] += E1 / L;    K_b[5, 1] += E1 / L
-        K_b[2, 4] += E1 / L;    K_b[4, 2] += E1 / L
-        K_b[4, 5] += -E1 / L;   K_b[5, 4] += -E1 / L
+        # --- E1 cross term: −∫E1·(dθ/dx·d²v/dx² + d²v/dx²·dθ/dx) dx ---
+        K_b[1, 2] += -E1_param / L;   K_b[2, 1] += -E1_param / L
+        K_b[1, 5] += E1_param / L;    K_b[5, 1] += E1_param / L
+        K_b[2, 4] += E1_param / L;    K_b[4, 2] += E1_param / L
+        K_b[4, 5] += -E1_param / L;   K_b[5, 4] += -E1_param / L
 
-        # --- G1 shear term: G1·L·∫γᵢ·γⱼ dξ ---
-        # γ = [N_θ,ᵢ + dN_v,ᵢ/dx] – see analytical integral table in derivation.
+        # --- G1 shear term: ∫G1·(θ − v')² dx ---
         K_b[0, 0] += 6.0 * G1 / (5.0 * L)
-        K_b[0, 1] += G1 / 10.0
-        K_b[0, 2] += -G1 / 2.0
+        K_b[0, 1] += -G1 / 2.0
+        K_b[0, 2] += G1 / 10.0
         K_b[0, 3] += -6.0 * G1 / (5.0 * L)
-        K_b[0, 4] += G1 / 10.0
-        K_b[0, 5] += -G1 / 2.0
+        K_b[0, 4] += -G1 / 2.0
+        K_b[0, 5] += G1 / 10.0
 
-        K_b[1, 0] += G1 / 10.0
-        K_b[1, 1] += 2.0 * G1 * L / 15.0
+        K_b[1, 0] += -G1 / 2.0
+        K_b[1, 1] += G1 * L / 3.0
         K_b[1, 2] += G1 * L / 12.0
-        K_b[1, 3] += -G1 / 10.0
-        K_b[1, 4] += -G1 * L / 30.0
+        K_b[1, 3] += G1 / 2.0
+        K_b[1, 4] += G1 * L / 6.0
         K_b[1, 5] += -G1 * L / 12.0
 
-        K_b[2, 0] += -G1 / 2.0
+        K_b[2, 0] += G1 / 10.0
         K_b[2, 1] += G1 * L / 12.0
-        K_b[2, 2] += G1 * L / 3.0
-        K_b[2, 3] += G1 / 2.0
+        K_b[2, 2] += 2.0 * G1 * L / 15.0
+        K_b[2, 3] += -G1 / 10.0
         K_b[2, 4] += -G1 * L / 12.0
-        K_b[2, 5] += G1 * L / 6.0
+        K_b[2, 5] += -G1 * L / 30.0
 
         K_b[3, 0] += -6.0 * G1 / (5.0 * L)
-        K_b[3, 1] += -G1 / 10.0
-        K_b[3, 2] += G1 / 2.0
+        K_b[3, 1] += G1 / 2.0
+        K_b[3, 2] += -G1 / 10.0
         K_b[3, 3] += 6.0 * G1 / (5.0 * L)
-        K_b[3, 4] += -G1 / 10.0
-        K_b[3, 5] += G1 / 2.0
+        K_b[3, 4] += G1 / 2.0
+        K_b[3, 5] += -G1 / 10.0
 
-        K_b[4, 0] += G1 / 10.0
-        K_b[4, 1] += -G1 * L / 30.0
+        K_b[4, 0] += -G1 / 2.0
+        K_b[4, 1] += G1 * L / 6.0
         K_b[4, 2] += -G1 * L / 12.0
-        K_b[4, 3] += -G1 / 10.0
-        K_b[4, 4] += 2.0 * G1 * L / 15.0
+        K_b[4, 3] += G1 / 2.0
+        K_b[4, 4] += G1 * L / 3.0
         K_b[4, 5] += G1 * L / 12.0
 
-        K_b[5, 0] += -G1 / 2.0
+        K_b[5, 0] += G1 / 10.0
         K_b[5, 1] += -G1 * L / 12.0
-        K_b[5, 2] += G1 * L / 6.0
-        K_b[5, 3] += G1 / 2.0
+        K_b[5, 2] += -G1 * L / 30.0
+        K_b[5, 3] += -G1 / 10.0
         K_b[5, 4] += G1 * L / 12.0
-        K_b[5, 5] += G1 * L / 3.0
+        K_b[5, 5] += 2.0 * G1 * L / 15.0
 
-        # Build the full 8×8 local stiffness matrix
+        # Build full 8×8
         k_local = np.zeros((8, 8))
-
-        # Axial part (DOFs 0 and 4)
         k_local[0, 0] = E * A / L
         k_local[0, 4] = -E * A / L
         k_local[4, 0] = -E * A / L
         k_local[4, 4] = E * A / L
 
-        # Map bending sub-matrix into full 8×8
         for i_b, i_g in enumerate(b_dofs):
             for j_b, j_g in enumerate(b_dofs):
                 k_local[i_g, j_g] = K_b[i_b, j_b]
 
-        # Transform to global coordinates: K_global = R · K_local · R^T
-        return R @ k_local @ R.T
+        return k_local
+
+    def stiffness_matrix(self):
+        """Build the 8×8 element stiffness matrix in global coordinates."""
+        return self.R @ self._build_local_stiffness() @ self.R.T
 
     def force_vector(self, q_ini=0, q_fim=0, p_ini=0, p_fim=0):
         """
@@ -1497,15 +1473,10 @@ class ReddyBickfordElement2Node(Element):
         fe[4] = L * (q_ini + 2.0 * q_fim) / 6.0
 
         # Transverse – Hermite shape functions for v; θ gets zero load
-        # v₁  (H1):  L·(7p_ini + 3p_fim)/20
-        # v₁' (H2):  L²·(3p_ini + 2p_fim)/60
-        # v₂  (H3):  L·(3p_ini + 7p_fim)/20
-        # v₂' (H4): −L²·(2p_ini + 3p_fim)/60
-        fe[1] = L * (7.0 * p_ini + 3.0 * p_fim) / 20.0    # v₁
-        fe[3] = L ** 2 * (3.0 * p_ini + 2.0 * p_fim) / 60.0  # (dv/dx)₁
-        fe[5] = L * (3.0 * p_ini + 7.0 * p_fim) / 20.0    # v₂
+        fe[1] = L * (7.0 * p_ini + 3.0 * p_fim) / 20.0        # v₁
+        fe[3] = L ** 2 * (3.0 * p_ini + 2.0 * p_fim) / 60.0   # (dv/dx)₁
+        fe[5] = L * (3.0 * p_ini + 7.0 * p_fim) / 20.0        # v₂
         fe[7] = -L ** 2 * (2.0 * p_ini + 3.0 * p_fim) / 60.0  # (dv/dx)₂
-        # fe[2] = fe[6] = 0  (θ₁, θ₂ – no direct transverse load contribution)
 
         return (self.R @ fe).flatten()
 
@@ -1513,25 +1484,13 @@ class ReddyBickfordElement2Node(Element):
         """
         Compute consistent nodal loads for a DistributedLoad object using
         numerical Gauss-Legendre integration.
-
-        Returns an 8-vector in GLOBAL coordinates
-        [u₁, v₁, θ₁, (dv/dx)₁, u₂, v₂, θ₂, (dv/dx)₂].
-
-        For custom functions (func), the variable ``x`` passed to the expression
-        is the **global** position along the beam (i.e. the x-coordinate of the
-        point on the element in the global frame).  ``L`` in the expression
-        refers to the length of the current element.
         """
         L = self.length
         c = self.c
         s = self.s
 
-        # Build scalar load function f(x_local) from distributed_load.
-        # x_local is the local coordinate within the element (0 to L).
+        # Build scalar load function f(x_local)
         if distributed_load.func:
-            # Custom function: evaluate using the global x position so that
-            # load expressions written in terms of the full-beam coordinate
-            # work correctly for any element in a multi-element mesh.
             x_start = self.node_start.x
             def f(x_local):
                 x_global = x_start + x_local * c
@@ -1557,8 +1516,8 @@ class ReddyBickfordElement2Node(Element):
 
         # Project global load direction onto local axes
         if distributed_load.direction == 'x':
-            def q_local(x): return f(x) * c      # axial
-            def p_local(x): return -f(x) * s     # transverse
+            def q_local(x): return f(x) * c
+            def p_local(x): return -f(x) * s
         elif distributed_load.direction == 'y':
             def q_local(x): return f(x) * s
             def p_local(x): return f(x) * c
@@ -1574,47 +1533,33 @@ class ReddyBickfordElement2Node(Element):
 
         # Gauss-Legendre quadrature (on [0, L])
         xi_pts, wi = np.polynomial.legendre.leggauss(n_gauss)
-        t = 0.5 * (xi_pts + 1.0)           # map [−1,1] → [0,1]
+        t = 0.5 * (xi_pts + 1.0)
         wt = 0.5 * wi
 
         fe = np.zeros(8)
-
         for ti, wi_s in zip(t, wt):
             x = ti * L
-
-            # --- Axial: linear shape functions ---
             N1u = 1.0 - ti
             N2u = ti
             qx = q_local(x)
-            fe[0] += N1u * qx * wi_s * L    # u₁
-            fe[4] += N2u * qx * wi_s * L    # u₂
+            fe[0] += N1u * qx * wi_s * L
+            fe[4] += N2u * qx * wi_s * L
 
-            # --- Transverse: Hermite shape functions for v; θ gets zero ---
             H1 = 1.0 - 3.0 * ti ** 2 + 2.0 * ti ** 3
-            H2 = L * ti * (1.0 - ti) ** 2                # shape fn for v₁' = dv/dx₁
+            H2 = L * ti * (1.0 - ti) ** 2
             H3 = 3.0 * ti ** 2 - 2.0 * ti ** 3
-            H4 = L * ti ** 2 * (ti - 1.0)                # shape fn for v₂' = dv/dx₂
+            H4 = L * ti ** 2 * (ti - 1.0)
             px = p_local(x)
-            fe[1] += H1 * px * wi_s * L   # v₁
-            fe[3] += H2 * px * wi_s * L   # (dv/dx)₁
-            fe[5] += H3 * px * wi_s * L   # v₂
-            fe[7] += H4 * px * wi_s * L   # (dv/dx)₂
-            # fe[2] = fe[6] = 0  (θ₁, θ₂ – no load contribution)
+            fe[1] += H1 * px * wi_s * L
+            fe[3] += H2 * px * wi_s * L
+            fe[5] += H3 * px * wi_s * L
+            fe[7] += H4 * px * wi_s * L
 
-        # Transform to global
         return (self.R @ fe).flatten()
 
     def bending_moment(self, x, displacements):
         """
         Bending moment M(x) recovered from nodal forces at local position x.
-
-        For the Reddy-Bickford element, the bending moment is recovered from
-        the element equilibrium (K_local · d_local) and linearly interpolated:
-
-            M(0) = f[2] - f[3]     (moment at start node, work-conjugate to curvature)
-            M(L) = -(f[6] - f[7])  (moment at end node)
-            M(x) = M(0)·(1−ξ) + M(L)·ξ,   ξ = x/L
-
         where f = K_local @ displacements is the element nodal force vector.
         This method is exact at the nodes and provides linear variation between them.
 
@@ -1624,93 +1569,7 @@ class ReddyBickfordElement2Node(Element):
         L = self.length
         xi = x / L
 
-        # Compute local element stiffness matrix
-        # (Extract just the local matrix, before transformation)
-        E = self.material.E
-        A = self.section.area
-        D1, E1, F1, G1 = self._get_reddy_params()
-
-        # Build 8×8 local stiffness (same as in stiffness_matrix but without R transformation)
-        b_dofs = [1, 3, 2, 5, 7, 6]
-        K_b = np.zeros((6, 6))
-
-        # D1 term
-        K_b[2, 2] += D1 / L
-        K_b[2, 5] += -D1 / L
-        K_b[5, 2] += -D1 / L
-        K_b[5, 5] += D1 / L
-
-        # F1 term
-        f = F1 / L ** 3
-        K_b[0, 0] += 12.0 * f;  K_b[0, 1] += 6.0 * L * f
-        K_b[0, 3] += -12.0 * f; K_b[0, 4] += 6.0 * L * f
-        K_b[1, 0] += 6.0 * L * f;  K_b[1, 1] += 4.0 * L ** 2 * f
-        K_b[1, 3] += -6.0 * L * f; K_b[1, 4] += 2.0 * L ** 2 * f
-        K_b[3, 0] += -12.0 * f; K_b[3, 1] += -6.0 * L * f
-        K_b[3, 3] += 12.0 * f;  K_b[3, 4] += -6.0 * L * f
-        K_b[4, 0] += 6.0 * L * f;  K_b[4, 1] += 2.0 * L ** 2 * f
-        K_b[4, 3] += -6.0 * L * f; K_b[4, 4] += 4.0 * L ** 2 * f
-
-        # E1 term
-        K_b[1, 2] += -E1 / L;   K_b[2, 1] += -E1 / L
-        K_b[1, 5] += E1 / L;    K_b[5, 1] += E1 / L
-        K_b[2, 4] += E1 / L;    K_b[4, 2] += E1 / L
-        K_b[4, 5] += -E1 / L;   K_b[5, 4] += -E1 / L
-
-        # G1 term
-        K_b[0, 0] += 6.0 * G1 / (5.0 * L)
-        K_b[0, 1] += G1 / 10.0
-        K_b[0, 2] += -G1 / 2.0
-        K_b[0, 3] += -6.0 * G1 / (5.0 * L)
-        K_b[0, 4] += G1 / 10.0
-        K_b[0, 5] += -G1 / 2.0
-
-        K_b[1, 0] += G1 / 10.0
-        K_b[1, 1] += 2.0 * G1 * L / 15.0
-        K_b[1, 2] += G1 * L / 12.0
-        K_b[1, 3] += -G1 / 10.0
-        K_b[1, 4] += -G1 * L / 30.0
-        K_b[1, 5] += -G1 * L / 12.0
-
-        K_b[2, 0] += -G1 / 2.0
-        K_b[2, 1] += G1 * L / 12.0
-        K_b[2, 2] += G1 * L / 3.0
-        K_b[2, 3] += G1 / 2.0
-        K_b[2, 4] += -G1 * L / 12.0
-        K_b[2, 5] += G1 * L / 6.0
-
-        K_b[3, 0] += -6.0 * G1 / (5.0 * L)
-        K_b[3, 1] += -G1 / 10.0
-        K_b[3, 2] += G1 / 2.0
-        K_b[3, 3] += 6.0 * G1 / (5.0 * L)
-        K_b[3, 4] += -G1 / 10.0
-        K_b[3, 5] += G1 / 2.0
-
-        K_b[4, 0] += G1 / 10.0
-        K_b[4, 1] += -G1 * L / 30.0
-        K_b[4, 2] += -G1 * L / 12.0
-        K_b[4, 3] += -G1 / 10.0
-        K_b[4, 4] += 2.0 * G1 * L / 15.0
-        K_b[4, 5] += G1 * L / 12.0
-
-        K_b[5, 0] += -G1 / 2.0
-        K_b[5, 1] += -G1 * L / 12.0
-        K_b[5, 2] += G1 * L / 6.0
-        K_b[5, 3] += G1 / 2.0
-        K_b[5, 4] += G1 * L / 12.0
-        K_b[5, 5] += G1 * L / 3.0
-
-        k_local = np.zeros((8, 8))
-        k_local[0, 0] = E * A / L
-        k_local[0, 4] = -E * A / L
-        k_local[4, 0] = -E * A / L
-        k_local[4, 4] = E * A / L
-
-        for i_b, i_g in enumerate(b_dofs):
-            for j_b, j_g in enumerate(b_dofs):
-                k_local[i_g, j_g] = K_b[i_b, j_b]
-
-        # Compute nodal forces
+        k_local = self._build_local_stiffness()
         f = k_local @ displacements
 
         # Extract moments at left and right ends
@@ -1738,91 +1597,7 @@ class ReddyBickfordElement2Node(Element):
         """
         L = self.length
 
-        # Compute local element stiffness matrix (same as in bending_moment)
-        E = self.material.E
-        A = self.section.area
-        D1, E1, F1, G1 = self._get_reddy_params()
-
-        b_dofs = [1, 3, 2, 5, 7, 6]
-        K_b = np.zeros((6, 6))
-
-        # D1 term
-        K_b[2, 2] += D1 / L
-        K_b[2, 5] += -D1 / L
-        K_b[5, 2] += -D1 / L
-        K_b[5, 5] += D1 / L
-
-        # F1 term
-        f = F1 / L ** 3
-        K_b[0, 0] += 12.0 * f;  K_b[0, 1] += 6.0 * L * f
-        K_b[0, 3] += -12.0 * f; K_b[0, 4] += 6.0 * L * f
-        K_b[1, 0] += 6.0 * L * f;  K_b[1, 1] += 4.0 * L ** 2 * f
-        K_b[1, 3] += -6.0 * L * f; K_b[1, 4] += 2.0 * L ** 2 * f
-        K_b[3, 0] += -12.0 * f; K_b[3, 1] += -6.0 * L * f
-        K_b[3, 3] += 12.0 * f;  K_b[3, 4] += -6.0 * L * f
-        K_b[4, 0] += 6.0 * L * f;  K_b[4, 1] += 2.0 * L ** 2 * f
-        K_b[4, 3] += -6.0 * L * f; K_b[4, 4] += 4.0 * L ** 2 * f
-
-        # E1 term
-        K_b[1, 2] += -E1 / L;   K_b[2, 1] += -E1 / L
-        K_b[1, 5] += E1 / L;    K_b[5, 1] += E1 / L
-        K_b[2, 4] += E1 / L;    K_b[4, 2] += E1 / L
-        K_b[4, 5] += -E1 / L;   K_b[5, 4] += -E1 / L
-
-        # G1 term
-        K_b[0, 0] += 6.0 * G1 / (5.0 * L)
-        K_b[0, 1] += G1 / 10.0
-        K_b[0, 2] += -G1 / 2.0
-        K_b[0, 3] += -6.0 * G1 / (5.0 * L)
-        K_b[0, 4] += G1 / 10.0
-        K_b[0, 5] += -G1 / 2.0
-
-        K_b[1, 0] += G1 / 10.0
-        K_b[1, 1] += 2.0 * G1 * L / 15.0
-        K_b[1, 2] += G1 * L / 12.0
-        K_b[1, 3] += -G1 / 10.0
-        K_b[1, 4] += -G1 * L / 30.0
-        K_b[1, 5] += -G1 * L / 12.0
-
-        K_b[2, 0] += -G1 / 2.0
-        K_b[2, 1] += G1 * L / 12.0
-        K_b[2, 2] += G1 * L / 3.0
-        K_b[2, 3] += G1 / 2.0
-        K_b[2, 4] += -G1 * L / 12.0
-        K_b[2, 5] += G1 * L / 6.0
-
-        K_b[3, 0] += -6.0 * G1 / (5.0 * L)
-        K_b[3, 1] += -G1 / 10.0
-        K_b[3, 2] += G1 / 2.0
-        K_b[3, 3] += 6.0 * G1 / (5.0 * L)
-        K_b[3, 4] += -G1 / 10.0
-        K_b[3, 5] += G1 / 2.0
-
-        K_b[4, 0] += G1 / 10.0
-        K_b[4, 1] += -G1 * L / 30.0
-        K_b[4, 2] += -G1 * L / 12.0
-        K_b[4, 3] += -G1 / 10.0
-        K_b[4, 4] += 2.0 * G1 * L / 15.0
-        K_b[4, 5] += G1 * L / 12.0
-
-        K_b[5, 0] += -G1 / 2.0
-        K_b[5, 1] += -G1 * L / 12.0
-        K_b[5, 2] += G1 * L / 6.0
-        K_b[5, 3] += G1 / 2.0
-        K_b[5, 4] += G1 * L / 12.0
-        K_b[5, 5] += G1 * L / 3.0
-
-        k_local = np.zeros((8, 8))
-        k_local[0, 0] = E * A / L
-        k_local[0, 4] = -E * A / L
-        k_local[4, 0] = -E * A / L
-        k_local[4, 4] = E * A / L
-
-        for i_b, i_g in enumerate(b_dofs):
-            for j_b, j_g in enumerate(b_dofs):
-                k_local[i_g, j_g] = K_b[i_b, j_b]
-
-        # Compute nodal forces
+        k_local = self._build_local_stiffness()
         f_vec = k_local @ displacements
 
         # Extract moments at left and right ends
@@ -1843,6 +1618,255 @@ class ReddyBickfordElement2Node(Element):
         u1 = displacements[0]
         u2 = displacements[4]
         return E * A * (u2 - u1) / L
+
+    def interpolate_theta(self, x, displacements):
+        """Interpolate θ(x) at local position x."""
+        L = self.length
+        xi = x / L
+        # displacements local: [u1, v1, theta1, (dv/dx)1, u2, v2, theta2, (dv/dx)2]
+        theta1 = displacements[2]
+        theta2 = displacements[6]
+        return (1.0 - xi) * theta1 + xi * theta2
+
+    def interpolate_dv_dx(self, x, displacements):
+        """Interpolate dv/dx(x) at local position x using Hermite cubic derivative."""
+        L = self.length
+        ti = x / L
+        H1_p = (-6.0 * ti + 6.0 * ti**2) / L
+        H2_p = 1.0 - 4.0 * ti + 3.0 * ti**2
+        H3_p = (6.0 * ti - 6.0 * ti**2) / L
+        H4_p = -2.0 * ti + 3.0 * ti**2
+        
+        v1 = displacements[1]
+        dv_dx1 = displacements[3]
+        v2 = displacements[5]
+        dv_dx2 = displacements[7]
+        
+        return H1_p * v1 + H2_p * dv_dx1 + H3_p * v2 + H4_p * dv_dx2
+
+
+def _get_mrbt_X_vectors(x, L, h, nu, E, I, mu, D1, E1, G1):
+    # Using scaled constants c_i^* = c_i / (E * I) for i in {1, 5, 6}
+    # This eliminates E*I from the denominators of components 0, 4, 5
+    factor_scaled = h**2 * (1.0 + nu) / 420.0
+    
+    # X_v
+    X_v = np.array([
+        -factor_scaled * x,
+        1.0,
+        1.0 - mu * x + 0.5 * mu**2 * x**2,
+        1.0 + mu * x + 0.5 * mu**2 * x**2,
+        -x**3 / 6.0,
+        -x**2 / 2.0
+    ], dtype=float)
+    
+    # X_v_prime
+    X_v_prime = np.array([
+        -factor_scaled,
+        0.0,
+        -mu + mu**2 * x,
+        mu + mu**2 * x,
+        -x**2 / 2.0,
+        -x
+    ], dtype=float)
+    
+    # X_v_double_prime
+    X_v_double_prime = np.array([
+        0.0,
+        0.0,
+        mu**2,
+        mu**2,
+        -x,
+        -1.0
+    ], dtype=float)
+    
+    # X_theta
+    c_theta_3 = -0.25 * mu + 0.25 * mu**2 * x - 0.125 * mu**3 * x**2
+    c_theta_4 = 0.25 * mu + 0.25 * mu**2 * x + 0.125 * mu**3 * x**2
+    
+    X_theta = np.array([
+        -factor_scaled,
+        0.0,
+        c_theta_3,
+        c_theta_4,
+        -x**2 / 2.0 - (D1 + E1) / G1,
+        -x
+    ], dtype=float)
+    
+    # X_theta_prime
+    X_theta_prime = np.array([
+        0.0,
+        0.0,
+        0.25 * mu**2 - 0.25 * mu**3 * x,
+        0.25 * mu**2 + 0.25 * mu**3 * x,
+        -x,
+        -1.0
+    ], dtype=float)
+    
+    return X_v, X_v_prime, X_v_double_prime, X_theta, X_theta_prime
+
+
+class MRBTElement2Node(ReddyBickfordElement2Node):
+    """
+    2-node Modified Reddy-Bickford (MRBT) beam element.
+    Uses coupled shape functions derived from the exact homogeneous solution,
+    truncated using Taylor series expansion to the second order.
+    """
+    def _build_local_stiffness(self):
+        """
+        Build and return the 8×8 LOCAL stiffness matrix using MRBT kinematics
+        and 5-point Gauss-Legendre quadrature.
+        """
+        E = self.material.E
+        A = self.section.area
+        I = self.section.inertia
+        L = self.length
+        h = self._get_height()
+        nu = self.material.nu
+
+        mu = 2.0 * np.sqrt(105.0) / (h * np.sqrt(1.0 + nu))
+        D1, E1, F1, G1 = self._get_reddy_params()
+
+        # Build H matrix mapping constants to nodal displacements (CORRECT unpacking!)
+        X_v_0, X_v_prime_0, _, X_theta_0, _ = _get_mrbt_X_vectors(0.0, L, h, nu, E, I, mu, D1, E1, G1)
+        X_v_L, X_v_prime_L, _, X_theta_L, _ = _get_mrbt_X_vectors(L, L, h, nu, E, I, mu, D1, E1, G1)
+
+        H = np.zeros((6, 6))
+        H[0] = X_v_0
+        H[1] = X_theta_0
+        H[2] = X_v_prime_0
+        H[3] = X_v_L
+        H[4] = X_theta_L
+        H[5] = X_v_prime_L
+
+        # Stable numerical inversion using column scaling / equilibration
+        col_scales = np.max(np.abs(H), axis=0)
+        col_scales[col_scales == 0] = 1.0
+        H_scaled = H / col_scales
+        H_scaled_inv = np.linalg.inv(H_scaled)
+        H_inv = H_scaled_inv / col_scales[:, np.newaxis]
+
+        # 5-point Gauss-Legendre quadrature
+        xi_pts, wi = np.polynomial.legendre.leggauss(5)
+        # map from [-1, 1] to [0, L]
+        t = 0.5 * (xi_pts + 1.0)
+        wt = 0.5 * wi
+
+        D = np.zeros((4, 4))
+        D[0, 0] = E * A
+        D[1, 1] = D1
+        D[1, 2] = E1
+        D[2, 1] = E1
+        D[2, 2] = F1
+        D[3, 3] = G1
+
+        k_local = np.zeros((8, 8))
+        bending_dofs = [1, 2, 3, 5, 6, 7]
+
+        for ti, wi_s in zip(t, wt):
+            x = ti * L
+            X_v, X_v_prime, X_v_double_prime, X_theta, X_theta_prime = _get_mrbt_X_vectors(
+                x, L, h, nu, E, I, mu, D1, E1, G1
+            )
+
+            # Build strain-displacement matrix B (4x8)
+            B = np.zeros((4, 8))
+            B[0, 0] = -1.0 / L
+            B[0, 4] = 1.0 / L
+
+            # B[1, :] corresponds to theta'
+            N_theta_prime = X_theta_prime @ H_inv
+            for idx, gd in enumerate(bending_dofs):
+                B[1, gd] = N_theta_prime[idx]
+
+            # B[2, :] corresponds to v''
+            N_v_double_prime = X_v_double_prime @ H_inv
+            for idx, gd in enumerate(bending_dofs):
+                B[2, gd] = N_v_double_prime[idx]
+
+            # B[3, :] corresponds to theta - v'
+            N_shear = (X_theta - X_v_prime) @ H_inv
+            for idx, gd in enumerate(bending_dofs):
+                B[3, gd] = N_shear[idx]
+
+            # Integrate: K_local += B^T @ D @ B * weight * L
+            k_local += (B.T @ D @ B) * (wi_s * L)
+
+        k_local = 0.5 * (k_local + k_local.T)
+        return k_local
+
+    def interpolate_theta(self, x, displacements):
+        """Interpolate θ(x) at local position x using MRBT coupled shape functions."""
+        L = self.length
+        h = self._get_height()
+        nu = self.material.nu
+        E = self.material.E
+        I = self.section.inertia
+
+        mu = 2.0 * np.sqrt(105.0) / (h * np.sqrt(1.0 + nu))
+        D1, E1, F1, G1 = self._get_reddy_params()
+
+        # Build H matrix and invert (CORRECT unpacking!)
+        X_v_0, X_v_prime_0, _, X_theta_0, _ = _get_mrbt_X_vectors(0.0, L, h, nu, E, I, mu, D1, E1, G1)
+        X_v_L, X_v_prime_L, _, X_theta_L, _ = _get_mrbt_X_vectors(L, L, h, nu, E, I, mu, D1, E1, G1)
+
+        H = np.zeros((6, 6))
+        H[0] = X_v_0
+        H[1] = X_theta_0
+        H[2] = X_v_prime_0
+        H[3] = X_v_L
+        H[4] = X_theta_L
+        H[5] = X_v_prime_L
+
+        col_scales = np.max(np.abs(H), axis=0)
+        col_scales[col_scales == 0] = 1.0
+        H_scaled = H / col_scales
+        H_scaled_inv = np.linalg.inv(H_scaled)
+        H_inv = H_scaled_inv / col_scales[:, np.newaxis]
+
+        _, _, _, X_theta, _ = _get_mrbt_X_vectors(x, L, h, nu, E, I, mu, D1, E1, G1)
+        N_theta = X_theta @ H_inv
+
+        # Bending DOFs are [v1, theta1, (dv/dx)1, v2, theta2, (dv/dx)2]
+        bending_disps = displacements[[1, 2, 3, 5, 6, 7]]
+        return N_theta @ bending_disps
+
+    def interpolate_dv_dx(self, x, displacements):
+        """Interpolate dv/dx(x) at local position x using MRBT coupled shape functions."""
+        L = self.length
+        h = self._get_height()
+        nu = self.material.nu
+        E = self.material.E
+        I = self.section.inertia
+
+        mu = 2.0 * np.sqrt(105.0) / (h * np.sqrt(1.0 + nu))
+        D1, E1, F1, G1 = self._get_reddy_params()
+
+        # Build H matrix and invert (CORRECT unpacking!)
+        X_v_0, X_v_prime_0, _, X_theta_0, _ = _get_mrbt_X_vectors(0.0, L, h, nu, E, I, mu, D1, E1, G1)
+        X_v_L, X_v_prime_L, _, X_theta_L, _ = _get_mrbt_X_vectors(L, L, h, nu, E, I, mu, D1, E1, G1)
+
+        H = np.zeros((6, 6))
+        H[0] = X_v_0
+        H[1] = X_theta_0
+        H[2] = X_v_prime_0
+        H[3] = X_v_L
+        H[4] = X_theta_L
+        H[5] = X_v_prime_L
+
+        col_scales = np.max(np.abs(H), axis=0)
+        col_scales[col_scales == 0] = 1.0
+        H_scaled = H / col_scales
+        H_scaled_inv = np.linalg.inv(H_scaled)
+        H_inv = H_scaled_inv / col_scales[:, np.newaxis]
+
+        _, X_v_prime, _, _, _ = _get_mrbt_X_vectors(x, L, h, nu, E, I, mu, D1, E1, G1)
+        N_v_prime = X_v_prime @ H_inv
+
+        # Bending DOFs are [v1, theta1, (dv/dx)1, v2, theta2, (dv/dx)2]
+        bending_disps = displacements[[1, 2, 3, 5, 6, 7]]
+        return N_v_prime @ bending_disps
+
 
 
 class ElementResults:

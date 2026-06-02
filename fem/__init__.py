@@ -1,5 +1,5 @@
 from .analysis import Analysis, BeamAnalysis, EulerBernoulliAnalysis
-from .element import Element, EulerBernoulliElement2Node, EulerBernoulliElement3Node, TimoshenkoElement2Node
+from .element import Element, EulerBernoulliElement2Node, EulerBernoulliElement3Node, TimoshenkoElement2Node, ReddyBickfordElement2Node, MRBTElement2Node
 from .mesh import Mesh
 from .node import Node
 from .material import Material
@@ -15,6 +15,8 @@ __all__ = [
     'EulerBernoulliElement2Node',
     'EulerBernoulliElement3Node',
     'TimoshenkoElement2Node',
+    'ReddyBickfordElement2Node',
+    'MRBTElement2Node',
     'Mesh',
     'Node',
     'Material',

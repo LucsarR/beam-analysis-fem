@@ -985,6 +985,212 @@ def plot_shear_stress_distribution(element_result, x, n_points=100):
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     return fig
 
+def plot_reddy_shear_stress_distribution(element_result, x, n_points=100):
+    """
+    Interactive Plotly plot: 2D contour of Reddy-Bickford shear stress over the
+    section shape at position x along the element.
+    """
+    section = element_result.element.section
+    if not hasattr(section, "xy_grid"):
+        raise ValueError("Section type does not support 2D stress contour plotting.")
+
+    class_name = type(element_result.element).__name__
+    is_reddy = "ReddyBickford" in class_name or "MRBT" in class_name
+
+    X, Y, mask = section.xy_grid(n_points)
+    
+    if not is_reddy:
+        raise ValueError("This plot is only available for Reddy-Bickford / MRBT elements.")
+
+    # Evaluate Reddy shear stress at each grid point
+    TAU = np.full_like(X, np.nan, dtype=float)
+    n_rows = Y.shape[0]
+    n_cols = Y.shape[1]
+    
+    for i in range(n_rows):
+        for j in range(n_cols):
+            if mask[i, j]:
+                y_val = float(Y[i, j])
+                TAU[i, j] = element_result.reddy_shear_stress(x, y_val)
+
+    X_flat = X.flatten()
+    Y_flat = Y.flatten()
+    TAU_flat = TAU.flatten()
+    mask_flat = mask.flatten()
+    X_plot = X_flat[mask_flat]
+    Y_plot = Y_flat[mask_flat]
+    TAU_plot = TAU_flat[mask_flat]
+
+    fig = go.Figure(data=go.Scatter(
+        x=X_plot,
+        y=Y_plot,
+        mode='markers',
+        marker=dict(
+            size=6,
+            color=TAU_plot,
+            colorscale="RdBu",
+            colorbar=dict(title="Reddy Shear Stress"),
+            showscale=True
+        ),
+        text=[f"x={xv:.3f}<br>y={yv:.3f}<br>τ={tv:.3f}" for xv, yv, tv in zip(X_plot, Y_plot, TAU_plot)],
+        hoverinfo='text'
+    ))
+
+    # Add neutral axis line
+    x_min, x_max = np.min(X_plot), np.max(X_plot)
+    x_margin = 0.1 * (x_max - x_min)
+    fig.add_trace(go.Scatter(
+        x=[x_min - x_margin, x_max + x_margin],
+        y=[0.0, 0.0],
+        mode='lines',
+        line=dict(color='black', dash='dot', width=2),
+        hoverinfo='skip',
+        showlegend=False
+    ))
+    
+    # Add indicators at top and bottom fibers where τ = 0
+    h = element_result.element._get_height()
+    fig.add_trace(go.Scatter(
+        x=[0.0, 0.0],
+        y=[-h/2, h/2],
+        mode='markers',
+        marker=dict(size=10, symbol='x', color='black'),
+        name='τ=0 Boundary',
+        hovertext='Shear boundary condition: τ = 0'
+    ))
+
+    fig.update_layout(
+        title=f"Reddy Shear Stress Contour at x={x:.2f}",
+        xaxis_title="Section x",
+        yaxis_title="Section y",
+        width=600,
+        height=500,
+        showlegend=False
+    )
+    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    return fig
+
+def plot_shear_stress_comparison(element_result, x, n_points=100):
+    """
+    Line plot comparing Jourawski and Reddy-Bickford shear stress profiles
+    across the cross-section height at position x.
+    """
+    section = element_result.element.section
+    if not hasattr(section, "xy_grid"):
+        raise ValueError("Section type does not support stress plotting.")
+
+    class_name = type(element_result.element).__name__
+    is_reddy = "ReddyBickford" in class_name or "MRBT" in class_name
+
+    X, Y, mask = section.xy_grid(n_points)
+    V = element_result.shear_force(x)
+
+    if section.inertia is None or abs(section.inertia) < 1e-18:
+        raise ValueError("Section inertia must be defined to compute shear stress.")
+
+    n_rows = Y.shape[0]
+    if n_rows > 1:
+        dy = abs(float(np.mean(np.diff(Y[:, 0]))))
+    else:
+        dy = 1.0
+
+    row_width = np.zeros(n_rows)
+    row_first_moment = np.zeros(n_rows)
+    valid_rows = np.zeros(n_rows, dtype=bool)
+
+    for i in range(n_rows):
+        row_mask = mask[i, :]
+        if not np.any(row_mask):
+            continue
+        xi = np.sort(X[i, row_mask])
+        if xi.size > 1:
+            dx = float(np.mean(np.diff(xi)))
+        else:
+            x_full = X[i, :]
+            dx = float((np.max(x_full) - np.min(x_full)) / max(len(x_full) - 1, 1))
+        if dx <= 0:
+            continue
+
+        row_area = row_mask.sum() * dx * dy
+        row_y = float(np.mean(Y[i, row_mask]))
+        row_width[i] = row_mask.sum() * dx
+        row_first_moment[i] = row_y * row_area
+        valid_rows[i] = True
+
+    # Compute Jourawski Q(y)
+    Q = np.zeros(n_rows)
+    running_Q = 0.0
+    for i in range(n_rows - 1, -1, -1):
+        if not valid_rows[i]:
+            continue
+        running_Q += row_first_moment[i]
+        Q[i] = running_Q
+
+    y_coords = []
+    tau_jourawski = []
+    tau_reddy = []
+
+    for i in range(n_rows):
+        if valid_rows[i]:
+            row_y = float(np.mean(Y[i, mask[i, :]]))
+            y_coords.append(row_y)
+            
+            # Jourawski
+            if row_width[i] > 1e-12:
+                tau_j = V * Q[i] / (section.inertia * row_width[i])
+            else:
+                tau_j = 0.0
+            tau_jourawski.append(tau_j)
+            
+            # Reddy
+            if is_reddy:
+                tau_r = element_result.reddy_shear_stress(x, row_y)
+                tau_reddy.append(tau_r)
+
+    fig = go.Figure()
+
+    # Plot Jourawski
+    fig.add_trace(go.Scatter(
+        x=tau_jourawski,
+        y=y_coords,
+        mode='lines+markers',
+        name='Jourawski theory: τ = V·Q/(I·b)',
+        line=dict(color='#1f77b4', width=3),
+        marker=dict(size=4)
+    ))
+
+    # Plot Reddy
+    if is_reddy:
+        fig.add_trace(go.Scatter(
+            x=tau_reddy,
+            y=y_coords,
+            mode='lines+markers',
+            name='Reddy theory (TSDT): parabolic',
+            line=dict(color='#ff7f0e', width=3, dash='dash'),
+            marker=dict(size=4)
+        ))
+
+    # Neutral axis line
+    fig.add_trace(go.Scatter(
+        x=[min(tau_jourawski + (tau_reddy if is_reddy else [])), max(tau_jourawski + (tau_reddy if is_reddy else []))],
+        y=[0.0, 0.0],
+        mode='lines',
+        line=dict(color='black', dash='dot', width=1.5),
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+
+    fig.update_layout(
+        title=f"Shear Stress Comparison across Section Height at x={x:.2f}",
+        xaxis_title="Shear Stress τ",
+        yaxis_title="Section Coordinate y",
+        width=700,
+        height=500,
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
+    )
+    return fig
+
+
 def plot_normal_stress_side_view(element_result, x, n_points=30, display_x=None, display_length=None):
     """
     Interactive Plotly plot: Side view of normal stress distribution along the element height.

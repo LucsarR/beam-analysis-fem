@@ -1004,6 +1004,243 @@ def test_polynomial_load_interpolation_order_effects_in_plotted_diagrams():
     return True
 
 
+def test_mrbt_stiffness_symmetry():
+    """Verify that the MRBT 8x8 stiffness matrix is symmetric."""
+    print("\n" + "=" * 60)
+    print("Test: MRBT Stiffness Matrix Symmetry")
+    print("=" * 60)
+    mesh, _ = _make_cantilever(1, H_THICK, etype="mrbt_2node")
+    element = mesh.elements[0]
+    K = element.stiffness_matrix()
+    symmetry_error = np.max(np.abs(K - K.T))
+    print(f"  Max symmetry error: {symmetry_error:.6e}")
+    assert symmetry_error < 1e-12, f"MRBT Stiffness matrix not symmetric: {symmetry_error}"
+    print("OK MRBT Stiffness matrix is symmetric")
+    return True
+
+def test_mrbt_stiffness_positive_semidefinite():
+    """Verify that the MRBT stiffness matrix is positive semi-definite."""
+    print("\n" + "=" * 60)
+    print("Test: MRBT Stiffness Matrix Positive Semi-Definiteness")
+    print("=" * 60)
+    mesh, _ = _make_cantilever(1, H_THICK, etype="mrbt_2node")
+    element = mesh.elements[0]
+    K = element.stiffness_matrix()
+    eigvals = np.linalg.eigvalsh(K)
+    min_eigval = np.min(eigvals)
+    print(f"  Min eigenvalue = {min_eigval:.6e}")
+    assert min_eigval >= -1e-4, f"Negative eigenvalue found in MRBT: {min_eigval:.6e}"
+    
+    # Check 3 rigid body modes
+    zero_tol = 100.0
+    n_zero = np.sum(np.abs(eigvals) < zero_tol)
+    print(f"  Number of near-zero eigenvalues: {n_zero} (Expected 3)")
+    assert n_zero == 3, f"Expected 3 rigid body modes in MRBT, found {n_zero}"
+    print("OK MRBT Stiffness matrix is positive semi-definite")
+    return True
+
+def test_mrbt_cantilever_point_load():
+    """
+    Test MRBT cantilever point load deflection and compare to EBBT.
+    """
+    print("\n" + "=" * 60)
+    print("Test: MRBT Cantilever Point Load")
+    print("=" * 60)
+    P = -1000.0
+    h = H_THICK
+    
+    mesh, nodes = _make_cantilever(2, h, etype="mrbt_2node")
+    load = PointLoad(P, 1)
+    load.node = nodes[-1]
+    mesh.point_loads.append(load)
+    
+    displacements, _ = _solve(mesh)
+    v_tip = displacements[(nodes[-1].id - 1) * 4 + 1]
+    
+    # EBBT Analytical deflection
+    w_EB = P * L_BEAM**3 / (3.0 * _ei(h))
+    
+    print(f"  MRBT Tip Deflection:   {v_tip:.6e} m")
+    print(f"  EB Analytical:         {w_EB:.6e} m")
+    print(f"  Ratio (MRBT/EB):       {v_tip / w_EB:.6f}")
+    
+    assert v_tip / w_EB > 1.0, "MRBT deflection should include shear deformation and be larger than EB"
+    assert v_tip / w_EB < 1.20, "MRBT deflection ratio is too large"
+    print("OK MRBT Cantilever point load deflection correct")
+    return True
+
+def test_mrbt_matches_eb_for_slender_beam():
+    """
+    Verify that for a very slender beam, MRBT deflections converge to EB deflections.
+    """
+    print("\n" + "=" * 60)
+    print("Test: MRBT Slender Beam Deflection (L/h -> infinity)")
+    print("=" * 60)
+    P = -10.0
+    h = H_SLENDER  # very slender (L/h = 200)
+    
+    mesh, nodes = _make_cantilever(8, h, etype="mrbt_2node")
+    load = PointLoad(P, 1)
+    load.node = nodes[-1]
+    mesh.point_loads.append(load)
+    
+    displacements, _ = _solve(mesh)
+    v_tip = displacements[(nodes[-1].id - 1) * 4 + 1]
+    
+    w_EB = P * L_BEAM**3 / (3.0 * _ei(h))
+    
+    print(f"  MRBT Tip Deflection:   {v_tip:.6e} m")
+    print(f"  EB Analytical:         {w_EB:.6e} m")
+    print(f"  Difference:            {abs(v_tip/w_EB - 1.0)*100:.4f}%")
+    
+    # Should be within 0.1% for L/h = 200
+    assert abs(v_tip / w_EB - 1.0) < 1e-3, f"Difference too large: {abs(v_tip/w_EB - 1.0)*100:.4f}%"
+    print("OK MRBT matches EB for slender beams")
+    return True
+
+def test_mrbt_convergence_faster_than_rbt():
+    """
+    Verify that MRBT converges much faster than RBT on coarse meshes.
+    Using a thick simply-supported beam with uniform load, 4 MRBT elements
+    should be within 1% of a highly refined (e.g. 160 elements) RBT solution,
+    whereas 4 RBT elements will under-predict deflection (shear locking/stiffness).
+    """
+    print("\n" + "=" * 60)
+    print("Test: MRBT vs RBT Convergence Comparison")
+    print("=" * 60)
+    q = -1000.0
+    h = H_THICK
+    
+    # 1. 160-element RBT (Refined target)
+    mesh_ref, nodes_ref = _make_simply_supported(160, h, etype="reddy_bickford_2node")
+    for el in mesh_ref.elements:
+        load = DistributedLoad(magnitude_start=q, magnitude_end=q, direction="t")
+        load.element = el
+        mesh_ref.distributed_loads.append(load)
+    disps_ref, _ = _solve(mesh_ref)
+    v_mid_ref = disps_ref[(nodes_ref[80].id - 1) * 4 + 1]
+    
+    # 2. 4-element MRBT
+    mesh_mrbt, nodes_mrbt = _make_simply_supported(4, h, etype="mrbt_2node")
+    for el in mesh_mrbt.elements:
+        load = DistributedLoad(magnitude_start=q, magnitude_end=q, direction="t")
+        load.element = el
+        mesh_mrbt.distributed_loads.append(load)
+    disps_mrbt, _ = _solve(mesh_mrbt)
+    v_mid_mrbt = disps_mrbt[(nodes_mrbt[2].id - 1) * 4 + 1]
+
+    # 3. 4-element RBT
+    mesh_rbt, nodes_rbt = _make_simply_supported(4, h, etype="reddy_bickford_2node")
+    for el in mesh_rbt.elements:
+        load = DistributedLoad(magnitude_start=q, magnitude_end=q, direction="t")
+        load.element = el
+        mesh_rbt.distributed_loads.append(load)
+    disps_rbt, _ = _solve(mesh_rbt)
+    v_mid_rbt = disps_rbt[(nodes_rbt[2].id - 1) * 4 + 1]
+
+    print(f"  Midspan Deflection (160 RBT Refined): {v_mid_ref:.6e} m")
+    print(f"  Midspan Deflection (4 MRBT):          {v_mid_mrbt:.6e} m")
+    print(f"  Midspan Deflection (4 RBT):           {v_mid_rbt:.6e} m")
+    
+    err_mrbt = abs(v_mid_mrbt - v_mid_ref) / abs(v_mid_ref)
+    err_rbt = abs(v_mid_rbt - v_mid_ref) / abs(v_mid_ref)
+    
+    print(f"  4 MRBT Error: {err_mrbt*100:.4f}%")
+    print(f"  4 RBT Error:  {err_rbt*100:.4f}%")
+    
+    assert err_mrbt < 0.01, f"MRBT error is too large on 4 elements: {err_mrbt*100:.4f}%"
+    assert err_mrbt < 0.1 * err_rbt, "MRBT should be at least 10 times more accurate than RBT on coarse meshes"
+    print("OK MRBT converges much faster than RBT")
+    return True
+
+def test_reddy_shear_stress_zero_at_boundaries():
+    """Verify that shear stress τ_xy vanishes at top and bottom fibers (y = ±h/2)."""
+    print("\n" + "=" * 60)
+    print("Test: Reddy Shear Stress Zero at Boundaries (y = ±h/2)")
+    print("=" * 60)
+    h = H_THICK
+    
+    for etype in ["reddy_bickford_2node", "mrbt_2node"]:
+        mesh, nodes = _make_cantilever(4, h, etype=etype)
+        load = PointLoad(-1000.0, 1)
+        load.node = nodes[-1]
+        mesh.point_loads.append(load)
+        
+        _, results = _solve(mesh)
+        er = results.element_results[0]
+        
+        tau_top = er.reddy_shear_stress(x=0.0, y=h/2)
+        tau_bottom = er.reddy_shear_stress(x=0.0, y=-h/2)
+        
+        print(f"  {etype} at y=h/2:  {tau_top:.6e} Pa")
+        print(f"  {etype} at y=-h/2: {tau_bottom:.6e} Pa")
+        
+        assert abs(tau_top) < 1e-9, f"{etype} shear stress at top fiber not zero: {tau_top}"
+        assert abs(tau_bottom) < 1e-9, f"{etype} shear stress at bottom fiber not zero: {tau_bottom}"
+        
+    print("OK Reddy shear stress is zero at boundaries")
+    return True
+
+def test_reddy_shear_stress_max_at_neutral_axis():
+    """Verify that maximum shear stress magnitude occurs at neutral axis (y = 0)."""
+    print("\n" + "=" * 60)
+    print("Test: Reddy Shear Stress Max at Neutral Axis (y = 0)")
+    print("=" * 60)
+    h = H_THICK
+    
+    for etype in ["reddy_bickford_2node", "mrbt_2node"]:
+        mesh, nodes = _make_cantilever(4, h, etype=etype)
+        load = PointLoad(-1000.0, 1)
+        load.node = nodes[-1]
+        mesh.point_loads.append(load)
+        
+        _, results = _solve(mesh)
+        er = results.element_results[0]
+        
+        tau_center = er.reddy_shear_stress(x=0.0, y=0.0)
+        tau_quarter = er.reddy_shear_stress(x=0.0, y=h/4)
+        
+        print(f"  {etype} at y=0:   {tau_center:.6e} Pa")
+        print(f"  {etype} at y=h/4: {tau_quarter:.6e} Pa")
+        
+        assert abs(tau_center) > abs(tau_quarter), f"{etype} shear stress not maximum at neutral axis"
+        
+    print("OK Reddy shear stress is maximum at neutral axis")
+    return True
+
+def test_reddy_shear_stress_parabolic_shape():
+    """Verify that Reddy shear stress has a perfect parabolic distribution (G * gamma * (3α y² - 1))."""
+    print("\n" + "=" * 60)
+    print("Test: Reddy Shear Stress Parabolic Shape")
+    print("=" * 60)
+    h = H_THICK
+    
+    mesh, nodes = _make_cantilever(4, h, etype="mrbt_2node")
+    load = PointLoad(-1000.0, 1)
+    load.node = nodes[-1]
+    mesh.point_loads.append(load)
+    
+    _, results = _solve(mesh)
+    er = results.element_results[0]
+    
+    tau_0 = er.reddy_shear_stress(x=0.0, y=0.0)
+    tau_quarter = er.reddy_shear_stress(x=0.0, y=h/4)
+    
+    # For a perfect parabolic distribution of form C * (3 * alpha * y**2 - 1)
+    # where alpha = 4/(3h**2):
+    # At y=0:   tau = -C
+    # At y=h/4: tau = C * (3 * (4/(3h**2)) * (h**2/16) - 1) = C * (1/4 - 1) = -0.75 * C
+    # Therefore, tau_quarter should be exactly 0.75 * tau_0!
+    ratio = tau_quarter / tau_0
+    print(f"  tau at y=0:   {tau_0:.6e}")
+    print(f"  tau at y=h/4: {tau_quarter:.6e}")
+    print(f"  Ratio:        {ratio:.6f} (Expected 0.75)")
+    
+    assert abs(ratio - 0.75) < 1e-6, f"Reddy shear stress is not parabolic: ratio = {ratio}"
+    print("OK Reddy shear stress parabolic distribution shape verified")
+    return True
+
+
 # ===========================================================================
 # Main test runner
 # ===========================================================================
@@ -1022,6 +1259,14 @@ if __name__ == "__main__":
         test_beam_theory_polynomial_distributed_loads,
         test_polynomial_load_interpolation_order_effects,
         test_polynomial_load_interpolation_order_effects_in_plotted_diagrams,
+        test_mrbt_stiffness_symmetry,
+        test_mrbt_stiffness_positive_semidefinite,
+        test_mrbt_cantilever_point_load,
+        test_mrbt_matches_eb_for_slender_beam,
+        test_mrbt_convergence_faster_than_rbt,
+        test_reddy_shear_stress_zero_at_boundaries,
+        test_reddy_shear_stress_max_at_neutral_axis,
+        test_reddy_shear_stress_parabolic_shape,
     ]
 
     print("\n" + "=" * 70)
