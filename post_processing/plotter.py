@@ -874,7 +874,7 @@ def plot_normal_stress_distribution(element_result, x, n_points=100, query_y=Non
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     return fig
 
-def plot_shear_stress_distribution(element_result, x, n_points=100, display_x=None):
+def plot_shear_stress_distribution(element_result, x, n_points=100, query_y=None, display_x=None):
     """
     Interactive Plotly plot: approximate 2D contour of shear stress over the
     section shape at position x along the element.
@@ -974,6 +974,27 @@ def plot_shear_stress_distribution(element_result, x, n_points=100, display_x=No
         showlegend=False
     ))
 
+    # Draw query-y marker line if provided
+    if query_y is not None:
+        tau_at_query = element_result.jourawski_shear_stress(x, query_y, n_points)
+        fig.add_trace(go.Scatter(
+            x=[x_min - x_margin, x_max + x_margin],
+            y=[query_y, query_y],
+            mode='lines',
+            line=dict(color='red', dash='dot', width=2),
+            hoverinfo='skip',
+            showlegend=False,
+        ))
+        fig.add_trace(go.Scatter(
+            x=[x_max + x_margin],
+            y=[query_y],
+            mode='text',
+            text=[f"τ={tau_at_query:.4f}"],
+            textposition="middle right",
+            showlegend=False,
+            hoverinfo='skip',
+        ))
+
     x_title = x if display_x is None else float(display_x)
 
     fig.update_layout(
@@ -987,7 +1008,7 @@ def plot_shear_stress_distribution(element_result, x, n_points=100, display_x=No
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     return fig
 
-def plot_reddy_shear_stress_distribution(element_result, x, n_points=100, display_x=None):
+def plot_reddy_shear_stress_distribution(element_result, x, n_points=100, query_y=None, display_x=None):
     """
     Interactive Plotly plot: 2D contour of Reddy-Bickford shear stress over the
     section shape at position x along the element.
@@ -1050,6 +1071,27 @@ def plot_reddy_shear_stress_distribution(element_result, x, n_points=100, displa
         showlegend=False
     ))
     
+    # Draw query-y marker line if provided
+    if query_y is not None:
+        tau_at_query = element_result.reddy_shear_stress(x, query_y)
+        fig.add_trace(go.Scatter(
+            x=[x_min - x_margin, x_max + x_margin],
+            y=[query_y, query_y],
+            mode='lines',
+            line=dict(color='red', dash='dot', width=2),
+            hoverinfo='skip',
+            showlegend=False,
+        ))
+        fig.add_trace(go.Scatter(
+            x=[x_max + x_margin],
+            y=[query_y],
+            mode='text',
+            text=[f"τ={tau_at_query:.4f}"],
+            textposition="middle right",
+            showlegend=False,
+            hoverinfo='skip',
+        ))
+
     # Add indicators at top and bottom fibers where τ = 0
     h = element_result.element._get_height()
     fig.add_trace(go.Scatter(
@@ -1074,7 +1116,7 @@ def plot_reddy_shear_stress_distribution(element_result, x, n_points=100, displa
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     return fig
 
-def plot_shear_stress_comparison(element_result, x, n_points=100, display_x=None):
+def plot_shear_stress_comparison(element_result, x, n_points=100, query_y=None, display_x=None):
     """
     Line plot comparing Jourawski and Reddy-Bickford shear stress profiles
     across the cross-section height at position x.
@@ -1183,6 +1225,36 @@ def plot_shear_stress_comparison(element_result, x, n_points=100, display_x=None
         showlegend=False,
         hoverinfo='skip'
     ))
+
+    # Draw query-y marker line if provided
+    if query_y is not None:
+        tau_vals = tau_jourawski + (tau_reddy if is_reddy else [])
+        min_t, max_t = min(tau_vals), max(tau_vals)
+        t_margin = 0.1 * (max_t - min_t) if max_t != min_t else 1.0
+        fig.add_trace(go.Scatter(
+            x=[min_t - t_margin, max_t + t_margin],
+            y=[query_y, query_y],
+            mode='lines',
+            line=dict(color='red', dash='dot', width=2),
+            hoverinfo='skip',
+            showlegend=False,
+        ))
+        
+        tau_j_val = element_result.jourawski_shear_stress(x, query_y, n_points)
+        txt = f"y={query_y:.2f}: τ_J={tau_j_val:.4f}"
+        if is_reddy:
+            tau_r_val = element_result.reddy_shear_stress(x, query_y)
+            txt += f", τ_R={tau_r_val:.4f}"
+            
+        fig.add_trace(go.Scatter(
+            x=[max_t + t_margin],
+            y=[query_y],
+            mode='text',
+            text=[txt],
+            textposition="middle right",
+            showlegend=False,
+            hoverinfo='skip',
+        ))
 
     x_title = x if display_x is None else float(display_x)
 

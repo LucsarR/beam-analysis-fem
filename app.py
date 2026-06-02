@@ -2298,11 +2298,28 @@ with tab3:
                             N_val = selected_element_result.normal_force(x_pos)
                             M_val = selected_element_result.bending_moment(x_pos)
                             sigma_val = selected_element_result.element.section.normal_stress(N_val, M_val, section_query_y)
-                            st.info(
-                                f"📍 At section y = {section_query_y:.4f}  |  "
-                                f"N = {N_val:.4f}  |  M = {M_val:.4f}  |  "
-                                f"σ = **{sigma_val:.4f}**"
-                            )
+                            
+                            class_name = type(selected_element_result.element).__name__
+                            is_reddy = "ReddyBickford" in class_name or "MRBT" in class_name
+                            
+                            tau_j_val = selected_element_result.jourawski_shear_stress(x_pos, section_query_y)
+                            
+                            if is_reddy:
+                                tau_r_val = selected_element_result.reddy_shear_stress(x_pos, section_query_y)
+                                st.info(
+                                    f"📍 At section y = {section_query_y:.4f}  |  "
+                                    f"N = {N_val:.4f}  |  M = {M_val:.4f}  |  "
+                                    f"σ = **{sigma_val:.4f}**  |  "
+                                    f"τ (Jourawski) = **{tau_j_val:.4f}**  |  "
+                                    f"τ (Reddy) = **{tau_r_val:.4f}**"
+                                )
+                            else:
+                                st.info(
+                                    f"📍 At section y = {section_query_y:.4f}  |  "
+                                    f"N = {N_val:.4f}  |  M = {M_val:.4f}  |  "
+                                    f"σ = **{sigma_val:.4f}**  |  "
+                                    f"τ = **{tau_j_val:.4f}**"
+                                )
                         
                         st.subheader("Stress Distribution Views (Cross-Section & Side View)")
                         cross_col, shear_col = st.columns(2)
@@ -2332,24 +2349,28 @@ with tab3:
                                     fig_shear_cross = plot_shear_stress_distribution(
                                         selected_element_result,
                                         x_pos,
+                                        query_y=section_query_y if use_section_query else None,
                                         display_x=x_pos_global if (not use_global_pos) else x_pos,
                                     )
                                 elif shear_theory == "Reddy-Bickford (parabolic TSDT)":
                                     fig_shear_cross = plot_reddy_shear_stress_distribution(
                                         selected_element_result,
                                         x_pos,
+                                        query_y=section_query_y if use_section_query else None,
                                         display_x=x_pos_global if (not use_global_pos) else x_pos,
                                     )
                                 else:
                                     fig_shear_cross = plot_shear_stress_comparison(
                                         selected_element_result,
                                         x_pos,
+                                        query_y=section_query_y if use_section_query else None,
                                         display_x=x_pos_global if (not use_global_pos) else x_pos,
                                     )
                             else:
                                 fig_shear_cross = plot_shear_stress_distribution(
                                     selected_element_result,
                                     x_pos,
+                                    query_y=section_query_y if use_section_query else None,
                                     display_x=x_pos_global if (not use_global_pos) else x_pos,
                                 )
                             st.plotly_chart(fig_shear_cross, use_container_width=True)

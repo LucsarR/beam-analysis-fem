@@ -115,6 +115,81 @@ class ElementResults:
         gamma = self._reddy_gamma_factor(x)
         return G * gamma * (3.0 * alpha * y**2 - 1.0)
 
+    def jourawski_shear_stress(self, x, y_val, n_points=100):
+        """
+        Compute approximate shear stress τ_xy(x, y_val) using Jourawski theory:
+        τ = V · Q / (I · b)
+        """
+        section = self.element.section
+        if not hasattr(section, "xy_grid"):
+            return 0.0
+        
+        X, Y, mask = section.xy_grid(n_points)
+        if X is None or Y is None or mask is None:
+            return 0.0
+            
+        V = self.shear_force(x)
+        if section.inertia is None or abs(section.inertia) < 1e-18:
+            return 0.0
+            
+        n_rows = Y.shape[0]
+        if n_rows > 1:
+            dy = abs(float(np.mean(np.diff(Y[:, 0]))))
+        else:
+            dy = 1.0
+
+        row_width = np.zeros(n_rows)
+        row_first_moment = np.zeros(n_rows)
+        valid_rows = np.zeros(n_rows, dtype=bool)
+
+        for i in range(n_rows):
+            row_mask = mask[i, :]
+            if not np.any(row_mask):
+                continue
+            xi = np.sort(X[i, row_mask])
+            if xi.size > 1:
+                dx = float(np.mean(np.diff(xi)))
+            else:
+                x_full = X[i, :]
+                dx = float((np.max(x_full) - np.min(x_full)) / max(len(x_full) - 1, 1))
+            if dx <= 0:
+                continue
+
+            row_area = row_mask.sum() * dx * dy
+            row_y = float(np.mean(Y[i, row_mask]))
+            row_width[i] = row_mask.sum() * dx
+            row_first_moment[i] = row_y * row_area
+            valid_rows[i] = True
+
+        Q = np.zeros(n_rows)
+        running_Q = 0.0
+        for i in range(n_rows - 1, -1, -1):
+            if not valid_rows[i]:
+                continue
+            running_Q += row_first_moment[i]
+            Q[i] = running_Q
+
+        # Find the row closest to y_val
+        row_ys = np.zeros(n_rows)
+        for i in range(n_rows):
+            if valid_rows[i]:
+                row_ys[i] = float(np.mean(Y[i, mask[i, :]]))
+            else:
+                row_ys[i] = Y[i, 0]
+
+        valid_y_coords = [row_ys[i] for i in range(n_rows) if valid_rows[i]]
+        if not valid_y_coords:
+            return 0.0
+        min_y, max_y = min(valid_y_coords), max(valid_y_coords)
+        h = max_y - min_y
+        if y_val < min_y - 0.01 * h or y_val > max_y + 0.01 * h:
+            return 0.0
+
+        idx = np.argmin(np.abs(row_ys - y_val))
+        if valid_rows[idx] and row_width[idx] > 1e-12:
+            return V * Q[idx] / (section.inertia * row_width[idx])
+        return 0.0
+
 class StructureResults:
     """
     Manages results for all elements in the mesh.
