@@ -145,19 +145,8 @@ def save_project_to_dict():
 def load_project_from_dict(project_data):
     """Load project state from dictionary."""
     try:
-        # Clear widget state keys so widgets re-initialize from the loaded values.
-        # When a widget has an explicit key, Streamlit stores its value in
-        # st.session_state[key] and ignores the 'value' parameter on subsequent
-        # reruns.  Removing those stale entries forces Streamlit to respect the
-        # 'value' argument computed from the freshly loaded project data.
-        persistent_keys = {
-            "nodes", "properties", "elements", "constraints", "point_loads",
-            "distributed_loads", "springs", "project_description", "stiffness_integration_mode",
-            "structural_behavior_mode",
-        }
-        for k in list(st.session_state.keys()):
-            if k not in persistent_keys:
-                del st.session_state[k]
+        # Pre-reset: clear all session state to certify that it does not inherit past modifications
+        st.session_state.clear()
 
         st.session_state["nodes"] = project_data.get("nodes", [])
         st.session_state["elements"] = project_data.get("elements", [])
