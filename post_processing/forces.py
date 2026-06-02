@@ -85,7 +85,7 @@ class ElementResults:
 
     def _reddy_gamma_factor(self, x):
         """
-        Compute (θ(x) - dv₀/dx(x)) using shape function interpolation.
+        Compute -(θ(x) + dv₀/dx(x)) using shape function interpolation.
         Returns 0.0 if not a Reddy element.
         """
         class_name = type(self.element).__name__
@@ -98,7 +98,7 @@ class ElementResults:
         theta = self.element.interpolate_theta(x, local_disps)
         dv_dx = self.element.interpolate_dv_dx(x, local_disps)
         
-        return theta - dv_dx
+        return - (theta + dv_dx)
 
     def reddy_shear_stress(self, x, y):
         """

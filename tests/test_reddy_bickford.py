@@ -96,7 +96,7 @@ def _make_cantilever(n, h, etype="reddy_bickford_2node"):
     sec = RectangularBar(1, B, h)
     nodes = mesh.generate_1d_mesh(0, 0, L_BEAM, 0, n, mat, sec, etype)
     # Fix all DOFs at left end
-    if etype == "reddy_bickford_2node":
+    if etype in ["reddy_bickford_2node", "mrbt_2node"]:
         mesh.constraints.add(Constraint(nodes[0], 0, 0.0))  # u
         mesh.constraints.add(Constraint(nodes[0], 1, 0.0))  # v
         mesh.constraints.add(Constraint(nodes[0], 2, 0.0))  # theta

@@ -676,7 +676,7 @@ def test_internal_force_recovery_across_element_types():
         mesh.constraints.add(Constraint(nodes[0], 0, 0.0))
         mesh.constraints.add(Constraint(nodes[0], 1, 0.0))
         mesh.constraints.add(Constraint(nodes[0], 2, 0.0))
-        if element_type == "reddy_bickford_2node":
+        if element_type in ["reddy_bickford_2node", "mrbt_2node"]:
             mesh.constraints.add(Constraint(nodes[0], 3, 0.0))
 
         tip_load = PointLoad(P, 1)
@@ -850,7 +850,7 @@ def test_structural_behavior_modes_supported_across_element_types():
                 mesh.constraints.add(Constraint(n1, 0, 0.0))
                 mesh.constraints.add(Constraint(n1, 1, 0.0))
                 mesh.constraints.add(Constraint(n1, 2, 0.0))
-                if element_type == "reddy_bickford_2node":
+                if element_type in ["reddy_bickford_2node", "mrbt_2node"]:
                     mesh.constraints.add(Constraint(n1, 3, 0.0))
                 p = PointLoad(-1000.0, 1)
             p.node = n2
