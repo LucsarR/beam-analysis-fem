@@ -4,7 +4,7 @@ import json
 import numpy as np
 
 # Ensure path includes workspace root
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fem.mesh import Mesh
 from fem.material import Material

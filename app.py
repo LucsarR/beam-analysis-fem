@@ -2343,21 +2343,25 @@ with tab3:
                                     fig_shear_cross = plot_shear_stress_distribution(
                                         selected_element_result,
                                         x_pos,
+                                        display_x=x_pos_global if (not use_global_pos) else x_pos,
                                     )
                                 elif shear_theory == "Reddy-Bickford (parabolic TSDT)":
                                     fig_shear_cross = plot_reddy_shear_stress_distribution(
                                         selected_element_result,
                                         x_pos,
+                                        display_x=x_pos_global if (not use_global_pos) else x_pos,
                                     )
                                 else:
                                     fig_shear_cross = plot_shear_stress_comparison(
                                         selected_element_result,
                                         x_pos,
+                                        display_x=x_pos_global if (not use_global_pos) else x_pos,
                                     )
                             else:
                                 fig_shear_cross = plot_shear_stress_distribution(
                                     selected_element_result,
                                     x_pos,
+                                    display_x=x_pos_global if (not use_global_pos) else x_pos,
                                 )
                             st.plotly_chart(fig_shear_cross, use_container_width=True)
 

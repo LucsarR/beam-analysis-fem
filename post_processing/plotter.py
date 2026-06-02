@@ -874,7 +874,7 @@ def plot_normal_stress_distribution(element_result, x, n_points=100, query_y=Non
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     return fig
 
-def plot_shear_stress_distribution(element_result, x, n_points=100):
+def plot_shear_stress_distribution(element_result, x, n_points=100, display_x=None):
     """
     Interactive Plotly plot: approximate 2D contour of shear stress over the
     section shape at position x along the element.
@@ -974,8 +974,10 @@ def plot_shear_stress_distribution(element_result, x, n_points=100):
         showlegend=False
     ))
 
+    x_title = x if display_x is None else float(display_x)
+
     fig.update_layout(
-        title=f"Shear Stress Contour at x={x:.2f}",
+        title=f"Shear Stress Contour at x={x_title:.2f}",
         xaxis_title="Section x",
         yaxis_title="Section y",
         width=600,
@@ -985,7 +987,7 @@ def plot_shear_stress_distribution(element_result, x, n_points=100):
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     return fig
 
-def plot_reddy_shear_stress_distribution(element_result, x, n_points=100):
+def plot_reddy_shear_stress_distribution(element_result, x, n_points=100, display_x=None):
     """
     Interactive Plotly plot: 2D contour of Reddy-Bickford shear stress over the
     section shape at position x along the element.
@@ -1059,8 +1061,10 @@ def plot_reddy_shear_stress_distribution(element_result, x, n_points=100):
         hovertext='Shear boundary condition: τ = 0'
     ))
 
+    x_title = x if display_x is None else float(display_x)
+
     fig.update_layout(
-        title=f"Reddy Shear Stress Contour at x={x:.2f}",
+        title=f"Reddy Shear Stress Contour at x={x_title:.2f}",
         xaxis_title="Section x",
         yaxis_title="Section y",
         width=600,
@@ -1070,7 +1074,7 @@ def plot_reddy_shear_stress_distribution(element_result, x, n_points=100):
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     return fig
 
-def plot_shear_stress_comparison(element_result, x, n_points=100):
+def plot_shear_stress_comparison(element_result, x, n_points=100, display_x=None):
     """
     Line plot comparing Jourawski and Reddy-Bickford shear stress profiles
     across the cross-section height at position x.
@@ -1180,8 +1184,10 @@ def plot_shear_stress_comparison(element_result, x, n_points=100):
         hoverinfo='skip'
     ))
 
+    x_title = x if display_x is None else float(display_x)
+
     fig.update_layout(
-        title=f"Shear Stress Comparison across Section Height at x={x:.2f}",
+        title=f"Shear Stress Comparison across Section Height at x={x_title:.2f}",
         xaxis_title="Shear Stress τ",
         yaxis_title="Section Coordinate y",
         width=700,
