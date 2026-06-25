@@ -1034,6 +1034,43 @@ def test_streamlit_app_force_diagram_resolution_slider_removed():
     print("✓ test_streamlit_app_force_diagram_resolution_slider_removed passed")
 
 
+def test_streamlit_app_point_load_default_direction():
+    """Streamlit app should default new point loads to X force (0) for frame/truss and Y force (1) for beam."""
+    # 1. Test Frame mode -> should default to X force (0)
+    at_frame = AppTest.from_file("app.py")
+    at_frame.session_state["nodes"] = [(0.0, 0.0), (1.0, 0.0)]
+    at_frame.session_state["structural_behavior_mode"] = "frame"
+    at_frame.run(timeout=60)
+    # Set number of point loads to 1
+    num_loads = next(ni for ni in at_frame.number_input if ni.label == "Number of point loads")
+    num_loads.set_value(1).run(timeout=60)
+    # Check default direction selectbox value is 0 (X force)
+    ldir_frame = at_frame.selectbox(key="ldir_0")
+    assert ldir_frame.value == 0, f"Expected default frame load direction to be 0 (X force), got {ldir_frame.value}"
+
+    # 2. Test Truss mode -> should default to X force (0)
+    at_truss = AppTest.from_file("app.py")
+    at_truss.session_state["nodes"] = [(0.0, 0.0), (1.0, 0.0)]
+    at_truss.session_state["structural_behavior_mode"] = "truss"
+    at_truss.run(timeout=60)
+    num_loads = next(ni for ni in at_truss.number_input if ni.label == "Number of point loads")
+    num_loads.set_value(1).run(timeout=60)
+    ldir_truss = at_truss.selectbox(key="ldir_0")
+    assert ldir_truss.value == 0, f"Expected default truss load direction to be 0 (X force), got {ldir_truss.value}"
+
+    # 3. Test Beam mode -> should default to Y force (1)
+    at_beam = AppTest.from_file("app.py")
+    at_beam.session_state["nodes"] = [(0.0, 0.0), (1.0, 0.0)]
+    at_beam.session_state["structural_behavior_mode"] = "beam"
+    at_beam.run(timeout=60)
+    num_loads = next(ni for ni in at_beam.number_input if ni.label == "Number of point loads")
+    num_loads.set_value(1).run(timeout=60)
+    ldir_beam = at_beam.selectbox(key="ldir_0")
+    assert ldir_beam.value == 1, f"Expected default beam load direction to be 1 (Y force), got {ldir_beam.value}"
+
+    print("✓ test_streamlit_app_point_load_default_direction passed")
+
+
 def run_all_tests():
     """Run all integration tests."""
     print("\n" + "="*60)
@@ -1069,6 +1106,7 @@ def run_all_tests():
     test_streamlit_app_structural_behavior_option_applied()
     test_streamlit_app_structural_behavior_filters_inputs_and_outputs()
     test_streamlit_app_force_diagram_resolution_slider_removed()
+    test_streamlit_app_point_load_default_direction()
     
     print("\n" + "="*60)
     print("✅ All Mesh Integration Tests Passed!")

@@ -1446,9 +1446,12 @@ with tab1:
                         help=f"Load {i+1} at node"
                     ))
 
-                    _existing_ldir = existing_load[1] if existing_load and len(existing_load) > 1 else 1
-                    # default to direction 1 (Y force); clamp to valid range
-                    _ldir_default = _existing_ldir if _existing_ldir in _dof_options_l else 1
+                    if existing_load and len(existing_load) > 1:
+                        _existing_ldir = existing_load[1]
+                    else:
+                        _existing_ldir = 0 if 0 in _dof_options_l else 1
+                    # default direction; clamp to valid range
+                    _ldir_default = _existing_ldir if _existing_ldir in _dof_options_l else _dof_options_l[0]
                     _ldir_index = _dof_options_l.index(_ldir_default)
                     direction = int(col2.selectbox(
                         f"Direction",
