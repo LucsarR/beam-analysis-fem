@@ -787,8 +787,11 @@ def plot_normal_stress_distribution(element_result, x, n_points=100, query_y=Non
     X, Y, mask = section.xy_grid(n_points)
     N = element_result.normal_force(x)
     M = element_result.bending_moment(x)
-    # Vectorised: compute stress everywhere, NaN outside the section
-    SIGMA = np.where(mask, N / section.area - M * Y / section.inertia, np.nan)
+    # Vectorised: compute stress everywhere using kinematic stress if available, otherwise fallback to linear formula
+    if hasattr(element_result, "kinematic_normal_stress"):
+        SIGMA = np.where(mask, element_result.kinematic_normal_stress(x, Y), np.nan)
+    else:
+        SIGMA = np.where(mask, N / section.area - M * Y / section.inertia, np.nan)
 
     # Mask out-of-section points
     X_flat = X.flatten()
@@ -840,9 +843,11 @@ def plot_normal_stress_distribution(element_result, x, n_points=100, query_y=Non
             hoverinfo='skip'
         ))
 
-    # Draw query-y marker line if provided
     if query_y is not None:
-        sigma_at_query = N / section.area - M * query_y / section.inertia
+        if hasattr(element_result, "kinematic_normal_stress"):
+            sigma_at_query = element_result.kinematic_normal_stress(x, query_y)
+        else:
+            sigma_at_query = N / section.area - M * query_y / section.inertia
         fig.add_trace(go.Scatter(
             x=[x_min - x_margin, x_max + x_margin],
             y=[query_y, query_y],
@@ -1308,7 +1313,10 @@ def plot_normal_stress_side_view(element_result, x, n_points=30, display_x=None,
     
     # Sample stress values at different heights
     y_values = np.linspace(y_min, y_max, n_points)
-    sigma_values = np.array([section.normal_stress(N, M, y) for y in y_values])
+    if hasattr(element_result, "kinematic_normal_stress"):
+        sigma_values = element_result.kinematic_normal_stress(x, y_values)
+    else:
+        sigma_values = np.array([section.normal_stress(N, M, y) for y in y_values])
     
     # Determine max stress for scaling arrows
     max_sigma = np.max(np.abs(sigma_values))

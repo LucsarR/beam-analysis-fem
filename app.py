@@ -2657,7 +2657,7 @@ with tab3:
                             if use_section_query and section_query_y is not None:
                                 N_val = selected_element_result.normal_force(x_pos)
                                 M_val = selected_element_result.bending_moment(x_pos)
-                                sigma_val = selected_element_result.element.section.normal_stress(N_val, M_val, section_query_y)
+                                sigma_val = selected_element_result.kinematic_normal_stress(x_pos, section_query_y)
                                 
                                 tau_j_val = selected_element_result.jourawski_shear_stress(x_pos, section_query_y)
                                 

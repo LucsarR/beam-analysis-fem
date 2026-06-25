@@ -111,7 +111,7 @@ class ElementResults:
             d2w_dx2 = d2N1 * v1 + d2N2 * theta1 + d2N3 * v2 + d2N4 * theta2
             
             # sigma = E * (du/dx - y * d2w/dx2)
-            return float(E * (du_dx - y * d2w_dx2))
+            stress = E * (du_dx - y * d2w_dx2)
 
         elif class_name == "EulerBernoulliElement3Node":
             # DOFs: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
@@ -128,7 +128,7 @@ class ElementResults:
             _, _, d2_w_dx2, _, _, _ = _quintic_bending_shapes_3node(xi, L)
             d2w_dx2 = np.dot(d2_w_dx2, d_bending)
             
-            return float(E * (du_dx - y * d2w_dx2))
+            stress = E * (du_dx - y * d2w_dx2)
 
         elif class_name == "TimoshenkoElement2Node":
             # DOFs: [u1, v1, theta1, u2, v2, theta2]
@@ -142,7 +142,7 @@ class ElementResults:
             dtheta_dx = (theta2 - theta1) / L
             
             # sigma = E * (du/dx + y * dtheta/dx)
-            return float(E * (du_dx + y * dtheta_dx))
+            stress = E * (du_dx + y * dtheta_dx)
 
         elif class_name == "TimoshenkoElement3Node":
             # DOFs: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
@@ -159,7 +159,7 @@ class ElementResults:
             dtheta_dx = (1.0 / L) * (dN1_dxi * theta1 + dN2_dxi * theta2 + dN3_dxi * theta3)
             
             # sigma = E * (du/dx + y * dtheta/dx)
-            return float(E * (du_dx + y * dtheta_dx))
+            stress = E * (du_dx + y * dtheta_dx)
 
         elif class_name in ["ReddyBickfordElement2Node", "MRBTElement2Node"]:
             # DOFs: [u1, v1, theta1, dv_dx1, u2, v2, theta2, dv_dx2]
@@ -188,13 +188,17 @@ class ElementResults:
             # epsilon_xx = du/dx + y * dtheta/dx - c1 * y^3 * (dtheta/dx + d^2v/dx^2)
             epsilon_xx = du_dx + y * dtheta_dx - c1 * y**3 * (dtheta_dx + d2v_dx2)
             
-            return float(E * epsilon_xx)
+            stress = E * epsilon_xx
 
         else:
             # Fallback to resultant normal stress using section formula
             N = self.normal_force(x)
             M = self.bending_moment(x)
-            return float(self.element.section.normal_stress(N, M, y))
+            stress = self.element.section.normal_stress(N, M, y)
+
+        if np.ndim(stress) == 0:
+            return float(stress)
+        return stress
 
     def _reddy_gamma_factor(self, x):
         """
