@@ -1462,8 +1462,8 @@ with tab1:
             n_elements = st.number_input(
                 "Number of elements",
                 min_value=1,
-                max_value=n_nodes-1,
-                value=st.session_state["n_elements_input"] if "n_elements_input" in st.session_state else (len(st.session_state.get("elements", [])) if len(st.session_state.get("elements", [])) >= 1 else min(n_nodes-1, 1)),
+                max_value=100,
+                value=st.session_state["n_elements_input"] if "n_elements_input" in st.session_state else (len(st.session_state.get("elements", [])) if len(st.session_state.get("elements", [])) >= 1 else n_nodes - 1),
                 key="n_elements_input",
                 help="Number of beam elements"
             )
@@ -1480,7 +1480,7 @@ with tab1:
                         f"Start Node",
                         min_value=1,
                         max_value=n_nodes,
-                        value=st.session_state[f"en1_{i}"] if f"en1_{i}" in st.session_state else (existing_elem[0] if existing_elem else min(i+1, n_nodes)),
+                        value=st.session_state[f"en1_{i}"] if f"en1_{i}" in st.session_state else (existing_elem[0] if existing_elem else (i % n_nodes) + 1),
                         key=f"en1_{i}",
                         help=f"Element {i+1} start node"
                     ))
@@ -1489,7 +1489,7 @@ with tab1:
                         f"End Node",
                         min_value=1,
                         max_value=n_nodes,
-                        value=st.session_state[f"en2_{i}"] if f"en2_{i}" in st.session_state else (existing_elem[1] if existing_elem else min(i+2, n_nodes)),
+                        value=st.session_state[f"en2_{i}"] if f"en2_{i}" in st.session_state else (existing_elem[1] if existing_elem else ((i + 1) % n_nodes) + 1),
                         key=f"en2_{i}",
                         help=f"Element {i+1} end node"
                     ))

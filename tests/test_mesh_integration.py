@@ -1071,6 +1071,51 @@ def test_streamlit_app_point_load_default_direction():
     print("✓ test_streamlit_app_point_load_default_direction passed")
 
 
+def test_streamlit_app_triangular_frame_3nodes_3elements():
+    """Streamlit app should successfully run analysis on a triangular frame with 3 nodes and 3 elements."""
+    mat = Material(1, 210e9, 0.3)
+    sec = RectangularBar(1, 0.05, 0.1)
+
+    at = AppTest.from_file("app.py")
+    # Coordinates of a 3-node triangular frame
+    at.session_state["nodes"] = [(0.0, 0.0), (2.0, 0.0), (1.0, 1.732)]
+    at.session_state["properties"] = [{
+        "name": "Property_1",
+        "material": mat,
+        "mat_input_mode": "Calculate G (from E and ν)",
+        "section": sec,
+        "section_type": "rectangular_bar",
+        "section_kwargs": {"width": 0.05, "height": 0.1}
+    }]
+    # 3 elements connecting 1->2, 2->3, and 3->1
+    at.session_state["elements"] = [
+        (1, 2, "euler_bernoulli_2node", "Property_1", 1),
+        (2, 3, "euler_bernoulli_2node", "Property_1", 1),
+        (3, 1, "euler_bernoulli_2node", "Property_1", 1),
+    ]
+    # Fully constraint/fix Node 1, and pin Node 2 in Y
+    at.session_state["constraints"] = [
+        (1, 0, 0.0), (1, 1, 0.0), (1, 2, 0.0),
+        (2, 1, 0.0)
+    ]
+    # Apply a vertical load at the apex (Node 3)
+    at.session_state["point_loads"] = [(3, 1, -1000.0)]
+    at.session_state["distributed_loads"] = []
+    at.session_state["structural_behavior_mode"] = "frame"
+
+    at.run(timeout=60)
+    run_analysis_button = next(btn for btn in at.button if btn.label == "Run Analysis")
+    run_analysis_button.click()
+    at.run(timeout=60)
+
+    errors = [err.value for err in at.error]
+    assert not any(msg.startswith("❌ Analysis failed") for msg in errors), (
+        f"Run Analysis failed for triangular frame: {errors}"
+    )
+    assert "displacements" in at.session_state
+    print("✓ test_streamlit_app_triangular_frame_3nodes_3elements passed")
+
+
 def run_all_tests():
     """Run all integration tests."""
     print("\n" + "="*60)
@@ -1107,6 +1152,7 @@ def run_all_tests():
     test_streamlit_app_structural_behavior_filters_inputs_and_outputs()
     test_streamlit_app_force_diagram_resolution_slider_removed()
     test_streamlit_app_point_load_default_direction()
+    test_streamlit_app_triangular_frame_3nodes_3elements()
     
     print("\n" + "="*60)
     print("✅ All Mesh Integration Tests Passed!")
