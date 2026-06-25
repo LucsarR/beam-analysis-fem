@@ -52,7 +52,7 @@ class Mesh:
         self.node_id_counter += 1
         return node
 
-    def add_element(self, node_start, node_end, material, section, element_type="euler_bernoulli_2node", stiffness_integration="analytical"):
+    def add_element(self, node_start, node_end, material, section, element_type="euler_bernoulli_2node", stiffness_integration="analytical", n_gauss=None):
         """
         Add an element to the mesh connecting two nodes.
         
@@ -82,7 +82,7 @@ class Mesh:
         if element_type == "euler_bernoulli_2node":
             element = EulerBernoulliElement2Node(
                 self.element_id_counter, node_start, node_end, material, section,
-                stiffness_integration=stiffness_integration
+                stiffness_integration=stiffness_integration, n_gauss=n_gauss
             )
         elif element_type == "euler_bernoulli_3node":
             # For 3-node element, create or find the central node
@@ -96,11 +96,11 @@ class Mesh:
                     break
             if node_center is None:
                 node_center = self.add_node(x_center, y_center)
-            element = EulerBernoulliElement3Node(self.element_id_counter, node_start, node_end, material, section, node_center)
+            element = EulerBernoulliElement3Node(self.element_id_counter, node_start, node_end, material, section, node_center, n_gauss=n_gauss)
         elif element_type == "timoshenko_2node":
             element = TimoshenkoElement2Node(
                 self.element_id_counter, node_start, node_end, material, section,
-                stiffness_integration=stiffness_integration
+                stiffness_integration=stiffness_integration, n_gauss=n_gauss
             )
         elif element_type == "timoshenko_3node":
             # For 3-node element, create or find the central node
@@ -114,18 +114,18 @@ class Mesh:
                     break
             if node_center is None:
                 node_center = self.add_node(x_center, y_center)
-            element = TimoshenkoElement3Node(self.element_id_counter, node_start, node_end, material, section, node_center)
+            element = TimoshenkoElement3Node(self.element_id_counter, node_start, node_end, material, section, node_center, n_gauss=n_gauss)
         elif element_type == "reddy_bickford_2node":
-            element = ReddyBickfordElement2Node(self.element_id_counter, node_start, node_end, material, section)
+            element = ReddyBickfordElement2Node(self.element_id_counter, node_start, node_end, material, section, n_gauss=n_gauss)
         elif element_type == "mrbt_2node":
-            element = MRBTElement2Node(self.element_id_counter, node_start, node_end, material, section)
+            element = MRBTElement2Node(self.element_id_counter, node_start, node_end, material, section, n_gauss=n_gauss)
         else:
             raise NotImplementedError(f"Element type '{element_type}' not implemented.")
         self.elements.append(element)
         self.element_id_counter += 1
         return element
 
-    def generate_1d_mesh(self, x_start, y_start, x_end, y_end, n_elements, material, section, element_type="euler_bernoulli_2node", stiffness_integration="analytical"):
+    def generate_1d_mesh(self, x_start, y_start, x_end, y_end, n_elements, material, section, element_type="euler_bernoulli_2node", stiffness_integration="analytical", n_gauss=None):
         """
         Generate a structured 1D mesh between two points.
         
@@ -156,7 +156,7 @@ class Mesh:
         for i in range(n_elements):
             self.add_element(
                 nodes[i], nodes[i+1], material, section, element_type,
-                stiffness_integration=stiffness_integration
+                stiffness_integration=stiffness_integration, n_gauss=n_gauss
             )
         return nodes
 

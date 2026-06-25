@@ -112,6 +112,7 @@ def save_project_to_dict():
             "created": datetime.now().isoformat(),
             "description": st.session_state.get("project_description", ""),
             "stiffness_integration_mode": st.session_state.get("stiffness_integration_mode", "analytical"),
+            "stiffness_n_gauss": st.session_state.get("stiffness_n_gauss", None),
             "structural_behavior_mode": st.session_state.get("structural_behavior_mode", "frame"),
         },
         "nodes": st.session_state.get("nodes", []),
@@ -156,6 +157,7 @@ def load_project_from_dict(project_data):
         st.session_state["distributed_loads"] = project_data.get("distributed_loads", [])
         st.session_state["project_description"] = project_data.get("metadata", {}).get("description", "")
         st.session_state["stiffness_integration_mode"] = project_data.get("metadata", {}).get("stiffness_integration_mode", "analytical")
+        st.session_state["stiffness_n_gauss"] = project_data.get("metadata", {}).get("stiffness_n_gauss", None)
         st.session_state["structural_behavior_mode"] = project_data.get("metadata", {}).get("structural_behavior_mode", "frame")
         
         # Reconstruct properties
@@ -556,6 +558,8 @@ if "distributed_loads" not in st.session_state:
     st.session_state["distributed_loads"] = []
 if "stiffness_integration_mode" not in st.session_state:
     st.session_state["stiffness_integration_mode"] = "analytical"
+if "stiffness_n_gauss" not in st.session_state:
+    st.session_state["stiffness_n_gauss"] = 3
 if "structural_behavior_mode" not in st.session_state:
     st.session_state["structural_behavior_mode"] = "frame"
 
@@ -1602,6 +1606,19 @@ with tab2:
     )
     st.session_state["stiffness_integration_mode"] = integration_mode_labels[selected_label]
     
+    if st.session_state["stiffness_integration_mode"] == "numerical":
+        n_gauss = st.number_input(
+            "Number of Gauss integration points",
+            min_value=1,
+            max_value=20,
+            value=st.session_state.get("stiffness_n_gauss") if st.session_state.get("stiffness_n_gauss") is not None else 3,
+            step=1,
+            help="Choose the number of integration points for numerical integration of stiffness matrices."
+        )
+        st.session_state["stiffness_n_gauss"] = int(n_gauss)
+    else:
+        st.session_state["stiffness_n_gauss"] = None
+    
     # Summary of model
     with st.expander("Model Summary", expanded=True):
         col1, col2, col3 = st.columns(3)
@@ -1709,6 +1726,7 @@ with tab2:
                                 prop["section"],
                                 element_type=etype,
                                 stiffness_integration=st.session_state["stiffness_integration_mode"],
+                                n_gauss=st.session_state.get("stiffness_n_gauss", None),
                             )
                             original_to_mesh_elements[orig_idx] = [el.id]
                         else:
@@ -1738,6 +1756,7 @@ with tab2:
                                     prop["section"],
                                     element_type=etype,
                                     stiffness_integration=st.session_state["stiffness_integration_mode"],
+                                    n_gauss=st.session_state.get("stiffness_n_gauss", None),
                                 )
                                 subdiv_ids.append(el.id)
                             original_to_mesh_elements[orig_idx] = subdiv_ids

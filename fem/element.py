@@ -89,9 +89,10 @@ class Element(ABC):
 class EulerBernoulliElement2Node(Element):
     dofs_per_node = 3  # Each node has [u, v, θ] DOFs
 
-    def __init__(self, id, node_start, node_end, material, section, stiffness_integration="analytical"):
+    def __init__(self, id, node_start, node_end, material, section, stiffness_integration="analytical", n_gauss=None):
         super().__init__(id, node_start, node_end, material, section)
         self.stiffness_integration = stiffness_integration
+        self.n_gauss = n_gauss
         self.length, self.c, self.s, self.R = self._compute_geometry()
 
     def _compute_geometry(self):
@@ -146,10 +147,8 @@ class EulerBernoulliElement2Node(Element):
 
         k_local = np.zeros((6, 6))
 
-        # 3-point Gauss-Legendre is exact here for the polynomial terms from
-        # Hermite-cubic Euler-Bernoulli interpolation.
-        xi_gauss = np.array([-np.sqrt(3/5), 0.0, np.sqrt(3/5)])
-        w_gauss = np.array([5/9, 8/9, 5/9])
+        deg = self.n_gauss if self.n_gauss is not None else 3
+        xi_gauss, w_gauss = np.polynomial.legendre.leggauss(deg)
 
         for xi_g, w_g in zip(xi_gauss, w_gauss):
             xi = 0.5 * (xi_g + 1.0)
@@ -339,9 +338,10 @@ class EulerBernoulliElement2Node(Element):
 class EulerBernoulliElement3Node(Element):
     dofs_per_node = 3  # Each node has [u, v, θ] DOFs
 
-    def __init__(self, id, node_start, node_end, material, section, node_center=None):
+    def __init__(self, id, node_start, node_end, material, section, node_center=None, n_gauss=None):
         super().__init__(id, node_start, node_end, material, section)
         self.node_center = node_center  # Central node
+        self.n_gauss = n_gauss
         self.length, self.c, self.s, self.R = self._compute_geometry()
 
     def _compute_geometry(self):
@@ -404,8 +404,9 @@ class EulerBernoulliElement3Node(Element):
         n_bending = len(bending_dofs)
         k_bending = np.zeros((n_bending, n_bending))
         
-        # 5-point Gauss integration on ξ ∈ [0, 1]
-        xi_g, w_g = np.polynomial.legendre.leggauss(5)
+        # Gauss integration on ξ ∈ [0, 1]
+        deg = self.n_gauss if self.n_gauss is not None else 5
+        xi_g, w_g = np.polynomial.legendre.leggauss(deg)
         t = 0.5 * (xi_g + 1.0)
         wt = 0.5 * w_g
         for xi, wi in zip(t, wt):
@@ -610,9 +611,10 @@ class EulerBernoulliElement3Node(Element):
 class TimoshenkoElement2Node(Element):
     dofs_per_node = 3  # Each node has [u, v, θ] DOFs
 
-    def __init__(self, id, node_start, node_end, material, section, stiffness_integration="analytical"):
+    def __init__(self, id, node_start, node_end, material, section, stiffness_integration="analytical", n_gauss=None):
         super().__init__(id, node_start, node_end, material, section)
         self.stiffness_integration = stiffness_integration
+        self.n_gauss = n_gauss
         self.length, self.c, self.s, self.R = self._compute_geometry()
 
     def _compute_geometry(self):
@@ -702,10 +704,10 @@ class TimoshenkoElement2Node(Element):
         k_local = np.zeros((6, 6))
         As = kappa * A
 
-        # Axial + bending terms with 2-point Gauss integration.
+        # Axial + bending terms with Gauss integration.
         # This is exact for the linear shape-function derivatives used here.
-        xi_gauss = np.array([-1 / np.sqrt(3), 1 / np.sqrt(3)])
-        w_gauss = np.array([1.0, 1.0])
+        deg = self.n_gauss if self.n_gauss is not None else 2
+        xi_gauss, w_gauss = np.polynomial.legendre.leggauss(deg)
         for xi_g, w_g in zip(xi_gauss, w_gauss):
             xi = 0.5 * (xi_g + 1.0)
             jac = L / 2.0
@@ -716,14 +718,17 @@ class TimoshenkoElement2Node(Element):
             k_local += E * A * np.outer(b_axial, b_axial) * jac * w_g
             k_local += E * I * np.outer(b_bending, b_bending) * jac * w_g
 
-        # Reduced integration for shear term (single point) to mitigate
+        # Reduced integration for shear term to mitigate
         # shear locking (artificially stiff transverse response in slender beams).
-        xi = 0.5
-        jac = L
-        n1 = 1.0 - xi
-        n2 = xi
-        b_shear = np.array([0.0, -1.0 / L, -n1, 0.0, 1.0 / L, -n2])
-        k_local += As * G * np.outer(b_shear, b_shear) * jac
+        deg_shear = max(1, deg - 1)
+        xi_gauss_reduced, w_gauss_reduced = np.polynomial.legendre.leggauss(deg_shear)
+        for xi_g, w_g in zip(xi_gauss_reduced, w_gauss_reduced):
+            xi = 0.5 * (xi_g + 1.0)
+            jac = L / 2.0
+            n1 = 1.0 - xi
+            n2 = xi
+            b_shear = np.array([0.0, -1.0 / L, -n1, 0.0, 1.0 / L, -n2])
+            k_local += As * G * np.outer(b_shear, b_shear) * jac * w_g
 
         return R @ k_local @ R.T
 
@@ -948,9 +953,10 @@ class TimoshenkoElement3Node(Element):
     """
     dofs_per_node = 3  # Each node has [u, v, θ] DOFs
 
-    def __init__(self, id, node_start, node_end, material, section, node_center=None):
+    def __init__(self, id, node_start, node_end, material, section, node_center=None, n_gauss=None):
         super().__init__(id, node_start, node_end, material, section)
         self.node_center = node_center
+        self.n_gauss = n_gauss
         self.length, self.c, self.s, self.R = self._compute_geometry()
     
     def _compute_geometry(self):
@@ -1031,10 +1037,9 @@ class TimoshenkoElement3Node(Element):
         n_bending = len(bending_dofs)
         k_bending_shear = np.zeros((n_bending, n_bending))
         
-        # Full integration (3-point) for bending stiffness
-        # 3-point Gauss-Legendre quadrature points and weights for interval [-1,1]
-        xi_gauss_full = np.array([-np.sqrt(3/5), 0, np.sqrt(3/5)])
-        w_gauss_full = np.array([5/9, 8/9, 5/9])
+        # Full integration for bending stiffness
+        deg = self.n_gauss if self.n_gauss is not None else 3
+        xi_gauss_full, w_gauss_full = np.polynomial.legendre.leggauss(deg)
         
         for xi_g, w_g in zip(xi_gauss_full, w_gauss_full):
             # Map from [-1,1] to [0,1]
@@ -1047,10 +1052,9 @@ class TimoshenkoElement3Node(Element):
             dtheta_vec = np.array([0, dn_theta_dx[0], 0, dn_theta_dx[1], 0, dn_theta_dx[2]])
             k_bending_shear += E * I * np.outer(dtheta_vec, dtheta_vec) * (L/2) * w_g
         
-        # Reduced integration (2-point) for shear stiffness to avoid shear locking
-        # 2-point Gauss-Legendre quadrature points and weights for interval [-1,1]
-        xi_gauss_reduced = np.array([-1/np.sqrt(3), 1/np.sqrt(3)])
-        w_gauss_reduced = np.array([1.0, 1.0])
+        # Reduced integration for shear stiffness to avoid shear locking
+        deg_shear = max(1, deg - 1)
+        xi_gauss_reduced, w_gauss_reduced = np.polynomial.legendre.leggauss(deg_shear)
         
         for xi_g, w_g in zip(xi_gauss_reduced, w_gauss_reduced):
             # Map from [-1,1] to [0,1]
@@ -1290,8 +1294,9 @@ class ReddyBickfordElement2Node(Element):
 
     dofs_per_node = 4
 
-    def __init__(self, id, node_start, node_end, material, section):
+    def __init__(self, id, node_start, node_end, material, section, n_gauss=None):
         super().__init__(id, node_start, node_end, material, section)
+        self.n_gauss = n_gauss
         x1, y1 = node_start.x, node_start.y
         x2, y2 = node_end.x, node_end.y
         L = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
