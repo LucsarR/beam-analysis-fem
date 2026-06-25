@@ -83,6 +83,119 @@ class ElementResults:
             H4 = L * xi**2 * (xi - 1.0)
             return float(H1 * v1 + H2 * theta1 + H3 * v2 + H4 * theta2)
 
+    def kinematic_normal_stress(self, x, y):
+        """
+        Compute the kinematic normal stress sigma_xx(x, y) directly from the
+        displacement fields and kinematic relations of the specific beam theory.
+        """
+        el = self.element
+        d = self.displacements
+        E = el.material.E
+        L = el.length
+        xi = x / L if L > 1e-14 else 0.0
+        class_name = type(el).__name__
+
+        if class_name == "EulerBernoulliElement2Node":
+            # DOFs: [u1, v1, theta1, u2, v2, theta2]
+            u1, u2 = d[0], d[3]
+            v1, theta1, v2, theta2 = d[1], d[2], d[4], d[5]
+            
+            # du/dx (linear/constant)
+            du_dx = (u2 - u1) / L
+            
+            # d^2w/dx^2 (linear)
+            d2N1 = (12.0 / L**2) * (xi - 0.5)
+            d2N2 = (6.0 / L) * (xi - 2.0/3.0)
+            d2N3 = (-12.0 / L**2) * (xi - 0.5)
+            d2N4 = (6.0 / L) * (xi - 1.0/3.0)
+            d2w_dx2 = d2N1 * v1 + d2N2 * theta1 + d2N3 * v2 + d2N4 * theta2
+            
+            # sigma = E * (du/dx - y * d2w/dx2)
+            return float(E * (du_dx - y * d2w_dx2))
+
+        elif class_name == "EulerBernoulliElement3Node":
+            # DOFs: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
+            u1, u2, u3 = d[0], d[3], d[6]
+            d_bending = d[[1, 2, 4, 5, 7, 8]]
+            
+            # du/dx (linear)
+            dN1_dxi = -3.0 + 4.0 * xi
+            dN2_dxi = 4.0 - 8.0 * xi
+            dN3_dxi = -1.0 + 4.0 * xi
+            du_dx = (1.0 / L) * (dN1_dxi * u1 + dN2_dxi * u2 + dN3_dxi * u3)
+            
+            # d^2w/dx^2 (cubic)
+            _, _, d2_w_dx2, _, _, _ = _quintic_bending_shapes_3node(xi, L)
+            d2w_dx2 = np.dot(d2_w_dx2, d_bending)
+            
+            return float(E * (du_dx - y * d2w_dx2))
+
+        elif class_name == "TimoshenkoElement2Node":
+            # DOFs: [u1, v1, theta1, u2, v2, theta2]
+            u1, u2 = d[0], d[3]
+            theta1, theta2 = d[2], d[5]
+            
+            # du/dx (linear/constant)
+            du_dx = (u2 - u1) / L
+            
+            # dtheta/dx (linear/constant)
+            dtheta_dx = (theta2 - theta1) / L
+            
+            # sigma = E * (du/dx + y * dtheta/dx)
+            return float(E * (du_dx + y * dtheta_dx))
+
+        elif class_name == "TimoshenkoElement3Node":
+            # DOFs: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
+            u1, u2, u3 = d[0], d[3], d[6]
+            theta1, theta2, theta3 = d[2], d[5], d[8]
+            
+            # du/dx (linear)
+            dN1_dxi = -3.0 + 4.0 * xi
+            dN2_dxi = 4.0 - 8.0 * xi
+            dN3_dxi = -1.0 + 4.0 * xi
+            du_dx = (1.0 / L) * (dN1_dxi * u1 + dN2_dxi * u2 + dN3_dxi * u3)
+            
+            # dtheta/dx (linear)
+            dtheta_dx = (1.0 / L) * (dN1_dxi * theta1 + dN2_dxi * theta2 + dN3_dxi * theta3)
+            
+            # sigma = E * (du/dx + y * dtheta/dx)
+            return float(E * (du_dx + y * dtheta_dx))
+
+        elif class_name in ["ReddyBickfordElement2Node", "MRBTElement2Node"]:
+            # DOFs: [u1, v1, theta1, dv_dx1, u2, v2, theta2, dv_dx2]
+            u1, u2 = d[0], d[4]
+            v1, dv_dx1 = d[1], d[3]
+            theta1, theta2 = d[2], d[6]
+            v2, dv_dx2 = d[5], d[7]
+            
+            # du/dx (linear/constant)
+            du_dx = (u2 - u1) / L
+            
+            # dtheta/dx (linear/constant)
+            dtheta_dx = (theta2 - theta1) / L
+            
+            # d^2v/dx^2 (linear)
+            H1_pp = 6.0 * (2.0 * xi - 1.0) / L**2
+            H2_pp = 2.0 * (3.0 * xi - 2.0) / L
+            H3_pp = 6.0 * (1.0 - 2.0 * xi) / L**2
+            H4_pp = 2.0 * (3.0 * xi - 1.0) / L
+            d2v_dx2 = H1_pp * v1 + H2_pp * dv_dx1 + H3_pp * v2 + H4_pp * dv_dx2
+            
+            # Reddy-Bickford parameter c1 = 4 / (3 * h^2)
+            h = el._get_height()
+            c1 = 4.0 / (3.0 * h**2)
+            
+            # epsilon_xx = du/dx + y * dtheta/dx - c1 * y^3 * (dtheta/dx + d^2v/dx^2)
+            epsilon_xx = du_dx + y * dtheta_dx - c1 * y**3 * (dtheta_dx + d2v_dx2)
+            
+            return float(E * epsilon_xx)
+
+        else:
+            # Fallback to resultant normal stress using section formula
+            N = self.normal_force(x)
+            M = self.bending_moment(x)
+            return float(self.element.section.normal_stress(N, M, y))
+
     def _reddy_gamma_factor(self, x):
         """
         Compute -(θ(x) + dv₀/dx(x)) using shape function interpolation.
