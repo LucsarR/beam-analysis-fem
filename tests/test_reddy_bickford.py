@@ -623,16 +623,16 @@ def test_shear_force_recovery():
 
     displacements, results = _solve(mesh)
 
-    # Check shear force (should be constant = P)
+    # Check shear force (should be constant = -P)
     V_mid = results.V(L_BEAM / 2)
 
     print(f"  Shear force at mid-span:")
-    print(f"    Analytical: {P:.4e} N")
+    print(f"    Analytical: {-P:.4e} N")
     print(f"    FEM:        {V_mid:.4e} N")
-    print(f"    Error:      {abs(V_mid/P - 1)*100:.2f}%")
+    print(f"    Error:      {abs(V_mid/(-P) - 1)*100:.2f}%")
 
-    assert abs(V_mid / P - 1.0) < 0.10, \
-        f"Shear force error > 10%: {abs(V_mid/P - 1)*100:.2f}%"
+    assert abs(V_mid / (-P) - 1.0) < 0.10, \
+        f"Shear force error > 10%: {abs(V_mid/(-P) - 1)*100:.2f}%"
 
     print("OK Shear force recovery correct")
     return True
@@ -1294,7 +1294,7 @@ if __name__ == "__main__":
     print("=" * 70)
 
     if failed == 0:
-        print("\n✓ All tests passed!")
+        print("\n[OK] All tests passed!")
     else:
-        print(f"\n✗ {failed} test(s) failed")
+        print(f"\n[FAIL] {failed} test(s) failed")
         sys.exit(1)

@@ -1562,8 +1562,8 @@ class ReddyBickfordElement2Node(Element):
         M_left = f_vec[2] - f_vec[3]
         M_right = -(f_vec[6] - f_vec[7])
 
-        # Shear force (constant): V = -dM/dx
-        return (M_left - M_right) / L
+        # Shear force (constant): V = dM/dx
+        return (M_right - M_left) / L
 
     def normal_force(self, x, displacements):
         """
