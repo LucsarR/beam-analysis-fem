@@ -54,9 +54,21 @@ def test_side_view_clips_display_position_to_axis_limits():
     print("✓ test_side_view_clips_display_position_to_axis_limits passed")
 
 
+def test_side_view_query_y():
+    sec = RectangularBar(1, width=0.2, height=0.4)
+    er = _ElementResult(sec, length=1.0)
+    fig = plot_normal_stress_side_view(er, x=0.25, query_y=0.1)
+
+    query_trace = _trace_by_name(fig, "Queried Position")
+    assert np.allclose(np.asarray(query_trace.y, dtype=float), [0.1, 0.1])
+    assert np.isclose(float(query_trace.x[-1]), 1.0)
+    print("✓ test_side_view_query_y passed")
+
+
 def run_all_tests():
     test_side_view_uses_display_axis_values()
     test_side_view_clips_display_position_to_axis_limits()
+    test_side_view_query_y()
     print("\n✅ All normal stress side-view plot tests passed!")
 
 

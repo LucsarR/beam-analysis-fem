@@ -2367,31 +2367,125 @@ with tab3:
                 st.markdown("---")
                 st.markdown("##### Extract value at exact position")
                 use_query = st.checkbox(
-                    "Query a specific (x, y) position",
+                    "Enable force query",
                     value=False,
-                    help="Mark a specific global coordinate on the diagram and read the force value there.",
+                    help="Read exact force/moment values at a specific point on the structure.",
                     key="forces_use_query",
                 )
                 query_xy = None
+                query_mode = "Element & Distance"
                 if use_query:
-                    col_qx, col_qy = st.columns(2)
-                    with col_qx:
-                        q_x = st.number_input(
-                            "x coordinate",
-                            value=0.0,
-                            format="%.4f",
-                            help="Global x of the point to query",
-                            key="forces_query_x",
-                        )
-                    with col_qy:
-                        q_y = st.number_input(
-                            "y coordinate",
-                            value=0.0,
-                            format="%.4f",
-                            help="Global y of the point to query",
-                            key="forces_query_y",
-                        )
-                    query_xy = (q_x, q_y)
+                    query_mode = st.radio(
+                        "Query Mode",
+                        ["Query by Element & Distance (Recommended)", "Query by Global Coordinate (x, y)"],
+                        key="forces_query_mode",
+                    )
+                    
+                    if "Query by Element & Distance" in query_mode:
+                        original_to_mesh = st.session_state.get("original_to_mesh_elements", {})
+                        if original_to_mesh:
+                            orig_element_ids = sorted(original_to_mesh.keys())
+                        else:
+                            orig_element_ids = [el.id for el in st.session_state["mesh"].elements] if "mesh" in st.session_state else []
+                        
+                        if orig_element_ids:
+                            selected_orig_id = st.selectbox(
+                                "Select element",
+                                orig_element_ids,
+                                help="Choose element to query",
+                                key="forces_query_element_selector"
+                            )
+                            
+                            if original_to_mesh:
+                                sub_el_ids = original_to_mesh[selected_orig_id]
+                            else:
+                                sub_el_ids = [selected_orig_id]
+                            sub_el_results = sorted(
+                                (er for er in structure_results.element_results if er.element.id in sub_el_ids),
+                                key=lambda er: sub_el_ids.index(er.element.id),
+                            )
+                            total_element_length = sum(er.length for er in sub_el_results)
+                            
+                            # Initialize session state for query local x
+                            if "forces_query_local_x" not in st.session_state:
+                                st.session_state["forces_query_local_x"] = 0.0
+                            
+                            # Clamp to bounds
+                            st.session_state["forces_query_local_x"] = float(np.clip(
+                                st.session_state["forces_query_local_x"], 0.0, total_element_length
+                            ))
+                            
+                            def sync_forces_from_slider():
+                                st.session_state["forces_query_local_x"] = st.session_state["forces_x_slider"]
+
+                            def sync_forces_from_num():
+                                st.session_state["forces_query_local_x"] = st.session_state["forces_x_num"]
+
+                            col_slider, col_num = st.columns([2, 1])
+                            with col_slider:
+                                st.slider(
+                                    "Distance along element",
+                                    min_value=0.0,
+                                    max_value=float(total_element_length),
+                                    value=st.session_state["forces_query_local_x"],
+                                    step=float(total_element_length / 200.0) if total_element_length > 0 else 0.01,
+                                    format="%.4f",
+                                    key="forces_x_slider",
+                                    on_change=sync_forces_from_slider,
+                                )
+                            with col_num:
+                                st.number_input(
+                                    "Exact distance",
+                                    min_value=0.0,
+                                    max_value=float(total_element_length),
+                                    value=st.session_state["forces_query_local_x"],
+                                    format="%.4f",
+                                    step=0.01,
+                                    key="forces_x_num",
+                                    on_change=sync_forces_from_num,
+                                )
+                                
+                            forces_x_val = st.session_state["forces_query_local_x"]
+                            
+                            # Map to the specific sub-element
+                            cumulative = 0.0
+                            selected_er = sub_el_results[-1]
+                            local_x = float(sub_el_results[-1].length)
+                            for er in sub_el_results:
+                                if forces_x_val <= cumulative + er.length + 1e-12:
+                                    selected_er = er
+                                    local_x = forces_x_val - cumulative
+                                    break
+                                cumulative += er.length
+                            
+                            # Compute global (x, y) coordinates of the projected point
+                            n1 = selected_er.element.node_start
+                            n2 = selected_er.element.node_end
+                            x1, y1, x2, y2 = n1.x, n1.y, n2.x, n2.y
+                            L = selected_er.length
+                            t = local_x / L if L > 1e-10 else 0.0
+                            proj_x = x1 + t * (x2 - x1)
+                            proj_y = y1 + t * (y2 - y1)
+                            query_xy = (proj_x, proj_y)
+                    else:
+                        col_qx, col_qy = st.columns(2)
+                        with col_qx:
+                            q_x = st.number_input(
+                                "x coordinate",
+                                value=0.0,
+                                format="%.4f",
+                                help="Global x of the point to query",
+                                key="forces_query_x",
+                            )
+                        with col_qy:
+                            q_y = st.number_input(
+                                "y coordinate",
+                                value=0.0,
+                                format="%.4f",
+                                help="Global y of the point to query",
+                                key="forces_query_y",
+                            )
+                        query_xy = (q_x, q_y)
                 
                 diagram_map = {
                     "Moment": "moment",
@@ -2405,27 +2499,43 @@ with tab3:
                     
                     # Pre-flight check for query position
                     if query_xy is not None:
-                        hit = find_position_on_structure(structure_results, query_xy[0], query_xy[1])
-                        if hit is None or not hit["is_on_structure"]:
-                            st.warning(
-                                f"⚠️ The queried position ({query_xy[0]:.4f}, {query_xy[1]:.4f}) "
-                                "is outside the structure (or too far from any element). "
-                                "The nearest point on the structure will be used."
-                            )
-                        elif hit is not None:
+                        if "Query by Element & Distance" in query_mode:
                             ft = diagram_map[diagram_type]
                             if ft == "moment":
-                                force_val_preview = hit["element_result"].bending_moment(hit["local_x"])
+                                force_val_preview = selected_er.bending_moment(local_x)
                             elif ft == "shear":
-                                force_val_preview = hit["element_result"].shear_force(hit["local_x"])
+                                force_val_preview = selected_er.shear_force(local_x)
                             else:
-                                force_val_preview = hit["element_result"].normal_force(hit["local_x"])
-                            st.info(
-                                f"📍 Nearest point on structure: "
-                                f"({hit['proj_x']:.4f}, {hit['proj_y']:.4f})  |  "
-                                f"{diagram_type} = **{force_val_preview:.4f}**  |  "
-                                f"Distance from query: {hit['distance']:.4f}"
+                                force_val_preview = selected_er.normal_force(local_x)
+                            
+                            st.success(
+                                f"📍 Element {selected_orig_id}  |  "
+                                f"Distance: {forces_x_val:.4f}  |  "
+                                f"Global coordinates: ({query_xy[0]:.4f}, {query_xy[1]:.4f})  |  "
+                                f"{diagram_type} = **{force_val_preview:.4f}**"
                             )
+                        else:
+                            hit = find_position_on_structure(structure_results, query_xy[0], query_xy[1])
+                            if hit is None or not hit["is_on_structure"]:
+                                st.warning(
+                                    f"⚠️ The queried position ({query_xy[0]:.4f}, {query_xy[1]:.4f}) "
+                                    "is outside the structure (or too far from any element). "
+                                    "The nearest point on the structure will be used."
+                                )
+                            if hit is not None:
+                                ft = diagram_map[diagram_type]
+                                if ft == "moment":
+                                    force_val_preview = hit["element_result"].bending_moment(hit["local_x"])
+                                elif ft == "shear":
+                                    force_val_preview = hit["element_result"].shear_force(hit["local_x"])
+                                else:
+                                    force_val_preview = hit["element_result"].normal_force(hit["local_x"])
+                                st.info(
+                                    f"📍 Nearest point on structure: "
+                                    f"({hit['proj_x']:.4f}, {hit['proj_y']:.4f})  |  "
+                                    f"{diagram_type} = **{force_val_preview:.4f}**  |  "
+                                    f"Distance from query: {hit['distance']:.4f}"
+                                )
                     
                     fig = plot_structure_diagram(
                         structure_results,
@@ -2607,13 +2717,67 @@ with tab3:
                     
                     section_query_y = None
                     if use_section_query:
-                        section_query_y = st.number_input(
-                            "Section y-coordinate (from centroid)",
-                            value=0.0,
-                            format="%.4f",
-                            help="y position within the cross-section (positive = above centroid)",
-                            key="stresses_section_query_y_value",
-                        )
+                        # Determine y bounds based on the section properties
+                        y_min, y_max = -0.1, 0.1  # Fallback
+                        if selected_element_result is not None:
+                            sect = selected_element_result.element.section
+                            try:
+                                # Try to get bounds from xy_grid if available
+                                X_grid, Y_grid, mask_grid = sect.xy_grid(50)
+                                if Y_grid is not None and mask_grid is not None:
+                                    y_min = float(np.min(Y_grid[mask_grid]))
+                                    y_max = float(np.max(Y_grid[mask_grid]))
+                            except Exception:
+                                # Fallback using height or diameter if available
+                                if hasattr(sect, 'height'):
+                                    y_min, y_max = -sect.height/2, sect.height/2
+                                elif hasattr(sect, 'diameter'):
+                                    y_min, y_max = -sect.diameter/2, sect.diameter/2
+                                elif hasattr(sect, 'outer_diameter'):
+                                    y_min, y_max = -sect.outer_diameter/2, sect.outer_diameter/2
+                                elif hasattr(sect, 'h'):
+                                    y_min, y_max = -sect.h/2, sect.h/2
+
+                        # Initialize session state for the query y-value
+                        if "stresses_section_query_y_val" not in st.session_state:
+                            st.session_state["stresses_section_query_y_val"] = 0.0
+
+                        # Clamp session state to current y_min/y_max
+                        st.session_state["stresses_section_query_y_val"] = float(np.clip(
+                            st.session_state["stresses_section_query_y_val"], y_min, y_max
+                        ))
+
+                        def sync_from_slider():
+                            st.session_state["stresses_section_query_y_val"] = st.session_state["stresses_y_slider"]
+
+                        def sync_from_num():
+                            st.session_state["stresses_section_query_y_val"] = st.session_state["stresses_y_num"]
+
+                        col_slider, col_num = st.columns([2, 1])
+                        with col_slider:
+                            st.slider(
+                                "Drag to explore y-position",
+                                min_value=y_min,
+                                max_value=y_max,
+                                value=st.session_state["stresses_section_query_y_val"],
+                                step=float((y_max - y_min) / 200.0) if y_max > y_min else 0.001,
+                                format="%.4f",
+                                key="stresses_y_slider",
+                                on_change=sync_from_slider,
+                            )
+                        with col_num:
+                            st.number_input(
+                                "Type exact y-position",
+                                min_value=y_min,
+                                max_value=y_max,
+                                value=st.session_state["stresses_section_query_y_val"],
+                                format="%.4f",
+                                step=0.001,
+                                key="stresses_y_num",
+                                on_change=sync_from_num,
+                            )
+
+                        section_query_y = st.session_state["stresses_section_query_y_val"]
                     
                     is_reddy = False
                     if selected_element_result is not None:
@@ -2728,6 +2892,7 @@ with tab3:
                                 x_pos,
                                 display_x=side_view_x_pos,
                                 display_length=side_view_length,
+                                query_y=section_query_y if use_section_query else None,
                             )
                             st.plotly_chart(fig_side, use_container_width=True)
                             

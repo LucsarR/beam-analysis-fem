@@ -1274,7 +1274,7 @@ def plot_shear_stress_comparison(element_result, x, n_points=100, query_y=None, 
     return fig
 
 
-def plot_normal_stress_side_view(element_result, x, n_points=30, display_x=None, display_length=None):
+def plot_normal_stress_side_view(element_result, x, n_points=30, display_x=None, display_length=None, query_y=None):
     """
     Interactive Plotly plot: Side view of normal stress distribution along the element height.
     Shows:
@@ -1452,6 +1452,24 @@ def plot_normal_stress_side_view(element_result, x, n_points=30, display_x=None,
                 name='Neutral Axis',
                 hoverinfo='text',
                 text=[f'Neutral Axis (y={y_neutral:.4f})', ''],
+                showlegend=False
+            ))
+
+    # Draw query_y marker line if provided
+    if query_y is not None:
+        if y_min <= query_y <= y_max:
+            if hasattr(element_result, "kinematic_normal_stress"):
+                sigma_at_query = element_result.kinematic_normal_stress(x, query_y)
+            else:
+                sigma_at_query = N / section.area - M * query_y / section.inertia
+            fig.add_trace(go.Scatter(
+                x=[0, L],
+                y=[query_y, query_y],
+                mode='lines',
+                line=dict(color='red', dash='dot', width=2),
+                name='Queried Position',
+                hoverinfo='text',
+                text=[f'Query y={query_y:.4f}<br>Stress σ={sigma_at_query:.4f}', ''],
                 showlegend=False
             ))
     
