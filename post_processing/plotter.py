@@ -1,6 +1,6 @@
 import numpy as np
 import plotly.graph_objects as go
-import matplotlib.cm as cm
+from matplotlib import colormaps
 import matplotlib.colors as mcolors
 
 def plot_structure_preview(nodes, elements, properties, constraints, point_loads, distributed_loads, springs=None):
@@ -174,8 +174,8 @@ def plot_structure_preview(nodes, elements, properties, constraints, point_loads
             dx = 0
             dy = scale * 2 * np.sign(magnitude)
         else:  # Moment (direction == 2)
-            # Draw a small arc for moment
-            theta = np.linspace(0, 1.5*np.pi, 20)
+            # Draw a small arc for moment (counterclockwise for positive, clockwise for negative)
+            theta = np.linspace(0, 1.5*np.pi if magnitude >= 0 else -1.5*np.pi, 20)
             arc_r = scale * 0.5
             arc_x = x + arc_r * np.cos(theta)
             arc_y = y + arc_r * np.sin(theta)
@@ -1355,7 +1355,7 @@ def plot_normal_stress_side_view(element_result, x, n_points=30, display_x=None,
     vmin = np.min(sigma_values)
     vmax = np.max(sigma_values)
     norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
-    cmap = cm.get_cmap('rainbow')
+    cmap = colormaps['rainbow']
     
     # Scale factor for arrows (proportional to element length)
     arrow_scale = L * 0.15

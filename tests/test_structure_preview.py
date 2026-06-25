@@ -198,6 +198,56 @@ def test_spring_symbols():
     return True
 
 
+def test_moment_load_directions():
+    """Test that positive moment load points counterclockwise and negative points clockwise"""
+    print("\n[TEST 8] Moment Load Directions")
+    print("-" * 70)
+    
+    nodes = [(0.0, 0.0), (1.0, 0.0)]
+    elements = [(1, 2, "euler_bernoulli_2node", "P1", 1)]
+    properties = [{"name": "P1", "material": None, "section": None}]
+    constraints = []
+    distributed_loads = []
+    
+    # 1. Positive moment load at node 1 (should point counterclockwise, i.e. end at 6 o'clock pointing right)
+    point_loads_pos = [(1, 2, 10.0)]
+    fig_pos = plot_structure_preview(nodes, elements, properties, constraints, point_loads_pos, distributed_loads)
+    
+    moment_traces_pos = [tr for tr in fig_pos.data if tr.name == "Moment Load"]
+    assert len(moment_traces_pos) == 1, "Should have one moment load trace"
+    pos_x = moment_traces_pos[0].x
+    pos_y = moment_traces_pos[0].y
+    
+    assert abs(pos_x[-1]) < 1e-5, f"Expected end x near 0, got {pos_x[-1]}"
+    assert pos_y[-1] < -1e-5, f"Expected end y negative, got {pos_y[-1]}"
+    
+    assert len(fig_pos.layout.annotations) == 1, "Should have one annotation for arrowhead"
+    ann_pos = fig_pos.layout.annotations[0]
+    dx_pos = ann_pos.x - ann_pos.ax
+    assert dx_pos > 0, f"Expected positive moment arrow to point right at 6 o'clock, but got dx={dx_pos}"
+    
+    # 2. Negative moment load at node 1 (should point clockwise, i.e. end at 12 o'clock pointing right)
+    point_loads_neg = [(1, 2, -10.0)]
+    fig_neg = plot_structure_preview(nodes, elements, properties, constraints, point_loads_neg, distributed_loads)
+    
+    moment_traces_neg = [tr for tr in fig_neg.data if tr.name == "Moment Load"]
+    assert len(moment_traces_neg) == 1, "Should have one moment load trace"
+    neg_x = moment_traces_neg[0].x
+    neg_y = moment_traces_neg[0].y
+    
+    assert abs(neg_x[-1]) < 1e-5, f"Expected end x near 0, got {neg_x[-1]}"
+    assert neg_y[-1] > 1e-5, f"Expected end y positive, got {neg_y[-1]}"
+    
+    assert len(fig_neg.layout.annotations) == 1, "Should have one annotation for arrowhead"
+    ann_neg = fig_neg.layout.annotations[0]
+    dx_neg = ann_neg.x - ann_neg.ax
+    assert dx_neg > 0, f"Expected negative moment arrow to point right at 12 o'clock, but got dx={dx_neg}"
+    
+    print("  ✓ Positive moment arc ends at 6 o'clock and points right (CCW)")
+    print("  ✓ Negative moment arc ends at 12 o'clock and points right (CW)")
+    return True
+
+
 def run_all_tests():
     """Run all tests for the preview function"""
     print("=" * 70)
@@ -212,6 +262,7 @@ def run_all_tests():
         test_invalid_node_ids,
         test_arrow_scaling,
         test_spring_symbols,
+        test_moment_load_directions,
     ]
     
     passed = 0
@@ -232,6 +283,7 @@ def run_all_tests():
     print("=" * 70)
     
     return failed == 0
+
 
 if __name__ == "__main__":
     success = run_all_tests()

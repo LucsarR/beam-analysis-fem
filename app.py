@@ -454,13 +454,257 @@ def create_section_preview(section_type, **kwargs):
         ax.set_xlim(-b/2 - margin, b/2 + margin)
         ax.set_ylim(-h/2 - margin, h/2 + margin)
 
-    elif section_type in ["c_section", "l_section", "t_section", "z_section", "hat_section", "hexagonal_bar", "hexagonal_tube"]:
-        # For complex sections, show a simplified diagram
-        ax.text(0, 0, f"{section_type.replace('_', ' ').title()}\n\nSee parameters\nfor dimensions",
-                ha='center', va='center', fontsize=10,
-                bbox=dict(boxstyle='round', facecolor='lightgray', alpha=0.5))
-        ax.set_xlim(-0.5, 0.5)
-        ax.set_ylim(-0.5, 0.5)
+    elif section_type == "hexagonal_bar":
+        side = kwargs.get("side", 0.05)
+        scale = side
+        dim_off = scale * 0.30
+
+        points = [
+            [side/2, side * np.sqrt(3)/2],
+            [-side/2, side * np.sqrt(3)/2],
+            [-side, 0],
+            [-side/2, -side * np.sqrt(3)/2],
+            [side/2, -side * np.sqrt(3)/2],
+            [side, 0]
+        ]
+        hexagon = mpatches.Polygon(points, closed=True, linewidth=2,
+                                    edgecolor='black', facecolor='lightgray')
+        ax.add_patch(hexagon)
+
+        add_dimension(-side/2, side * np.sqrt(3)/2 + dim_off,
+                      side/2, side * np.sqrt(3)/2 + dim_off,
+                      'side', scale, shape_ref=side * np.sqrt(3)/2)
+
+        margin = scale * 0.60
+        ax.set_xlim(-side - margin, side + margin)
+        ax.set_ylim(-side * np.sqrt(3)/2 - margin, side * np.sqrt(3)/2 + margin)
+
+    elif section_type == "hexagonal_tube":
+        outer_side = kwargs.get("outer_side", 0.05)
+        thickness = kwargs.get("thickness", 0.005)
+        inner_side = max(outer_side - 2 * thickness, 0.001)
+        scale = outer_side
+        dim_off = scale * 0.30
+
+        points_outer = [
+            [outer_side/2, outer_side * np.sqrt(3)/2],
+            [-outer_side/2, outer_side * np.sqrt(3)/2],
+            [-outer_side, 0],
+            [-outer_side/2, -outer_side * np.sqrt(3)/2],
+            [outer_side/2, -outer_side * np.sqrt(3)/2],
+            [outer_side, 0]
+        ]
+        outer_hex = mpatches.Polygon(points_outer, closed=True, linewidth=2,
+                                      edgecolor='black', facecolor='lightgray')
+        ax.add_patch(outer_hex)
+
+        points_inner = [
+            [inner_side/2, inner_side * np.sqrt(3)/2],
+            [-inner_side/2, inner_side * np.sqrt(3)/2],
+            [-inner_side, 0],
+            [-inner_side/2, -inner_side * np.sqrt(3)/2],
+            [inner_side/2, -inner_side * np.sqrt(3)/2],
+            [inner_side, 0]
+        ]
+        inner_hex = mpatches.Polygon(points_inner, closed=True, linewidth=1,
+                                      edgecolor='black', facecolor='white')
+        ax.add_patch(inner_hex)
+
+        add_dimension(-outer_side/2, outer_side * np.sqrt(3)/2 + dim_off,
+                      outer_side/2, outer_side * np.sqrt(3)/2 + dim_off,
+                      'outer_side', scale, shape_ref=outer_side * np.sqrt(3)/2)
+
+        add_dimension(0, inner_side * np.sqrt(3)/2,
+                      0, outer_side * np.sqrt(3)/2,
+                      't', scale, shape_ref=None)
+
+        margin = scale * 0.60
+        ax.set_xlim(-outer_side - margin, outer_side + margin)
+        ax.set_ylim(-outer_side * np.sqrt(3)/2 - margin, outer_side * np.sqrt(3)/2 + margin)
+
+    elif section_type == "c_section":
+        h = kwargs.get("h", 0.10)
+        b = kwargs.get("b", 0.05)
+        tw = kwargs.get("tw", 0.005)
+        tf = kwargs.get("tf", 0.005)
+        scale = max(h, b)
+        dim_off = scale * 0.30
+
+        points = [
+            [-b/2, -h/2],
+            [b/2, -h/2],
+            [b/2, -h/2 + tf],
+            [-b/2 + tw, -h/2 + tf],
+            [-b/2 + tw, h/2 - tf],
+            [b/2, h/2 - tf],
+            [b/2, h/2],
+            [-b/2, h/2]
+        ]
+        c_poly = mpatches.Polygon(points, closed=True, linewidth=2,
+                                   edgecolor='black', facecolor='lightgray')
+        ax.add_patch(c_poly)
+
+        add_dimension(-b/2, -h/2 - dim_off, b/2, -h/2 - dim_off,
+                      'b', scale, shape_ref=-h/2)
+        add_dimension(-b/2 - dim_off, -h/2, -b/2 - dim_off, h/2,
+                      'h', scale, shape_ref=-b/2)
+        
+        tw_off = scale * 0.15
+        add_dimension(-b/2, h/2 + tw_off, -b/2 + tw, h/2 + tw_off,
+                      'tw', scale, shape_ref=h/2)
+        add_dimension(b/2 + tw_off, h/2 - tf, b/2 + tw_off, h/2,
+                      'tf', scale, shape_ref=b/2)
+
+        margin = scale * 0.60
+        ax.set_xlim(-b/2 - margin, b/2 + margin)
+        ax.set_ylim(-h/2 - margin, h/2 + margin)
+
+    elif section_type == "l_section":
+        b = kwargs.get("b", 0.05)
+        h = kwargs.get("h", 0.10)
+        t = kwargs.get("t", 0.005)
+        scale = max(h, b)
+        dim_off = scale * 0.30
+
+        points = [
+            [-b/2, -h/2],
+            [b/2, -h/2],
+            [b/2, -h/2 + t],
+            [-b/2 + t, -h/2 + t],
+            [-b/2 + t, h/2],
+            [-b/2, h/2]
+        ]
+        l_poly = mpatches.Polygon(points, closed=True, linewidth=2,
+                                   edgecolor='black', facecolor='lightgray')
+        ax.add_patch(l_poly)
+
+        add_dimension(-b/2, -h/2 - dim_off, b/2, -h/2 - dim_off,
+                      'b', scale, shape_ref=-h/2)
+        add_dimension(-b/2 - dim_off, -h/2, -b/2 - dim_off, h/2,
+                      'h', scale, shape_ref=-b/2)
+        
+        t_off = scale * 0.15
+        add_dimension(-b/2, h/2 + t_off, -b/2 + t, h/2 + t_off,
+                      't', scale, shape_ref=h/2)
+
+        margin = scale * 0.60
+        ax.set_xlim(-b/2 - margin, b/2 + margin)
+        ax.set_ylim(-h/2 - margin, h/2 + margin)
+
+    elif section_type == "t_section":
+        b = kwargs.get("b", 0.05)
+        h = kwargs.get("h", 0.10)
+        tw = kwargs.get("tw", 0.005)
+        tf = kwargs.get("tf", 0.005)
+        scale = max(h, b)
+        dim_off = scale * 0.30
+
+        points = [
+            [-tw/2, -h/2],
+            [tw/2, -h/2],
+            [tw/2, h/2 - tf],
+            [b/2, h/2 - tf],
+            [b/2, h/2],
+            [-b/2, h/2],
+            [-b/2, h/2 - tf],
+            [-tw/2, h/2 - tf]
+        ]
+        t_poly = mpatches.Polygon(points, closed=True, linewidth=2,
+                                   edgecolor='black', facecolor='lightgray')
+        ax.add_patch(t_poly)
+
+        add_dimension(-b/2, h/2 + dim_off, b/2, h/2 + dim_off,
+                      'b', scale, shape_ref=h/2)
+        add_dimension(-b/2 - dim_off, -h/2, -b/2 - dim_off, h/2,
+                      'h', scale, shape_ref=-b/2)
+        
+        tw_off = scale * 0.15
+        add_dimension(-tw/2, -h/2 - tw_off, tw/2, -h/2 - tw_off,
+                      'tw', scale, shape_ref=-h/2)
+        add_dimension(b/2 + tw_off, h/2 - tf, b/2 + tw_off, h/2,
+                      'tf', scale, shape_ref=b/2)
+
+        margin = scale * 0.60
+        ax.set_xlim(-b/2 - margin, b/2 + margin)
+        ax.set_ylim(-h/2 - margin, h/2 + margin)
+
+    elif section_type == "z_section":
+        h = kwargs.get("h", 0.10)
+        b = kwargs.get("b", 0.05)
+        tw = kwargs.get("tw", 0.005)
+        tf = kwargs.get("tf", 0.005)
+        scale = max(h, b)
+        dim_off = scale * 0.30
+
+        points = [
+            [-b, h/2],
+            [-b, h/2 - tf],
+            [-tw/2, h/2 - tf],
+            [-tw/2, -h/2],
+            [b, -h/2],
+            [b, -h/2 + tf],
+            [tw/2, -h/2 + tf],
+            [tw/2, h/2]
+        ]
+        z_poly = mpatches.Polygon(points, closed=True, linewidth=2,
+                                   edgecolor='black', facecolor='lightgray')
+        ax.add_patch(z_poly)
+
+        add_dimension(-b, h/2 + dim_off, 0, h/2 + dim_off,
+                      'b', scale, shape_ref=h/2)
+        add_dimension(-b - dim_off, -h/2, -b - dim_off, h/2,
+                      'h', scale, shape_ref=-b)
+        
+        tw_off = scale * 0.15
+        add_dimension(-tw/2, -h/2 - tw_off, tw/2, -h/2 - tw_off,
+                      'tw', scale, shape_ref=-h/2)
+        add_dimension(b + tw_off, -h/2, b + tw_off, -h/2 + tf,
+                      'tf', scale, shape_ref=b)
+
+        margin = scale * 0.60
+        ax.set_xlim(-b - margin, b + margin)
+        ax.set_ylim(-h/2 - margin, h/2 + margin)
+
+    elif section_type == "hat_section":
+        h = kwargs.get("h", 0.10)
+        b = kwargs.get("b", 0.05)
+        tw = kwargs.get("tw", 0.005)
+        tf = kwargs.get("tf", 0.005)
+        scale = max(h, b)
+        dim_off = scale * 0.30
+
+        points = [
+            [-b/2, h/2],
+            [b/2, h/2],
+            [b/2, -h/2 + tf],
+            [b, -h/2 + tf],
+            [b, -h/2],
+            [b/2 - tw/2, -h/2],
+            [b/2 - tw/2, h/2 - tf],
+            [-b/2 + tw/2, h/2 - tf],
+            [-b/2 + tw/2, -h/2],
+            [-b, -h/2],
+            [-b, -h/2 + tf],
+            [-b/2, -h/2 + tf]
+        ]
+        hat_poly = mpatches.Polygon(points, closed=True, linewidth=2,
+                                     edgecolor='black', facecolor='lightgray')
+        ax.add_patch(hat_poly)
+
+        add_dimension(-b/2, h/2 + dim_off, b/2, h/2 + dim_off,
+                      'b', scale, shape_ref=h/2)
+        add_dimension(-b - dim_off, -h/2, -b - dim_off, h/2,
+                      'h', scale, shape_ref=-b)
+        
+        tw_off = scale * 0.15
+        add_dimension(b/2 - tw/2, h/2 + tw_off, b/2, h/2 + tw_off,
+                      'tw', scale, shape_ref=h/2)
+        add_dimension(b + tw_off, -h/2, b + tw_off, -h/2 + tf,
+                      'tf', scale, shape_ref=b)
+
+        margin = scale * 0.60
+        ax.set_xlim(-b - margin, b + margin)
+        ax.set_ylim(-h/2 - margin, h/2 + margin)
 
     elif section_type == "general":
         # For general section, just show a placeholder
