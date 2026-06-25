@@ -811,9 +811,9 @@ if "structural_behavior_mode" not in st.session_state:
 tab1, tab2, tab3, tab4 = st.tabs(["Structure Definition", "Analysis", "Results", "Help"])
 
 with tab1:
-    col_left, col_right = st.columns(2)
+    col_behavior, col_nodes = st.columns(2)
     
-    with col_left:
+    with col_behavior:
         behavior_labels = STRUCTURAL_BEHAVIOR_TYPES
         behavior_keys = list(behavior_labels.keys())
         behavior_values = list(behavior_labels.values())
@@ -838,6 +838,7 @@ with tab1:
                 "- **Frame**: axial + shear + bending (default)."
             )
 
+    with col_nodes:
         # --- Input: Nodes ---
         with st.expander("Nodes", expanded=True):
             st.markdown("Define the nodal points of your structure.")
@@ -1473,103 +1474,105 @@ with tab1:
         st.session_state["properties"] = properties
         st.success(f"✅ {n_properties} property set(s) defined successfully.")
 
-        # --- Input: Elements ---
-        with st.expander("Elements", expanded=True):
-            st.markdown("Define beam elements connecting nodes.")
+    # --- Input: Elements ---
+    with st.expander("Elements", expanded=True):
+        st.markdown("Define beam elements connecting nodes.")
+        
+        if not properties:
+            st.warning("⚠️ Please define at least one property set first.")
+        else:
+            property_names = [prop["name"] for prop in properties]
+            element_types = ELEMENT_TYPES
             
-            if not properties:
-                st.warning("⚠️ Please define at least one property set first.")
-            else:
-                property_names = [prop["name"] for prop in properties]
-                element_types = ELEMENT_TYPES
+            n_elements = st.number_input(
+                "Number of elements",
+                min_value=1,
+                max_value=100,
+                value=st.session_state["n_elements_input"] if "n_elements_input" in st.session_state else (len(st.session_state.get("elements", [])) if len(st.session_state.get("elements", [])) >= 1 else n_nodes - 1),
+                key="n_elements_input",
+                help="Number of beam elements"
+            )
+            
+            elements = []
+            
+            # Table header
+            col1, col2, col3, col4, col5 = st.columns([1.5, 1.5, 3.5, 3.5, 2])
+            col1.markdown("**Start Node**")
+            col2.markdown("**End Node**")
+            col3.markdown("**Formulation**")
+            col4.markdown("**Property Set**")
+            col5.markdown("**Subdivs**")
+            
+            for i in range(n_elements):
+                col1, col2, col3, col4, col5 = st.columns([1.5, 1.5, 3.5, 3.5, 2])
                 
-                n_elements = st.number_input(
-                    "Number of elements",
+                existing_elem = st.session_state.get("elements", [])[i] if i < len(st.session_state.get("elements", [])) else None
+                
+                n1 = int(col1.number_input(
+                    "Start Node",
                     min_value=1,
-                    max_value=100,
-                    value=st.session_state["n_elements_input"] if "n_elements_input" in st.session_state else (len(st.session_state.get("elements", [])) if len(st.session_state.get("elements", [])) >= 1 else n_nodes - 1),
-                    key="n_elements_input",
-                    help="Number of beam elements"
+                    max_value=n_nodes,
+                    value=st.session_state[f"en1_{i}"] if f"en1_{i}" in st.session_state else (existing_elem[0] if existing_elem else (i % n_nodes) + 1),
+                    key=f"en1_{i}",
+                    label_visibility="collapsed"
+                ))
+                
+                n2 = int(col2.number_input(
+                    "End Node",
+                    min_value=1,
+                    max_value=n_nodes,
+                    value=st.session_state[f"en2_{i}"] if f"en2_{i}" in st.session_state else (existing_elem[1] if existing_elem else ((i + 1) % n_nodes) + 1),
+                    key=f"en2_{i}",
+                    label_visibility="collapsed"
+                ))
+                
+                if n1 == n2:
+                    st.error(f"⚠️ Element {i+1}: Start and end nodes must be different!")
+                
+                _etype_keys = list(element_types.keys())
+                if f"etype_{i}" in st.session_state:
+                    _etype_index = _etype_keys.index(st.session_state[f"etype_{i}"])
+                else:
+                    _etype_index = _etype_keys.index(next((k for k, v in element_types.items() if v == existing_elem[2]), _etype_keys[0])) if existing_elem and len(existing_elem) > 2 else 0
+
+                el_type = col3.selectbox(
+                    "Type",
+                    _etype_keys,
+                    index=_etype_index,
+                    key=f"etype_{i}",
+                    label_visibility="collapsed"
                 )
                 
-                elements = []
+                if f"propidx_{i}" in st.session_state:
+                    _prop_index = property_names.index(st.session_state[f"propidx_{i}"]) if st.session_state[f"propidx_{i}"] in property_names else 0
+                else:
+                    _prop_index = property_names.index(existing_elem[3]) if existing_elem and len(existing_elem) > 3 and existing_elem[3] in property_names else 0
+
+                prop_idx = col4.selectbox(
+                    "Property",
+                    property_names,
+                    index=_prop_index,
+                    key=f"propidx_{i}",
+                    label_visibility="collapsed"
+                )
                 
-                # Table header
-                col1, col2, col3, col4, col5 = st.columns([1.5, 1.5, 3.5, 3.5, 2])
-                col1.markdown("**Start Node**")
-                col2.markdown("**End Node**")
-                col3.markdown("**Formulation**")
-                col4.markdown("**Property Set**")
-                col5.markdown("**Subdivs**")
+                n_subdiv = col5.number_input(
+                    "Subdivisions",
+                    min_value=1,
+                    max_value=256,
+                    value=st.session_state[f"subdiv_{i}"] if f"subdiv_{i}" in st.session_state else (existing_elem[4] if existing_elem and len(existing_elem) > 4 else 1),
+                    key=f"subdiv_{i}",
+                    label_visibility="collapsed"
+                )
                 
-                for i in range(n_elements):
-                    col1, col2, col3, col4, col5 = st.columns([1.5, 1.5, 3.5, 3.5, 2])
-                    
-                    existing_elem = st.session_state.get("elements", [])[i] if i < len(st.session_state.get("elements", [])) else None
-                    
-                    n1 = int(col1.number_input(
-                        "Start Node",
-                        min_value=1,
-                        max_value=n_nodes,
-                        value=st.session_state[f"en1_{i}"] if f"en1_{i}" in st.session_state else (existing_elem[0] if existing_elem else (i % n_nodes) + 1),
-                        key=f"en1_{i}",
-                        label_visibility="collapsed"
-                    ))
-                    
-                    n2 = int(col2.number_input(
-                        "End Node",
-                        min_value=1,
-                        max_value=n_nodes,
-                        value=st.session_state[f"en2_{i}"] if f"en2_{i}" in st.session_state else (existing_elem[1] if existing_elem else ((i + 1) % n_nodes) + 1),
-                        key=f"en2_{i}",
-                        label_visibility="collapsed"
-                    ))
-                    
-                    if n1 == n2:
-                        st.error(f"⚠️ Element {i+1}: Start and end nodes must be different!")
-                    
-                    _etype_keys = list(element_types.keys())
-                    if f"etype_{i}" in st.session_state:
-                        _etype_index = _etype_keys.index(st.session_state[f"etype_{i}"])
-                    else:
-                        _etype_index = _etype_keys.index(next((k for k, v in element_types.items() if v == existing_elem[2]), _etype_keys[0])) if existing_elem and len(existing_elem) > 2 else 0
+                elements.append((n1, n2, element_types[el_type], prop_idx, n_subdiv))
+        
+        st.session_state["elements"] = elements
+        st.success(f"✅ {n_elements} element(s) defined successfully.")
 
-                    el_type = col3.selectbox(
-                        "Type",
-                        _etype_keys,
-                        index=_etype_index,
-                        key=f"etype_{i}",
-                        label_visibility="collapsed"
-                    )
-                    
-                    if f"propidx_{i}" in st.session_state:
-                        _prop_index = property_names.index(st.session_state[f"propidx_{i}"]) if st.session_state[f"propidx_{i}"] in property_names else 0
-                    else:
-                        _prop_index = property_names.index(existing_elem[3]) if existing_elem and len(existing_elem) > 3 and existing_elem[3] in property_names else 0
-
-                    prop_idx = col4.selectbox(
-                        "Property",
-                        property_names,
-                        index=_prop_index,
-                        key=f"propidx_{i}",
-                        label_visibility="collapsed"
-                    )
-                    
-                    n_subdiv = col5.number_input(
-                        "Subdivisions",
-                        min_value=1,
-                        max_value=256,
-                        value=st.session_state[f"subdiv_{i}"] if f"subdiv_{i}" in st.session_state else (existing_elem[4] if existing_elem and len(existing_elem) > 4 else 1),
-                        key=f"subdiv_{i}",
-                        label_visibility="collapsed"
-                    )
-                    
-                    elements.append((n1, n2, element_types[el_type], prop_idx, n_subdiv))
-            
-            st.session_state["elements"] = elements
-            st.success(f"✅ {n_elements} element(s) defined successfully.")
-
-    with col_right:
+    col_bcs, col_loads = st.columns(2)
+    
+    with col_bcs:
         # --- Input: Constraints ---
         with st.expander("Constraints (Boundary Conditions)", expanded=True):
             st.markdown("Define fixed or prescribed displacements and rotations.")
@@ -1721,6 +1724,7 @@ with tab1:
             else:
                 st.info("ℹ️ No springs defined.")
 
+    with col_loads:
         # --- Input: Point Loads ---
         with st.expander("Point Loads", expanded=True):
             st.markdown("Define concentrated forces and moments at nodes.")
