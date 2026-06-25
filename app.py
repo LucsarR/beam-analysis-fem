@@ -1755,131 +1755,143 @@ with tab1:
     # --- Input: Distributed Loads ---
     with st.expander("Distributed Loads", expanded=True):
         st.markdown("Define distributed loads along elements.")
-        if _behavior == "truss":
-            st.caption("Truss mode accepts only axial distributed loads (local axial direction).")
-            _dist_direction_options = ['l']
-        elif _behavior == "beam":
-            st.caption("Beam mode accepts only transverse distributed loads (local transverse direction).")
-            _dist_direction_options = ['t']
+        n_elems_current = len(st.session_state.get("elements", []))
+        if n_elems_current == 0:
+            st.warning("⚠️ Please define at least one element first.")
         else:
-            _dist_direction_options = ['x', 'y', 'l', 't']
-        
-        n_dist_loads = st.number_input(
-            "Number of distributed loads",
-            min_value=0,
-            value=st.session_state["n_dist_loads_input"] if "n_dist_loads_input" in st.session_state else len(st.session_state.get("distributed_loads", [])),
-            key="n_dist_loads_input",
-            help="Define distributed loads on elements"
-        )
-        
-        distributed_loads = []
-        
-        if n_dist_loads > 0:
-            for i in range(n_dist_loads):
-                with st.container(border=True):
-                    col1, col2, col3 = st.columns([2, 2, 3])
-                    
-                    existing_dload = st.session_state.get("distributed_loads", [])[i] if i < len(st.session_state.get("distributed_loads", [])) else None
-                    
-                    element_id = int(col1.number_input(
-                        f"Element",
-                        min_value=1,
-                        value=st.session_state[f"dlelem_{i}"] if f"dlelem_{i}" in st.session_state else (existing_dload[0] if existing_dload else 1),
-                        key=f"dlelem_{i}",
-                        help=f"Distributed load {i+1} on element"
-                    ))
-                    
-                    _ltype_options = ["constant", "linear", "custom"]
-                    if f"dltype_{i}" in st.session_state:
-                        _ltype_index = _ltype_options.index(st.session_state[f"dltype_{i}"])
-                    else:
-                        _existing_ltype = existing_dload[5] if existing_dload and len(existing_dload) > 5 else "constant"
-                        _ltype_index = _ltype_options.index(_existing_ltype) if _existing_ltype in _ltype_options else 0
-
-                    load_type = col2.selectbox(
-                        f"Type",
-                        options=_ltype_options,
-                        index=_ltype_index,
-                        key=f"dltype_{i}",
-                        help=f"Load {i+1} distribution type"
-                    )
-                    
-                    if f"ddir_{i}" in st.session_state:
-                        _ddir_val = st.session_state[f"ddir_{i}"]
-                    else:
-                        _ddir_val = existing_dload[3] if existing_dload and len(existing_dload) > 3 else _dist_direction_options[0]
-                    _ddir_index = _dist_direction_options.index(_ddir_val) if _ddir_val in _dist_direction_options else 0
-
-                    direction = col3.selectbox(
-                        f"Direction",
-                        options=_dist_direction_options,
-                        format_func=lambda x: {"x": "Global X", "y": "Global Y", "l": "Local axial", "t": "Local transverse"}[x],
-                        index=_ddir_index,
-                        key=f"ddir_{i}",
-                        help=f"Load {i+1} direction"
-                    )
-                    
-                    col4, col5 = st.columns(2)
-                    
-                    if load_type == "constant":
-                        magnitude = col4.number_input(
-                            f"Value",
-                            value=st.session_state[f"dlval_{i}"] if f"dlval_{i}" in st.session_state else (existing_dload[1] if existing_dload and existing_dload[1] is not None else 0.0),
-                            format="%.4f",
-                            key=f"dlval_{i}",
-                            help=f"Load {i+1} constant value"
-                        )
-                        distributed_loads.append((element_id, magnitude, None, direction, None, "constant"))
-                    
-                    elif load_type == "linear":
-                        magnitude_start = col4.number_input(
-                            f"Start",
-                            value=st.session_state[f"dlstart_{i}"] if f"dlstart_{i}" in st.session_state else (existing_dload[1] if existing_dload and existing_dload[1] is not None else 0.0),
-                            format="%.4f",
-                            key=f"dlstart_{i}",
-                            help=f"Load {i+1} start value"
-                        )
-                        magnitude_end = col5.number_input(
-                            f"End",
-                            value=st.session_state[f"dlend_{i}"] if f"dlend_{i}" in st.session_state else (existing_dload[2] if existing_dload and existing_dload[2] is not None else 0.0),
-                            format="%.4f",
-                            key=f"dlend_{i}",
-                            help=f"Load {i+1} end value"
-                        )
-                        distributed_loads.append((element_id, magnitude_start, magnitude_end, direction, None, "linear"))
-                    
-                    elif load_type == "custom":
-                        func_str = col4.text_input(
-                            f"Function f(x)",
-                            value=st.session_state[f"dlfunc_{i}"] if f"dlfunc_{i}" in st.session_state else (existing_dload[4] if existing_dload and existing_dload[4] is not None else ""),
-                            key=f"dlfunc_{i}",
-                            help="Enter function in terms of x and L (e.g., 'x**2' or 'np.sin(x/L)')"
-                        )
-                        
-                        # Validate function string
-                        error_msg = ""
-                        if func_str:
-                            try:
-                                x = 0.0
-                                L = 1.0
-                                test_val = eval(func_str, {"np": np, "x": x, "L": L})
-                                col5.success("✅ Valid function")
-                            except Exception as e:
-                                error_msg = f"Invalid function: {e}"
-                                col5.error(error_msg)
-                            
-                            # Show LaTeX representation for user verification
-                            latex_str = _func_str_to_latex(func_str)
-                            if latex_str and not error_msg:
-                                st.markdown("**Load function** $q(x)$:")
-                                st.latex(rf"q(x) = {latex_str}")
-                        
-                        distributed_loads.append((element_id, None, None, direction, func_str if not error_msg else None, "custom"))
+            if _behavior == "truss":
+                st.caption("Truss mode accepts only axial distributed loads (local axial direction).")
+                _dist_direction_options = ['l']
+            elif _behavior == "beam":
+                st.caption("Beam mode accepts only transverse distributed loads (local transverse direction).")
+                _dist_direction_options = ['t']
+            else:
+                _dist_direction_options = ['x', 'y', 'l', 't']
             
-            st.session_state["distributed_loads"] = distributed_loads
-            st.success(f"✅ {n_dist_loads} distributed load(s) defined successfully.")
-        else:
-            st.info("ℹ️ No distributed loads defined.")
+            n_dist_loads = st.number_input(
+                "Number of distributed loads",
+                min_value=0,
+                value=st.session_state["n_dist_loads_input"] if "n_dist_loads_input" in st.session_state else len(st.session_state.get("distributed_loads", [])),
+                key="n_dist_loads_input",
+                help="Define distributed loads on elements"
+            )
+            
+            distributed_loads = []
+            
+            if n_dist_loads > 0:
+                for i in range(n_dist_loads):
+                    with st.container(border=True):
+                        col1, col2, col3 = st.columns([2, 2, 3])
+                        
+                        existing_dload = st.session_state.get("distributed_loads", [])[i] if i < len(st.session_state.get("distributed_loads", [])) else None
+                        
+                        _max_elem_val = n_elems_current
+                        if f"dlelem_{i}" in st.session_state:
+                            st.session_state[f"dlelem_{i}"] = min(max(1, int(st.session_state[f"dlelem_{i}"])), _max_elem_val)
+                        
+                        _default_val = existing_dload[0] if existing_dload else 1
+                        _default_val = min(max(1, int(_default_val)), _max_elem_val)
+                        
+                        element_id = int(col1.number_input(
+                            f"Element",
+                            min_value=1,
+                            max_value=_max_elem_val,
+                            value=st.session_state[f"dlelem_{i}"] if f"dlelem_{i}" in st.session_state else _default_val,
+                            key=f"dlelem_{i}",
+                            help=f"Distributed load {i+1} on element"
+                        ))
+                        
+                        _ltype_options = ["constant", "linear", "custom"]
+                        if f"dltype_{i}" in st.session_state:
+                            _ltype_index = _ltype_options.index(st.session_state[f"dltype_{i}"])
+                        else:
+                            _existing_ltype = existing_dload[5] if existing_dload and len(existing_dload) > 5 else "constant"
+                            _ltype_index = _ltype_options.index(_existing_ltype) if _existing_ltype in _ltype_options else 0
+
+                        load_type = col2.selectbox(
+                            f"Type",
+                            options=_ltype_options,
+                            index=_ltype_index,
+                            key=f"dltype_{i}",
+                            help=f"Load {i+1} distribution type"
+                        )
+                        
+                        if f"ddir_{i}" in st.session_state:
+                            _ddir_val = st.session_state[f"ddir_{i}"]
+                        else:
+                            _ddir_val = existing_dload[3] if existing_dload and len(existing_dload) > 3 else _dist_direction_options[0]
+                        _ddir_index = _dist_direction_options.index(_ddir_val) if _ddir_val in _dist_direction_options else 0
+
+                        direction = col3.selectbox(
+                            f"Direction",
+                            options=_dist_direction_options,
+                            format_func=lambda x: {"x": "Global X", "y": "Global Y", "l": "Local axial", "t": "Local transverse"}[x],
+                            index=_ddir_index,
+                            key=f"ddir_{i}",
+                            help=f"Load {i+1} direction"
+                        )
+                        
+                        col4, col5 = st.columns(2)
+                        
+                        if load_type == "constant":
+                            magnitude = col4.number_input(
+                                f"Value",
+                                value=st.session_state[f"dlval_{i}"] if f"dlval_{i}" in st.session_state else (existing_dload[1] if existing_dload and existing_dload[1] is not None else 0.0),
+                                format="%.4f",
+                                key=f"dlval_{i}",
+                                help=f"Load {i+1} constant value"
+                            )
+                            distributed_loads.append((element_id, magnitude, None, direction, None, "constant"))
+                        
+                        elif load_type == "linear":
+                            magnitude_start = col4.number_input(
+                                f"Start",
+                                value=st.session_state[f"dlstart_{i}"] if f"dlstart_{i}" in st.session_state else (existing_dload[1] if existing_dload and existing_dload[1] is not None else 0.0),
+                                format="%.4f",
+                                key=f"dlstart_{i}",
+                                help=f"Load {i+1} start value"
+                            )
+                            magnitude_end = col5.number_input(
+                                f"End",
+                                value=st.session_state[f"dlend_{i}"] if f"dlend_{i}" in st.session_state else (existing_dload[2] if existing_dload and existing_dload[2] is not None else 0.0),
+                                format="%.4f",
+                                key=f"dlend_{i}",
+                                help=f"Load {i+1} end value"
+                            )
+                            distributed_loads.append((element_id, magnitude_start, magnitude_end, direction, None, "linear"))
+                        
+                        elif load_type == "custom":
+                            func_str = col4.text_input(
+                                f"Function f(x)",
+                                value=st.session_state[f"dlfunc_{i}"] if f"dlfunc_{i}" in st.session_state else (existing_dload[4] if existing_dload and existing_dload[4] is not None else ""),
+                                key=f"dlfunc_{i}",
+                                help="Enter function in terms of x and L (e.g., 'x**2' or 'np.sin(x/L)')"
+                            )
+                            
+                            # Validate function string
+                            error_msg = ""
+                            if func_str:
+                                try:
+                                    x = 0.0
+                                    L = 1.0
+                                    test_val = eval(func_str, {"np": np, "x": x, "L": L})
+                                    col5.success("✅ Valid function")
+                                except Exception as e:
+                                    error_msg = f"Invalid function: {e}"
+                                    col5.error(error_msg)
+                                
+                                # Show LaTeX representation for user verification
+                                latex_str = _func_str_to_latex(func_str)
+                                if latex_str and not error_msg:
+                                    st.markdown("**Load function** $q(x)$:")
+                                    st.latex(rf"q(x) = {latex_str}")
+                            
+                            distributed_loads.append((element_id, None, None, direction, func_str if not error_msg else None, "custom"))
+                
+                st.session_state["distributed_loads"] = distributed_loads
+                st.success(f"✅ {n_dist_loads} distributed load(s) defined successfully.")
+            else:
+                st.info("ℹ️ No distributed loads defined.")
 
 
 with tab2:
