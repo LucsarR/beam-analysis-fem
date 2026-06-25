@@ -823,7 +823,8 @@ with tab1:
         selected_behavior_label = st.selectbox(
             "Structural behavior",
             options=behavior_keys,
-            index=behavior_values.index(current_behavior),
+            index=behavior_keys.index(st.session_state["behavior_mode_input"]) if "behavior_mode_input" in st.session_state else behavior_values.index(current_behavior),
+            key="behavior_mode_input",
             help="This controls which DOFs, loads, and results are relevant in the interface.",
         )
         st.session_state["structural_behavior_mode"] = behavior_labels[selected_behavior_label]
@@ -842,7 +843,8 @@ with tab1:
             "Number of nodes",
             min_value=2,
             max_value=20,
-            value=len(st.session_state.get("nodes", [])) if len(st.session_state.get("nodes", [])) >= 2 else 2,
+            value=st.session_state["n_nodes_input"] if "n_nodes_input" in st.session_state else (len(st.session_state.get("nodes", [])) if len(st.session_state.get("nodes", [])) >= 2 else 2),
+            key="n_nodes_input",
             help="Number of nodes in the structure (minimum 2)"
         )
         
@@ -859,13 +861,13 @@ with tab1:
             
             x = col1.number_input(
                 f"Node {i+1} - X coordinate",
-                value=default_x,
+                value=st.session_state[f"node_x_{i}"] if f"node_x_{i}" in st.session_state else default_x,
                 format="%.4f",
                 key=f"node_x_{i}"
             )
             y = col2.number_input(
                 f"Node {i+1} - Y coordinate",
-                value=default_y,
+                value=st.session_state[f"node_y_{i}"] if f"node_y_{i}" in st.session_state else default_y,
                 format="%.4f",
                 key=f"node_y_{i}"
             )
@@ -897,7 +899,8 @@ with tab1:
             "Number of properties",
             min_value=1,
             max_value=10,
-            value=len(st.session_state.get("properties", [])) if len(st.session_state.get("properties", [])) >= 1 else 1,
+            value=st.session_state["n_properties_input"] if "n_properties_input" in st.session_state else (len(st.session_state.get("properties", [])) if len(st.session_state.get("properties", [])) >= 1 else 1),
+            key="n_properties_input",
             help="Different property sets for different element types"
         )
         
@@ -915,7 +918,7 @@ with tab1:
                 with col1:
                     prop_name = st.text_input(
                         "Property Name",
-                        value=existing_prop.get("name", f"Property_{i+1}") if existing_prop else f"Property_{i+1}",
+                        value=st.session_state[f"propname_{i}"] if f"propname_{i}" in st.session_state else (existing_prop.get("name", f"Property_{i+1}") if existing_prop else f"Property_{i+1}"),
                         key=f"propname_{i}",
                         help="Unique name for this property set"
                     )
@@ -927,8 +930,11 @@ with tab1:
                         "Calculate ν (from E and G)",
                         "Calculate E (from G and ν)",
                     ]
-                    _existing_mode = existing_prop.get("mat_input_mode", _MAT_MODES[0]) if existing_prop else _MAT_MODES[0]
-                    _mode_index = _MAT_MODES.index(_existing_mode) if _existing_mode in _MAT_MODES else 0
+                    if f"mat_mode_{i}" in st.session_state:
+                        _mode_index = _MAT_MODES.index(st.session_state[f"mat_mode_{i}"])
+                    else:
+                        _existing_mode = existing_prop.get("mat_input_mode", _MAT_MODES[0]) if existing_prop else _MAT_MODES[0]
+                        _mode_index = _MAT_MODES.index(_existing_mode) if _existing_mode in _MAT_MODES else 0
 
                     mat_input_mode = st.radio(
                         "Calculate:",
@@ -947,7 +953,7 @@ with tab1:
                     if mat_input_mode == "Calculate G (from E and ν)":
                         E = st.number_input(
                             "Young's Modulus E",
-                            value=existing_prop["material"].E if existing_prop and "material" in existing_prop else DEFAULT_E,
+                            value=st.session_state[f"E_{i}"] if f"E_{i}" in st.session_state else (existing_prop["material"].E if existing_prop and "material" in existing_prop else DEFAULT_E),
                             format="%.2e",
                             key=f"E_{i}",
                             help="Elastic modulus of the material",
@@ -960,7 +966,7 @@ with tab1:
                             "Poisson's Ratio ν",
                             min_value=0.0,
                             max_value=0.5,
-                            value=existing_prop["material"].nu if existing_prop and "material" in existing_prop else DEFAULT_NU,
+                            value=st.session_state[f"nu_{i}"] if f"nu_{i}" in st.session_state else (existing_prop["material"].nu if existing_prop and "material" in existing_prop else DEFAULT_NU),
                             format="%.3f",
                             key=f"nu_{i}",
                             help="Poisson's ratio (0.0 to 0.5)",
@@ -980,7 +986,7 @@ with tab1:
                     elif mat_input_mode == "Calculate ν (from E and G)":
                         E = st.number_input(
                             "Young's Modulus E",
-                            value=existing_prop["material"].E if existing_prop and "material" in existing_prop else DEFAULT_E,
+                            value=st.session_state[f"E_{i}"] if f"E_{i}" in st.session_state else (existing_prop["material"].E if existing_prop and "material" in existing_prop else DEFAULT_E),
                             format="%.2e",
                             key=f"E_{i}",
                             help="Elastic modulus of the material",
@@ -991,7 +997,7 @@ with tab1:
 
                         G_in = st.number_input(
                             "Shear Modulus G",
-                            value=existing_prop["material"].G if existing_prop and "material" in existing_prop else DEFAULT_G,
+                            value=st.session_state[f"G_{i}"] if f"G_{i}" in st.session_state else (existing_prop["material"].G if existing_prop and "material" in existing_prop else DEFAULT_G),
                             format="%.2e",
                             key=f"G_{i}",
                             help="Shear modulus of the material",
@@ -1021,7 +1027,7 @@ with tab1:
                     else:  # "Calculate E (from G and ν)"
                         G_in = st.number_input(
                             "Shear Modulus G",
-                            value=existing_prop["material"].G if existing_prop and "material" in existing_prop else DEFAULT_G,
+                            value=st.session_state[f"G_{i}"] if f"G_{i}" in st.session_state else (existing_prop["material"].G if existing_prop and "material" in existing_prop else DEFAULT_G),
                             format="%.2e",
                             key=f"G_{i}",
                             help="Shear modulus of the material",
@@ -1034,7 +1040,7 @@ with tab1:
                             "Poisson's Ratio ν",
                             min_value=0.0,
                             max_value=0.5,
-                            value=existing_prop["material"].nu if existing_prop and "material" in existing_prop else DEFAULT_NU,
+                            value=st.session_state[f"nu_{i}"] if f"nu_{i}" in st.session_state else (existing_prop["material"].nu if existing_prop and "material" in existing_prop else DEFAULT_NU),
                             format="%.3f",
                             key=f"nu_{i}",
                             help="Poisson's ratio (0.0 to 0.5)",
@@ -1057,7 +1063,7 @@ with tab1:
                     section_type = st.selectbox(
                         "Section Type",
                         SECTION_TYPES,
-                        index=SECTION_TYPES.index(existing_prop.get("section_type", "rectangular_bar")) if existing_prop and "section_type" in existing_prop else 0,
+                        index=SECTION_TYPES.index(st.session_state[f"sectype_{i}"]) if f"sectype_{i}" in st.session_state else (SECTION_TYPES.index(existing_prop.get("section_type", "rectangular_bar")) if existing_prop and "section_type" in existing_prop else 0),
                         key=f"sectype_{i}",
                         help="Cross-sectional shape"
                     )
@@ -1069,14 +1075,14 @@ with tab1:
                     if section_type == "rectangular_bar":
                         width = st.number_input(
                             "Width",
-                            value=existing_kwargs.get("width", 0.05),
+                            value=st.session_state[f"width_{i}"] if f"width_{i}" in st.session_state else existing_kwargs.get("width", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"width_{i}"
                         )
                         height = st.number_input(
                             "Height",
-                            value=existing_kwargs.get("height", 0.10),
+                            value=st.session_state[f"height_{i}"] if f"height_{i}" in st.session_state else existing_kwargs.get("height", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"height_{i}"
@@ -1086,21 +1092,21 @@ with tab1:
                     elif section_type == "rectangular_tube":
                         width = st.number_input(
                             "Width",
-                            value=existing_kwargs.get("width", 0.05),
+                            value=st.session_state[f"width_{i}"] if f"width_{i}" in st.session_state else existing_kwargs.get("width", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"width_{i}"
                         )
                         height = st.number_input(
                             "Height",
-                            value=existing_kwargs.get("height", 0.10),
+                            value=st.session_state[f"height_{i}"] if f"height_{i}" in st.session_state else existing_kwargs.get("height", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"height_{i}"
                         )
                         thickness = st.number_input(
                             "Wall Thickness",
-                            value=existing_kwargs.get("thickness", 0.005),
+                            value=st.session_state[f"thick_{i}"] if f"thick_{i}" in st.session_state else existing_kwargs.get("thickness", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"thick_{i}"
@@ -1114,7 +1120,7 @@ with tab1:
                     elif section_type == "circular_bar":
                         diameter = st.number_input(
                             "Diameter",
-                            value=existing_kwargs.get("diameter", 0.05),
+                            value=st.session_state[f"diam_{i}"] if f"diam_{i}" in st.session_state else existing_kwargs.get("diameter", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"diam_{i}"
@@ -1124,14 +1130,14 @@ with tab1:
                     elif section_type == "circular_tube":
                         outer_diameter = st.number_input(
                             "Outer Diameter",
-                            value=existing_kwargs.get("outer_diameter", 0.05),
+                            value=st.session_state[f"odiam_{i}"] if f"odiam_{i}" in st.session_state else existing_kwargs.get("outer_diameter", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"odiam_{i}"
                         )
                         thickness = st.number_input(
                             "Wall Thickness",
-                            value=existing_kwargs.get("thickness", 0.005),
+                            value=st.session_state[f"thick_{i}"] if f"thick_{i}" in st.session_state else existing_kwargs.get("thickness", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"thick_{i}"
@@ -1145,21 +1151,21 @@ with tab1:
                     elif section_type == "trapezoidal_bar":
                         base1 = st.number_input(
                             "Base 1",
-                            value=existing_kwargs.get("base1", 0.05),
+                            value=st.session_state[f"base1_{i}"] if f"base1_{i}" in st.session_state else existing_kwargs.get("base1", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"base1_{i}"
                         )
                         base2 = st.number_input(
                             "Base 2",
-                            value=existing_kwargs.get("base2", 0.10),
+                            value=st.session_state[f"base2_{i}"] if f"base2_{i}" in st.session_state else existing_kwargs.get("base2", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"base2_{i}"
                         )
                         height = st.number_input(
                             "Height",
-                            value=existing_kwargs.get("height", 0.10),
+                            value=st.session_state[f"height_{i}"] if f"height_{i}" in st.session_state else existing_kwargs.get("height", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"height_{i}"
@@ -1169,28 +1175,28 @@ with tab1:
                     elif section_type == "trapezoidal_tube":
                         base1 = st.number_input(
                             "Base 1",
-                            value=existing_kwargs.get("base1", 0.05),
+                            value=st.session_state[f"base1_{i}"] if f"base1_{i}" in st.session_state else existing_kwargs.get("base1", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"base1_{i}"
                         )
                         base2 = st.number_input(
                             "Base 2",
-                            value=existing_kwargs.get("base2", 0.10),
+                            value=st.session_state[f"base2_{i}"] if f"base2_{i}" in st.session_state else existing_kwargs.get("base2", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"base2_{i}"
                         )
                         height = st.number_input(
                             "Height",
-                            value=existing_kwargs.get("height", 0.10),
+                            value=st.session_state[f"height_{i}"] if f"height_{i}" in st.session_state else existing_kwargs.get("height", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"height_{i}"
                         )
                         thickness = st.number_input(
                             "Wall Thickness",
-                            value=existing_kwargs.get("thickness", 0.005),
+                            value=st.session_state[f"thick_{i}"] if f"thick_{i}" in st.session_state else existing_kwargs.get("thickness", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"thick_{i}"
@@ -1200,7 +1206,7 @@ with tab1:
                     elif section_type == "hexagonal_bar":
                         side = st.number_input(
                             "Side Length",
-                            value=existing_kwargs.get("side", 0.05),
+                            value=st.session_state[f"side_{i}"] if f"side_{i}" in st.session_state else existing_kwargs.get("side", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"side_{i}"
@@ -1210,14 +1216,14 @@ with tab1:
                     elif section_type == "hexagonal_tube":
                         outer_side = st.number_input(
                             "Outer Side Length",
-                            value=existing_kwargs.get("outer_side", 0.05),
+                            value=st.session_state[f"oside_{i}"] if f"oside_{i}" in st.session_state else existing_kwargs.get("outer_side", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"oside_{i}"
                         )
                         thickness = st.number_input(
                             "Wall Thickness",
-                            value=existing_kwargs.get("thickness", 0.005),
+                            value=st.session_state[f"thick_{i}"] if f"thick_{i}" in st.session_state else existing_kwargs.get("thickness", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"thick_{i}"
@@ -1227,28 +1233,28 @@ with tab1:
                     elif section_type == "ibeam":
                         h = st.number_input(
                             "Height h",
-                            value=existing_kwargs.get("h", 0.10),
+                            value=st.session_state[f"h_{i}"] if f"h_{i}" in st.session_state else existing_kwargs.get("h", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"h_{i}"
                         )
                         b = st.number_input(
                             "Flange Width b",
-                            value=existing_kwargs.get("b", 0.05),
+                            value=st.session_state[f"b_{i}"] if f"b_{i}" in st.session_state else existing_kwargs.get("b", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"b_{i}"
                         )
                         tw = st.number_input(
                             "Web Thickness tw",
-                            value=existing_kwargs.get("tw", 0.005),
+                            value=st.session_state[f"tw_{i}"] if f"tw_{i}" in st.session_state else existing_kwargs.get("tw", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"tw_{i}"
                         )
                         tf = st.number_input(
                             "Flange Thickness tf",
-                            value=existing_kwargs.get("tf", 0.005),
+                            value=st.session_state[f"tf_{i}"] if f"tf_{i}" in st.session_state else existing_kwargs.get("tf", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"tf_{i}"
@@ -1258,28 +1264,28 @@ with tab1:
                     elif section_type == "c_section":
                         h = st.number_input(
                             "Height h",
-                            value=existing_kwargs.get("h", 0.10),
+                            value=st.session_state[f"h_{i}"] if f"h_{i}" in st.session_state else existing_kwargs.get("h", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"h_{i}"
                         )
                         b = st.number_input(
                             "Flange Width b",
-                            value=existing_kwargs.get("b", 0.05),
+                            value=st.session_state[f"b_{i}"] if f"b_{i}" in st.session_state else existing_kwargs.get("b", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"b_{i}"
                         )
                         tw = st.number_input(
                             "Web Thickness tw",
-                            value=existing_kwargs.get("tw", 0.005),
+                            value=st.session_state[f"tw_{i}"] if f"tw_{i}" in st.session_state else existing_kwargs.get("tw", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"tw_{i}"
                         )
                         tf = st.number_input(
                             "Flange Thickness tf",
-                            value=existing_kwargs.get("tf", 0.005),
+                            value=st.session_state[f"tf_{i}"] if f"tf_{i}" in st.session_state else existing_kwargs.get("tf", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"tf_{i}"
@@ -1289,21 +1295,21 @@ with tab1:
                     elif section_type == "l_section":
                         b = st.number_input(
                             "Width b",
-                            value=existing_kwargs.get("b", 0.05),
+                            value=st.session_state[f"b_{i}"] if f"b_{i}" in st.session_state else existing_kwargs.get("b", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"b_{i}"
                         )
                         h = st.number_input(
                             "Height h",
-                            value=existing_kwargs.get("h", 0.10),
+                            value=st.session_state[f"h_{i}"] if f"h_{i}" in st.session_state else existing_kwargs.get("h", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"h_{i}"
                         )
                         t = st.number_input(
                             "Thickness t",
-                            value=existing_kwargs.get("t", 0.005),
+                            value=st.session_state[f"t_{i}"] if f"t_{i}" in st.session_state else existing_kwargs.get("t", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"t_{i}"
@@ -1313,28 +1319,28 @@ with tab1:
                     elif section_type == "t_section":
                         b = st.number_input(
                             "Flange Width b",
-                            value=existing_kwargs.get("b", 0.05),
+                            value=st.session_state[f"b_{i}"] if f"b_{i}" in st.session_state else existing_kwargs.get("b", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"b_{i}"
                         )
                         h = st.number_input(
                             "Height h",
-                            value=existing_kwargs.get("h", 0.10),
+                            value=st.session_state[f"h_{i}"] if f"h_{i}" in st.session_state else existing_kwargs.get("h", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"h_{i}"
                         )
                         tw = st.number_input(
                             "Web Thickness tw",
-                            value=existing_kwargs.get("tw", 0.005),
+                            value=st.session_state[f"tw_{i}"] if f"tw_{i}" in st.session_state else existing_kwargs.get("tw", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"tw_{i}"
                         )
                         tf = st.number_input(
                             "Flange Thickness tf",
-                            value=existing_kwargs.get("tf", 0.005),
+                            value=st.session_state[f"tf_{i}"] if f"tf_{i}" in st.session_state else existing_kwargs.get("tf", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"tf_{i}"
@@ -1344,28 +1350,28 @@ with tab1:
                     elif section_type == "z_section":
                         h = st.number_input(
                             "Height h",
-                            value=existing_kwargs.get("h", 0.10),
+                            value=st.session_state[f"h_{i}"] if f"h_{i}" in st.session_state else existing_kwargs.get("h", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"h_{i}"
                         )
                         b = st.number_input(
                             "Flange Width b",
-                            value=existing_kwargs.get("b", 0.05),
+                            value=st.session_state[f"b_{i}"] if f"b_{i}" in st.session_state else existing_kwargs.get("b", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"b_{i}"
                         )
                         tw = st.number_input(
                             "Web Thickness tw",
-                            value=existing_kwargs.get("tw", 0.005),
+                            value=st.session_state[f"tw_{i}"] if f"tw_{i}" in st.session_state else existing_kwargs.get("tw", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"tw_{i}"
                         )
                         tf = st.number_input(
                             "Flange Thickness tf",
-                            value=existing_kwargs.get("tf", 0.005),
+                            value=st.session_state[f"tf_{i}"] if f"tf_{i}" in st.session_state else existing_kwargs.get("tf", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"tf_{i}"
@@ -1375,28 +1381,28 @@ with tab1:
                     elif section_type == "hat_section":
                         h = st.number_input(
                             "Height h",
-                            value=existing_kwargs.get("h", 0.10),
+                            value=st.session_state[f"h_{i}"] if f"h_{i}" in st.session_state else existing_kwargs.get("h", 0.10),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"h_{i}"
                         )
                         b = st.number_input(
                             "Flange Width b",
-                            value=existing_kwargs.get("b", 0.05),
+                            value=st.session_state[f"b_{i}"] if f"b_{i}" in st.session_state else existing_kwargs.get("b", 0.05),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"b_{i}"
                         )
                         tw = st.number_input(
                             "Web Thickness tw",
-                            value=existing_kwargs.get("tw", 0.005),
+                            value=st.session_state[f"tw_{i}"] if f"tw_{i}" in st.session_state else existing_kwargs.get("tw", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"tw_{i}"
                         )
                         tf = st.number_input(
                             "Flange Thickness tf",
-                            value=existing_kwargs.get("tf", 0.005),
+                            value=st.session_state[f"tf_{i}"] if f"tf_{i}" in st.session_state else existing_kwargs.get("tf", 0.005),
                             format="%.4f",
                             min_value=0.0001,
                             key=f"tf_{i}"
@@ -1406,14 +1412,14 @@ with tab1:
                     elif section_type == "general":
                         area = st.number_input(
                             "Cross-sectional Area",
-                            value=existing_kwargs.get("area", 0.001),
+                            value=st.session_state[f"area_{i}"] if f"area_{i}" in st.session_state else existing_kwargs.get("area", 0.001),
                             format="%.6f",
                             min_value=0.000001,
                             key=f"area_{i}"
                         )
                         inertia = st.number_input(
                             "Moment of Inertia",
-                            value=existing_kwargs.get("inertia", 1e-6),
+                            value=st.session_state[f"inertia_{i}"] if f"inertia_{i}" in st.session_state else existing_kwargs.get("inertia", 1e-6),
                             format="%.6e",
                             min_value=1e-12,
                             key=f"inertia_{i}"
@@ -1457,7 +1463,8 @@ with tab1:
                 "Number of elements",
                 min_value=1,
                 max_value=n_nodes-1,
-                value=len(st.session_state.get("elements", [])) if len(st.session_state.get("elements", [])) >= 1 else min(n_nodes-1, 1),
+                value=st.session_state["n_elements_input"] if "n_elements_input" in st.session_state else (len(st.session_state.get("elements", [])) if len(st.session_state.get("elements", [])) >= 1 else min(n_nodes-1, 1)),
+                key="n_elements_input",
                 help="Number of beam elements"
             )
             
@@ -1473,7 +1480,7 @@ with tab1:
                         f"Start Node",
                         min_value=1,
                         max_value=n_nodes,
-                        value=existing_elem[0] if existing_elem else min(i+1, n_nodes),
+                        value=st.session_state[f"en1_{i}"] if f"en1_{i}" in st.session_state else (existing_elem[0] if existing_elem else min(i+1, n_nodes)),
                         key=f"en1_{i}",
                         help=f"Element {i+1} start node"
                     ))
@@ -1482,7 +1489,7 @@ with tab1:
                         f"End Node",
                         min_value=1,
                         max_value=n_nodes,
-                        value=existing_elem[1] if existing_elem else min(i+2, n_nodes),
+                        value=st.session_state[f"en2_{i}"] if f"en2_{i}" in st.session_state else (existing_elem[1] if existing_elem else min(i+2, n_nodes)),
                         key=f"en2_{i}",
                         help=f"Element {i+1} end node"
                     ))
@@ -1490,18 +1497,29 @@ with tab1:
                     if n1 == n2:
                         st.error(f"⚠️ Element {i+1}: Start and end nodes must be different!")
                     
+                    _etype_keys = list(element_types.keys())
+                    if f"etype_{i}" in st.session_state:
+                        _etype_index = _etype_keys.index(st.session_state[f"etype_{i}"])
+                    else:
+                        _etype_index = _etype_keys.index(next((k for k, v in element_types.items() if v == existing_elem[2]), _etype_keys[0])) if existing_elem and len(existing_elem) > 2 else 0
+
                     el_type = col3.selectbox(
                         f"Type",
-                        list(element_types.keys()),
-                        index=list(element_types.keys()).index(next((k for k, v in element_types.items() if v == existing_elem[2]), list(element_types.keys())[0])) if existing_elem and len(existing_elem) > 2 else 0,
+                        _etype_keys,
+                        index=_etype_index,
                         key=f"etype_{i}",
                         help=f"Element {i+1} formulation"
                     )
                     
+                    if f"propidx_{i}" in st.session_state:
+                        _prop_index = property_names.index(st.session_state[f"propidx_{i}"]) if st.session_state[f"propidx_{i}"] in property_names else 0
+                    else:
+                        _prop_index = property_names.index(existing_elem[3]) if existing_elem and len(existing_elem) > 3 and existing_elem[3] in property_names else 0
+
                     prop_idx = col4.selectbox(
                         f"Property",
                         property_names,
-                        index=property_names.index(existing_elem[3]) if existing_elem and len(existing_elem) > 3 and existing_elem[3] in property_names else 0,
+                        index=_prop_index,
                         key=f"propidx_{i}",
                         help=f"Element {i+1} property"
                     )
@@ -1510,7 +1528,7 @@ with tab1:
                         f"Subdivisions",
                         min_value=1,
                         max_value=256,
-                        value=existing_elem[4] if existing_elem and len(existing_elem) > 4 else 1,
+                        value=st.session_state[f"subdiv_{i}"] if f"subdiv_{i}" in st.session_state else (existing_elem[4] if existing_elem and len(existing_elem) > 4 else 1),
                         key=f"subdiv_{i}",
                         help=f"Element {i+1} mesh refinement"
                     )
@@ -1542,7 +1560,8 @@ with tab1:
             "Number of constraints",
             min_value=0,
             max_value=n_nodes * (4 if _has_reddy else 3),
-            value=len(st.session_state.get("constraints", [])),
+            value=st.session_state["n_constraints_input"] if "n_constraints_input" in st.session_state else len(st.session_state.get("constraints", [])),
+            key="n_constraints_input",
             help="Define boundary conditions (e.g., fixed supports)"
         )
         
@@ -1559,13 +1578,17 @@ with tab1:
                         f"Node",
                         min_value=1,
                         max_value=n_nodes,
-                        value=existing_const[0] if existing_const else 1,
+                        value=st.session_state[f"cnode_{i}"] if f"cnode_{i}" in st.session_state else (existing_const[0] if existing_const else 1),
                         key=f"cnode_{i}",
                         help=f"Constraint {i+1} at node"
                     ))
 
-                    _existing_dir = existing_const[1] if existing_const and len(existing_const) > 1 else 0
+                    if f"cdir_{i}" in st.session_state:
+                        _existing_dir = st.session_state[f"cdir_{i}"]
+                    else:
+                        _existing_dir = existing_const[1] if existing_const and len(existing_const) > 1 else 0
                     _dir_index = _dof_options_c.index(_existing_dir) if _existing_dir in _dof_options_c else 0
+                    
                     direction = int(col2.selectbox(
                         f"DOF",
                         options=_dof_options_c,
@@ -1577,7 +1600,7 @@ with tab1:
                     
                     value = col3.number_input(
                         f"Value",
-                        value=existing_const[2] if existing_const and len(existing_const) > 2 else 0.0,
+                        value=st.session_state[f"cval_{i}"] if f"cval_{i}" in st.session_state else (existing_const[2] if existing_const and len(existing_const) > 2 else 0.0),
                         format="%.6f",
                         key=f"cval_{i}",
                         help=f"Constraint {i+1} prescribed value"
@@ -1606,7 +1629,8 @@ with tab1:
             "Number of springs",
             min_value=0,
             max_value=n_nodes * (4 if _has_reddy else 3),
-            value=len(st.session_state.get("springs", [])),
+            value=st.session_state["n_springs_input"] if "n_springs_input" in st.session_state else len(st.session_state.get("springs", [])),
+            key="n_springs_input",
             help="Define elastic supports by DOF stiffness."
         )
 
@@ -1621,13 +1645,17 @@ with tab1:
                         "Node",
                         min_value=1,
                         max_value=n_nodes,
-                        value=existing_spring[0] if existing_spring else 1,
+                        value=st.session_state[f"snode_{i}"] if f"snode_{i}" in st.session_state else (existing_spring[0] if existing_spring else 1),
                         key=f"snode_{i}",
                         help=f"Spring {i+1} node"
                     ))
-                    _existing_sdir = existing_spring[1] if existing_spring and len(existing_spring) > 1 else _dof_options_s[0]
+                    if f"sdir_{i}" in st.session_state:
+                        _existing_sdir = st.session_state[f"sdir_{i}"]
+                    else:
+                        _existing_sdir = existing_spring[1] if existing_spring and len(existing_spring) > 1 else _dof_options_s[0]
                     _sdir_default = _existing_sdir if _existing_sdir in _dof_options_s else _dof_options_s[0]
                     _sdir_index = _dof_options_s.index(_sdir_default)
+                    
                     direction = int(col2.selectbox(
                         "DOF",
                         options=_dof_options_s,
@@ -1639,7 +1667,7 @@ with tab1:
                     stiffness = col3.number_input(
                         "Stiffness",
                         min_value=0.0,
-                        value=existing_spring[2] if existing_spring and len(existing_spring) > 2 else 0.0,
+                        value=st.session_state[f"sk_{i}"] if f"sk_{i}" in st.session_state else (existing_spring[2] if existing_spring and len(existing_spring) > 2 else 0.0),
                         format="%.6f",
                         key=f"sk_{i}",
                         help=f"Spring {i+1} stiffness"
@@ -1668,7 +1696,8 @@ with tab1:
             "Number of point loads",
             min_value=0,
             max_value=n_nodes * (4 if _has_reddy else 3),
-            value=len(st.session_state.get("point_loads", [])),
+            value=st.session_state["n_loads_input"] if "n_loads_input" in st.session_state else len(st.session_state.get("point_loads", [])),
+            key="n_loads_input",
             help="Define point loads applied at nodes"
         )
         
@@ -1685,18 +1714,20 @@ with tab1:
                         f"Node",
                         min_value=1,
                         max_value=n_nodes,
-                        value=existing_load[0] if existing_load else 1,
+                        value=st.session_state[f"lnode_{i}"] if f"lnode_{i}" in st.session_state else (existing_load[0] if existing_load else 1),
                         key=f"lnode_{i}",
                         help=f"Load {i+1} at node"
                     ))
 
-                    if existing_load and len(existing_load) > 1:
-                        _existing_ldir = existing_load[1]
+                    if f"ldir_{i}" in st.session_state:
+                        _existing_ldir = st.session_state[f"ldir_{i}"]
                     else:
-                        _existing_ldir = 0 if 0 in _dof_options_l else 1
+                        _existing_dir_val = existing_load[1] if existing_load and len(existing_load) > 1 else (0 if 0 in _dof_options_l else 1)
+                        _existing_ldir = _existing_dir_val
                     # default direction; clamp to valid range
                     _ldir_default = _existing_ldir if _existing_ldir in _dof_options_l else _dof_options_l[0]
                     _ldir_index = _dof_options_l.index(_ldir_default)
+                    
                     direction = int(col2.selectbox(
                         f"Direction",
                         options=_dof_options_l,
@@ -1708,7 +1739,7 @@ with tab1:
                     
                     magnitude = col3.number_input(
                         f"Magnitude",
-                        value=existing_load[2] if existing_load and len(existing_load) > 2 else 0.0,
+                        value=st.session_state[f"lmag_{i}"] if f"lmag_{i}" in st.session_state else (existing_load[2] if existing_load and len(existing_load) > 2 else 0.0),
                         format="%.4f",
                         key=f"lmag_{i}",
                         help=f"Load {i+1} magnitude"
@@ -1736,7 +1767,8 @@ with tab1:
         n_dist_loads = st.number_input(
             "Number of distributed loads",
             min_value=0,
-            value=len(st.session_state.get("distributed_loads", [])),
+            value=st.session_state["n_dist_loads_input"] if "n_dist_loads_input" in st.session_state else len(st.session_state.get("distributed_loads", [])),
+            key="n_dist_loads_input",
             help="Define distributed loads on elements"
         )
         
@@ -1752,24 +1784,37 @@ with tab1:
                     element_id = int(col1.number_input(
                         f"Element",
                         min_value=1,
-                        value=existing_dload[0] if existing_dload else 1,
+                        value=st.session_state[f"dlelem_{i}"] if f"dlelem_{i}" in st.session_state else (existing_dload[0] if existing_dload else 1),
                         key=f"dlelem_{i}",
                         help=f"Distributed load {i+1} on element"
                     ))
                     
+                    _ltype_options = ["constant", "linear", "custom"]
+                    if f"dltype_{i}" in st.session_state:
+                        _ltype_index = _ltype_options.index(st.session_state[f"dltype_{i}"])
+                    else:
+                        _existing_ltype = existing_dload[5] if existing_dload and len(existing_dload) > 5 else "constant"
+                        _ltype_index = _ltype_options.index(_existing_ltype) if _existing_ltype in _ltype_options else 0
+
                     load_type = col2.selectbox(
                         f"Type",
-                        options=["constant", "linear", "custom"],
-                        index=["constant", "linear", "custom"].index(existing_dload[5] if existing_dload and len(existing_dload) > 5 else "constant"),
+                        options=_ltype_options,
+                        index=_ltype_index,
                         key=f"dltype_{i}",
                         help=f"Load {i+1} distribution type"
                     )
                     
+                    if f"ddir_{i}" in st.session_state:
+                        _ddir_val = st.session_state[f"ddir_{i}"]
+                    else:
+                        _ddir_val = existing_dload[3] if existing_dload and len(existing_dload) > 3 else _dist_direction_options[0]
+                    _ddir_index = _dist_direction_options.index(_ddir_val) if _ddir_val in _dist_direction_options else 0
+
                     direction = col3.selectbox(
                         f"Direction",
                         options=_dist_direction_options,
                         format_func=lambda x: {"x": "Global X", "y": "Global Y", "l": "Local axial", "t": "Local transverse"}[x],
-                        index=_dist_direction_options.index(existing_dload[3]) if existing_dload and len(existing_dload) > 3 and existing_dload[3] in _dist_direction_options else 0,
+                        index=_ddir_index,
                         key=f"ddir_{i}",
                         help=f"Load {i+1} direction"
                     )
@@ -1779,7 +1824,7 @@ with tab1:
                     if load_type == "constant":
                         magnitude = col4.number_input(
                             f"Value",
-                            value=existing_dload[1] if existing_dload and existing_dload[1] is not None else 0.0,
+                            value=st.session_state[f"dlval_{i}"] if f"dlval_{i}" in st.session_state else (existing_dload[1] if existing_dload and existing_dload[1] is not None else 0.0),
                             format="%.4f",
                             key=f"dlval_{i}",
                             help=f"Load {i+1} constant value"
@@ -1789,14 +1834,14 @@ with tab1:
                     elif load_type == "linear":
                         magnitude_start = col4.number_input(
                             f"Start",
-                            value=existing_dload[1] if existing_dload and existing_dload[1] is not None else 0.0,
+                            value=st.session_state[f"dlstart_{i}"] if f"dlstart_{i}" in st.session_state else (existing_dload[1] if existing_dload and existing_dload[1] is not None else 0.0),
                             format="%.4f",
                             key=f"dlstart_{i}",
                             help=f"Load {i+1} start value"
                         )
                         magnitude_end = col5.number_input(
                             f"End",
-                            value=existing_dload[2] if existing_dload and existing_dload[2] is not None else 0.0,
+                            value=st.session_state[f"dlend_{i}"] if f"dlend_{i}" in st.session_state else (existing_dload[2] if existing_dload and existing_dload[2] is not None else 0.0),
                             format="%.4f",
                             key=f"dlend_{i}",
                             help=f"Load {i+1} end value"
@@ -1806,7 +1851,7 @@ with tab1:
                     elif load_type == "custom":
                         func_str = col4.text_input(
                             f"Function f(x)",
-                            value=existing_dload[4] if existing_dload and existing_dload[4] is not None else "",
+                            value=st.session_state[f"dlfunc_{i}"] if f"dlfunc_{i}" in st.session_state else (existing_dload[4] if existing_dload and existing_dload[4] is not None else ""),
                             key=f"dlfunc_{i}",
                             help="Enter function in terms of x and L (e.g., 'x**2' or 'np.sin(x/L)')"
                         )
@@ -1845,10 +1890,17 @@ with tab2:
         "Analytical (default)": "analytical",
         "Numerical integration": "numerical",
     }
+    _int_keys = list(integration_mode_labels.keys())
+    if "integration_mode_input" in st.session_state:
+        _int_index = _int_keys.index(st.session_state["integration_mode_input"]) if st.session_state["integration_mode_input"] in _int_keys else 0
+    else:
+        _int_index = 0 if st.session_state.get("stiffness_integration_mode", "analytical") == "analytical" else 1
+
     selected_label = st.selectbox(
         "Stiffness matrix integration",
-        options=list(integration_mode_labels.keys()),
-        index=0 if st.session_state.get("stiffness_integration_mode", "analytical") == "analytical" else 1,
+        options=_int_keys,
+        index=_int_index,
+        key="integration_mode_input",
         help="Choose how 2-node element stiffness matrices are computed.",
     )
     st.session_state["stiffness_integration_mode"] = integration_mode_labels[selected_label]
@@ -1858,7 +1910,8 @@ with tab2:
             "Number of Gauss integration points",
             min_value=1,
             max_value=20,
-            value=st.session_state.get("stiffness_n_gauss") if st.session_state.get("stiffness_n_gauss") is not None else 3,
+            value=st.session_state["n_gauss_input"] if "n_gauss_input" in st.session_state else (st.session_state.get("stiffness_n_gauss") if st.session_state.get("stiffness_n_gauss") is not None else 3),
+            key="n_gauss_input",
             step=1,
             help="Choose the number of integration points for numerical integration of stiffness matrices."
         )
