@@ -7,7 +7,8 @@ from post_processing.forces import ElementResults
 from post_processing.plotter import (
     plot_shear_stress_distribution,
     plot_reddy_shear_stress_distribution,
-    plot_shear_stress_comparison
+    plot_shear_stress_comparison,
+    plot_shear_stress_side_view
 )
 
 
@@ -47,7 +48,7 @@ def test_plot_shear_stress_distribution_rectangular_profile():
 
     assert center > edge
     assert "Shear Stress Contour" in fig.layout.title.text
-    print("✓ test_plot_shear_stress_distribution_rectangular_profile passed")
+    print("OK test_plot_shear_stress_distribution_rectangular_profile passed")
 
 
 def test_plot_shear_stress_distribution_zero_shear():
@@ -57,7 +58,7 @@ def test_plot_shear_stress_distribution_zero_shear():
     trace = _gradient_trace(fig)
     tau = np.asarray(trace.marker.color, dtype=float)
     assert np.allclose(tau, 0.0)
-    print("✓ test_plot_shear_stress_distribution_zero_shear passed")
+    print("OK test_plot_shear_stress_distribution_zero_shear passed")
 
 
 class MockNode:
@@ -83,7 +84,7 @@ def test_jourawski_shear_stress_extraction():
     tau_analytical = 1.5 * V / section.area
     
     assert np.isclose(tau_neutral, tau_analytical, rtol=0.03)
-    print("✓ test_jourawski_shear_stress_extraction passed")
+    print("OK test_jourawski_shear_stress_extraction passed")
 
 
 def test_shear_stress_plots_with_query_y():
@@ -110,7 +111,55 @@ def test_shear_stress_plots_with_query_y():
     fig_comp = plot_shear_stress_comparison(er, x=0.5, n_points=50, query_y=0.1)
     assert fig_comp is not None
     
-    print("✓ test_shear_stress_plots_with_query_y passed")
+    print("OK test_shear_stress_plots_with_query_y passed")
+
+
+def test_plot_shear_stress_side_view():
+    material = Material("Steel", E=210e9, nu=0.3)
+    section = RectangularBar(1, width=0.2, height=0.4)
+    node_start = MockNode(0.0, 0.0)
+    node_end = MockNode(2.0, 0.0)
+    
+    element = ReddyBickfordElement2Node(1, node_start, node_end, material, section)
+    displacements = np.zeros(8)
+    displacements[5] = -0.01  # cause bending/shear
+    
+    er = ElementResults(element, displacements)
+    
+    # Test plot_shear_stress_side_view
+    fig = plot_shear_stress_side_view(er, n_x=20, n_y=20, display_x=0.5, query_y=0.1)
+    assert fig is not None
+    print("OK test_plot_shear_stress_side_view passed")
+
+
+def test_plot_shear_stress_side_view_subelements():
+    material = Material("Steel", E=210e9, nu=0.3)
+    section = RectangularBar(1, width=0.2, height=0.4)
+    
+    # Subelement 1: 0.0 to 1.0
+    n1 = MockNode(0.0, 0.0)
+    n2 = MockNode(1.0, 0.0)
+    el1 = ReddyBickfordElement2Node(1, n1, n2, material, section)
+    displacements1 = np.zeros(8)
+    displacements1[5] = -0.005
+    er1 = ElementResults(el1, displacements1)
+    
+    # Subelement 2: 1.0 to 2.0
+    n3 = MockNode(2.0, 0.0)
+    el2 = ReddyBickfordElement2Node(2, n2, n3, material, section)
+    displacements2 = np.zeros(8)
+    displacements2[5] = -0.01
+    er2 = ElementResults(el2, displacements2)
+    
+    # Test plot_shear_stress_side_view with list of subelements
+    fig = plot_shear_stress_side_view([er1, er2], n_x=20, n_y=20, display_x=1.2, query_y=0.05)
+    assert fig is not None
+    
+    # Check that x range matches total length (2.0)
+    contour = fig.data[0]
+    assert np.isclose(contour.x[0], 0.0)
+    assert np.isclose(contour.x[-1], 2.0)
+    print("OK test_plot_shear_stress_side_view_subelements passed")
 
 
 def run_all_tests():
@@ -118,7 +167,9 @@ def run_all_tests():
     test_plot_shear_stress_distribution_zero_shear()
     test_jourawski_shear_stress_extraction()
     test_shear_stress_plots_with_query_y()
-    print("\n✅ All shear stress distribution plot tests passed!")
+    test_plot_shear_stress_side_view()
+    test_plot_shear_stress_side_view_subelements()
+    print("\nAll shear stress distribution plot tests passed!")
 
 
 if __name__ == "__main__":

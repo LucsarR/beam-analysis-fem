@@ -1661,6 +1661,31 @@ class MRBTElement2Node(ReddyBickfordElement2Node):
                 
         return K
 
+    def interpolate_theta(self, x, displacements):
+        """Interpolate θ(x) at local position x using quadratic MRBT shape functions."""
+        L = self.length
+        xi = x / L
+        # displacements local: [u1, v1, theta1, (dv/dx)1, u2, v2, theta2, (dv/dx)2]
+        v1 = displacements[1]
+        theta1 = displacements[2]
+        dv_dx1 = displacements[3]
+        v2 = displacements[5]
+        theta2 = displacements[6]
+        dv_dx2 = displacements[7]
+        
+        # MRBT shape functions for theta from Row 3 of equation (27) of the paper.
+        # Since local theta = -theta_paper in this codebase, we flip the signs 
+        # of the non-theta terms to maintain sign consistency.
+        N_v1 = -(6.0 * xi**2 / L - 6.0 * xi / L)
+        N_dv1 = -(3.0 * xi**2 - 3.0 * xi)
+        N_th1 = 1.0 - xi
+        N_v2 = -(-6.0 * xi**2 / L + 6.0 * xi / L)
+        N_dv2 = -(3.0 * xi**2 - 3.0 * xi)
+        N_th2 = xi
+        
+        return N_v1 * v1 + N_dv1 * dv_dx1 + N_th1 * theta1 + N_v2 * v2 + N_dv2 * dv_dx2 + N_th2 * theta2
+
+
 
 
 

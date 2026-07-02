@@ -39,6 +39,7 @@ from post_processing.plotter import (
     plot_reddy_shear_stress_distribution,
     plot_shear_stress_comparison,
     plot_normal_stress_side_view,
+    plot_shear_stress_side_view,
     plot_structure_preview,
     find_position_on_structure,
     plot_deformed_shape,
@@ -2634,6 +2635,7 @@ with tab3:
                     x_pos_global = None
                     total_element_length = None
                     selected_element_result = None
+                    sub_el_results = []
                     x_pos = 0.0
                     hit = None
                     
@@ -2659,6 +2661,31 @@ with tab3:
                         if hit is not None:
                             selected_element_result = hit["element_result"]
                             x_pos = hit["local_x"]
+                            
+                            # Find which original element the hit belongs to
+                            selected_orig_id = None
+                            for orig_id, sub_ids in original_to_mesh.items():
+                                if selected_element_result.element.id in sub_ids:
+                                    selected_orig_id = orig_id
+                                    break
+                            
+                            if selected_orig_id is not None:
+                                sub_el_ids = original_to_mesh[selected_orig_id]
+                            else:
+                                sub_el_ids = [selected_element_result.element.id]
+                                
+                            sub_el_results = sorted(
+                                (er for er in structure_results.element_results if er.element.id in sub_el_ids),
+                                key=lambda er: sub_el_ids.index(er.element.id),
+                            )
+                            total_element_length = sum(er.length for er in sub_el_results)
+                            
+                            cumulative = 0.0
+                            for er in sub_el_results:
+                                if er.element.id == selected_element_result.element.id:
+                                    x_pos_global = cumulative + x_pos
+                                    break
+                                cumulative += er.length
                     else:
                         selected_orig_id = st.selectbox(
                             "Select element",
@@ -2699,7 +2726,7 @@ with tab3:
 
                     side_view_x_pos = float(x_pos)
                     side_view_length = float(selected_element_result.length) if selected_element_result is not None else 0.0
-                    if (not use_global_pos) and x_pos_global is not None and total_element_length is not None:
+                    if x_pos_global is not None and total_element_length is not None:
                         side_view_x_pos = float(x_pos_global)
                         side_view_length = float(total_element_length)
                     
@@ -2886,21 +2913,34 @@ with tab3:
                                     )
                                 st.plotly_chart(fig_shear_cross, use_container_width=True)
                             
-                            st.markdown("##### Normal Stress Distribution (Side View)")
-                            fig_side = plot_normal_stress_side_view(
-                                selected_element_result,
-                                x_pos,
-                                display_x=side_view_x_pos,
-                                display_length=side_view_length,
-                                query_y=section_query_y if use_section_query else None,
-                            )
-                            st.plotly_chart(fig_side, use_container_width=True)
+                            side_normal_col, side_shear_col = st.columns(2)
+                            with side_normal_col:
+                                st.markdown("##### Normal Stress Distribution (Side View)")
+                                fig_side = plot_normal_stress_side_view(
+                                    selected_element_result,
+                                    x_pos,
+                                    display_x=side_view_x_pos,
+                                    display_length=side_view_length,
+                                    query_y=section_query_y if use_section_query else None,
+                                )
+                                st.plotly_chart(fig_side, use_container_width=True)
+                                
+                            with side_shear_col:
+                                st.markdown("##### Shear Stress Distribution (Side View)")
+                                fig_shear_side = plot_shear_stress_side_view(
+                                    sub_el_results,
+                                    display_x=side_view_x_pos,
+                                    display_length=side_view_length,
+                                    query_y=section_query_y if use_section_query else None,
+                                )
+                                st.plotly_chart(fig_shear_side, use_container_width=True)
                             
                             st.info(
                                 "💡 **How to interpret the views:**\n"
                                 "- **Normal Stress Distribution (Cross-Section)**: Shows normal-stress distribution across the section at the selected cut\n"
                                 "- **Normal Stress Distribution (Side View)**: Shows where the selected cut is located along the element\n"
-                                "- **Shear Stress Distribution (Cross-Section)**: Shows the transverse shear-stress field at the same cut (assuming load passes through the shear center)"
+                                "- **Shear Stress Distribution (Cross-Section)**: Shows the transverse shear-stress field at the same cut (assuming load passes through the shear center)\n"
+                                "- **Shear Stress Distribution (Side View)**: Shows the 2D shear-stress field (x-y contour) along the length and height of the element"
                             )
                         except Exception as e:
                             st.error(f"Error: {e}")

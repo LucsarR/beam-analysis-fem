@@ -1504,6 +1504,131 @@ def plot_normal_stress_side_view(element_result, x, n_points=30, display_x=None,
     return fig
 
 
+def plot_shear_stress_side_view(element_result, n_x=50, n_y=50, display_x=None, display_length=None, query_y=None):
+    """
+    Interactive Plotly plot: Side view 2D contour of shear stress distribution along the element.
+    Shows the variation of shear stress across the length (x) and height (y).
+    """
+    if isinstance(element_result, (list, tuple)):
+        sub_el_results = element_result
+    else:
+        sub_el_results = [element_result]
+        
+    if not sub_el_results:
+        raise ValueError("element_result sequence is empty")
+        
+    first_er = sub_el_results[0]
+    section = first_er.element.section
+    L = sum(er.length for er in sub_el_results)
+    
+    # Determine section height range
+    if hasattr(section, 'height'):
+        h = section.height
+        y_min, y_max = -h/2, h/2
+    elif hasattr(section, 'diameter'):
+        d = section.diameter
+        y_min, y_max = -d/2, d/2
+    else:
+        y_min, y_max = -0.1, 0.1
+        
+    class_name = type(first_er.element).__name__
+    is_reddy = "ReddyBickford" in class_name or "MRBT" in class_name
+    
+    # Create grid for side-view contour
+    x_vals = np.linspace(0, L, n_x)
+    y_vals = np.linspace(y_min, y_max, n_y)
+    
+    # Evaluate shear stress at each grid point
+    TAU = np.zeros((n_y, n_x))
+    
+    for i, x_val in enumerate(x_vals):
+        # Find which subelement this x_val falls into
+        cumulative = 0.0
+        target_er = sub_el_results[-1]
+        local_x = x_val - (L - target_er.length) # default fallback
+        
+        for er in sub_el_results:
+            if x_val <= cumulative + er.length + 1e-12:
+                target_er = er
+                local_x = x_val - cumulative
+                break
+            cumulative += er.length
+            
+        local_x = np.clip(local_x, 0.0, target_er.length)
+        
+        for j, y_val in enumerate(y_vals):
+            if is_reddy:
+                TAU[j, i] = target_er.reddy_shear_stress(local_x, y_val)
+            else:
+                TAU[j, i] = target_er.jourawski_shear_stress(local_x, y_val)
+                
+    # Create the Plotly figure
+    fig = go.Figure()
+    
+    # Add contour trace
+    fig.add_trace(go.Contour(
+        x=x_vals,
+        y=y_vals,
+        z=TAU,
+        colorscale='RdBu',
+        colorbar=dict(title="Shear Stress (τ)"),
+        hoverinfo='x+y+z',
+        hovertemplate='x=%{x:.3f}<br>y=%{y:.4f}<br>τ=%{z:.3f}<extra></extra>',
+        line=dict(width=0.5, color='rgba(0,0,0,0.1)')
+    ))
+    
+    # Draw beam axis
+    fig.add_trace(go.Scatter(
+        x=[0, L],
+        y=[0, 0],
+        mode='lines',
+        line=dict(color='black', dash='dot', width=1),
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+    
+    # Draw cut position vertical line if display_x is provided
+    if display_x is not None:
+        x_cut = float(display_x)
+        section_height = y_max - y_min
+        fig.add_trace(go.Scatter(
+            x=[x_cut, x_cut],
+            y=[y_min - 0.1 * section_height, y_max + 0.1 * section_height],
+            mode='lines',
+            line=dict(color='red', width=2, dash='dash'),
+            name='Cut Position',
+            hoverinfo='text',
+            text=[f'Cut at x={x_cut:.3f}', ''],
+            showlegend=False
+        ))
+        
+    # Draw queried height horizontal line if query_y is provided
+    if query_y is not None:
+        if y_min <= query_y <= y_max:
+            fig.add_trace(go.Scatter(
+                x=[0, L],
+                y=[query_y, query_y],
+                mode='lines',
+                line=dict(color='yellow', dash='dash', width=2),
+                name='Queried Height',
+                hoverinfo='text',
+                text=[f'Query y={query_y:.4f}', ''],
+                showlegend=False
+            ))
+            
+    fig.update_layout(
+        title=f"Shear Stress Distribution - Side View ({'Reddy-Bickford' if is_reddy else 'Jourawski'})",
+        xaxis_title="Position along element (x)",
+        yaxis_title="Section height (y)",
+        width=900,
+        height=500,
+        hovermode='closest'
+    )
+    
+    return fig
+
+
+
 def plot_deformed_shape(
     structure_results,
     scale_factor=None,

@@ -1004,6 +1004,55 @@ def test_polynomial_load_interpolation_order_effects_in_plotted_diagrams():
     return True
 
 
+def test_mrbt_interpolate_theta():
+    """Verify that the MRBT interpolate_theta is quadratic and matches nodal boundaries."""
+    print("\n" + "=" * 60)
+    print("Test: MRBT interpolate_theta")
+    print("=" * 60)
+    mesh, nodes = _make_cantilever(1, H_THICK, etype="mrbt_2node")
+    element = mesh.elements[0]
+    
+    # Let's set some dummy local displacements:
+    # [u1, v1, theta1, dv_dx1, u2, v2, theta2, dv_dx2]
+    displacements = np.array([0.0, 1.2, 0.3, -0.4, 0.0, 2.5, 0.7, 0.1])
+    
+    # Boundary checks:
+    # theta at x=0 must be exactly theta1 (displacements[2] = 0.3)
+    # theta at x=L must be exactly theta2 (displacements[6] = 0.7)
+    theta_0 = element.interpolate_theta(0.0, displacements)
+    theta_L = element.interpolate_theta(element.length, displacements)
+    
+    print(f"  theta(0) = {theta_0:.6f} (Expected {displacements[2]:.6f})")
+    print(f"  theta(L) = {theta_L:.6f} (Expected {displacements[6]:.6f})")
+    
+    assert np.isclose(theta_0, displacements[2]), f"theta(0) error: {theta_0}"
+    assert np.isclose(theta_L, displacements[6]), f"theta(L) error: {theta_L}"
+    
+    # Check that it is quadratic (its second derivative with respect to x should be constant and non-zero)
+    # theta(x) = a*x^2 + b*x + c
+    # d^2 theta / dx^2 = 2*a
+    # We can evaluate at x=0, x=L/2, x=L, and compute the second derivative by finite difference
+    L = element.length
+    theta_half = element.interpolate_theta(L / 2.0, displacements)
+    
+    # For a quadratic function, the finite difference approximation of second derivative:
+    # d^2 theta / dx^2 = (theta(0) - 2*theta(L/2) + theta(L)) / (L/2)^2
+    d2_theta = (theta_0 - 2.0 * theta_half + theta_L) / (L / 2.0)**2
+    print(f"  d^2 theta / dx^2 = {d2_theta:.6f}")
+    assert abs(d2_theta) > 1e-4, "MRBT interpolate_theta should be quadratic and have non-zero second derivative"
+    
+    # Compare with RBT's linear interpolation (which has second derivative equal to 0)
+    from fem.element import ReddyBickfordElement2Node
+    # Call parent's interpolate_theta (which is linear):
+    theta_linear_half = ReddyBickfordElement2Node.interpolate_theta(element, L / 2.0, displacements)
+    print(f"  linear theta(L/2) = {theta_linear_half:.6f}")
+    print(f"  MRBT theta(L/2) = {theta_half:.6f}")
+    assert not np.isclose(theta_half, theta_linear_half), "MRBT theta interpolation should differ from linear RBT interpolation"
+    
+    print("OK MRBT interpolate_theta verified")
+    return True
+
+
 def test_mrbt_stiffness_symmetry():
     """Verify that the MRBT 8x8 stiffness matrix is symmetric."""
     print("\n" + "=" * 60)
@@ -1264,6 +1313,7 @@ if __name__ == "__main__":
         test_mrbt_cantilever_point_load,
         test_mrbt_matches_eb_for_slender_beam,
         test_mrbt_convergence_faster_than_rbt,
+        test_mrbt_interpolate_theta,
         test_reddy_shear_stress_zero_at_boundaries,
         test_reddy_shear_stress_max_at_neutral_axis,
         test_reddy_shear_stress_parabolic_shape,
