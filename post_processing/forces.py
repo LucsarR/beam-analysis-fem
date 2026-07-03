@@ -141,8 +141,8 @@ class ElementResults:
             # dtheta/dx (linear/constant)
             dtheta_dx = (theta2 - theta1) / L
             
-            # sigma = E * (du/dx + y * dtheta/dx)
-            stress = E * (du_dx + y * dtheta_dx)
+            # sigma = E * (du/dx - y * dtheta/dx)
+            stress = E * (du_dx - y * dtheta_dx)
 
         elif class_name == "TimoshenkoElement3Node":
             # DOFs: [u1, v1, theta1, u2, v2, theta2, u3, v3, theta3]
@@ -158,8 +158,8 @@ class ElementResults:
             # dtheta/dx (linear)
             dtheta_dx = (1.0 / L) * (dN1_dxi * theta1 + dN2_dxi * theta2 + dN3_dxi * theta3)
             
-            # sigma = E * (du/dx + y * dtheta/dx)
-            stress = E * (du_dx + y * dtheta_dx)
+            # sigma = E * (du/dx - y * dtheta/dx)
+            stress = E * (du_dx - y * dtheta_dx)
 
         elif class_name in ["ReddyBickfordElement2Node", "MRBTElement2Node"]:
             # DOFs: [u1, v1, theta1, dv_dx1, u2, v2, theta2, dv_dx2]
