@@ -13,6 +13,7 @@ This tool performs finite element analysis on beams using three different formul
   * **Timoshenko 2-node**: Includes shear deformation effects
   * **Timoshenko 3-node**: Enhanced element with central node for improved accuracy with distributed loads and shear deformation
   * **Reddy-Bickford 2-node**: Third-order shear deformation theory element
+  * **Reddy-Bickford MRBT 2-node**: Modified Reddy-Bickford element using shape functions derived from the analytical solution (truncated to 2nd-order polynomial form)
 * Interactive web interface for setting up simulations
 * Visualization of displacement, shear force, bending moment, and normal force diagrams
 * Support for point loads and distributed loads (constant, linear, and custom functions)
@@ -58,6 +59,13 @@ Third-order shear deformation theory element:
 - Each node has 4 DOFs: u, v, θ, dv/dx
 - 8 DOFs total per element
 
+### Reddy-Bickford MRBT 2-Node
+Modified 2-node Reddy-Bickford (MRBT) element:
+- Employs shape functions derived from the exact analytical solution, with exponential terms expanded and truncated to 2nd-order polynomial form to avoid numerical instabilities and allow analytical integration of the stiffness matrix
+- Avoids shear locking and boundary issue approximations on coarse meshes
+- Achieves much faster convergence than the standard Reddy-Bickford element
+- Each node has 4 DOFs: u, v, θ, dv/dx (8 DOFs total per element)
+
 ## 🚀 How to Run
 
 ### Prerequisites
@@ -81,6 +89,11 @@ Third-order shear deformation theory element:
     ```
 
 4.  **Run tests:**
+    To run the entire test suite using `pytest`:
+    ```sh
+    pytest
+    ```
+    Alternatively, to run individual test files:
     ```sh
     export PYTHONPATH=$(pwd)
     python tests/test_euler_bernoulli.py

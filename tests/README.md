@@ -43,28 +43,28 @@ Tests for 3-node Timoshenko beam elements:
 - Verification that Timoshenko deflections exceed Euler-Bernoulli (shear effects)
 
 #### 6. `test_reddy_bickford.py`
-**Tests for the 2-node Reddy-Bickford (third-order shear deformation theory) element.**
+**Tests for standard Reddy-Bickford and Modified Reddy-Bickford (MRBT) 2-node beam elements.**
 
 Comprehensive test suite validating:
 - Parameter computation (D1, E1, F1, G1) for rectangular sections ✅
 - Stiffness matrix properties (symmetry, positive semi-definiteness) ✅
-- Cantilever and simply supported beam behavior
+- Cantilever and simply supported beam behavior (standard RBT and MRBT formulations)
 - Comparison with Euler-Bernoulli and Timoshenko theories
 - Mesh convergence with refinement ✅
 - Force recovery methods (moment, shear, normal force)
+- Inter-element boundary rotation/slope compatibility and shear locking resistance (MRBT)
 
-**Status**: Test suite complete. **Implementation has bugs** - see `REDDY_BICKFORD_TEST_RESULTS.md` for details.
+**Status**: Test suite complete. **Formulations are fully verified and working.** All tests pass and match reference literature solutions (Heyliger & Reddy, 1988; Rodrigues et al., 2024).
 
-Key Issues Identified:
-1. Element is overly stiff (24% less deflection than EB, should be more)
-2. Simply supported boundary conditions show equilibrium errors
-3. Requires debugging before element can be considered correctly implemented
+#### 7. `test_forces_polynomial_degrees.py`
+Tests verifying the polynomial degrees of internal forces for Euler-Bernoulli and Timoshenko 3-node elements. Validates the consistency of force recovery against the respective polynomial degrees of shape functions.
 
-Tests are based on Heyliger & Reddy (1988) reference paper.
+#### 8. `test_gauss_point_selection.py`
+Tests the configuration and correct propagation of numerical integration parameters (number of Gauss integration points) across all element types.
 
 ### Component Tests
 
-#### 7. `test_section.py`
+#### 9. `test_section.py`
 Tests for every formula in `section.py`:
 - All 14 cross-section types: rectangular bar/tube, circular bar/tube, trapezoidal bar/tube, hexagonal bar/tube, I-beam, C-section, L-section, T-section, Z-section, hat section, general
 - Area and second moment of area calculations
@@ -72,14 +72,14 @@ Tests for every formula in `section.py`:
 - `normal_stress` method
 - `create_section` factory function
 
-#### 8. `test_material.py`
+#### 10. `test_material.py`
 Tests for the `Material` class elastic constant calculations:
 - Computing G from E and ν
 - Computing ν from E and G
 - Computing E from G and ν
 - Error handling when all three constants are supplied simultaneously
 
-#### 9. `test_reactions.py`
+#### 11. `test_reactions.py`
 Tests reaction force calculations at constrained DOFs:
 - Cantilever beam reactions (vertical, horizontal, moment)
 - Simply supported beam reactions
@@ -87,7 +87,7 @@ Tests reaction force calculations at constrained DOFs:
 
 ### Mesh & Integration Tests
 
-#### 10. `test_mesh_integration.py`
+#### 12. `test_mesh_integration.py`
 Tests the integration of the `Mesh` class with other FEM components:
 - Basic mesh creation and operations
 - Node and element management
@@ -98,7 +98,7 @@ Tests the integration of the `Mesh` class with other FEM components:
 - Support for different element types (Euler-Bernoulli, Timoshenko)
 - Mesh query and export methods
 
-#### 11. `test_mesh_convergence.py`
+#### 13. `test_mesh_convergence.py`
 Tests convergence of solutions with mesh refinement for canonical problems:
 - **Euler-Bernoulli Cantilever**: Verifies displacement, moment, and shear convergence
 - **Timoshenko Cantilever**: Verifies convergence including shear deformation effects
@@ -107,7 +107,7 @@ Tests convergence of solutions with mesh refinement for canonical problems:
 
 These tests use analytical solutions to validate numerical convergence.
 
-#### 12. `test_complex_structures.py`
+#### 14. `test_complex_structures.py`
 Tests mesh behaviour with complex, realistic scenarios:
 - **Angled Cantilever (45°)**: Verifies mesh handles inclined elements correctly
 - **L-Shaped Frame**: Tests structures with elements at 90° to each other
@@ -115,34 +115,46 @@ Tests mesh behaviour with complex, realistic scenarios:
 - **Timoshenko Angled Beam**: Verifies Timoshenko elements work correctly at angles
 - **Forces Convergence**: Verifies that moment and shear force calculations converge
 
-### Visualization Tests
+### Visualization & Stress Tests
 
-#### 13. `test_structure_preview.py`
+#### 15. `test_structure_preview.py`
 Tests the `plot_structure_preview` function used in the app before analysis:
 - Verifies the function returns a Plotly `Figure` object with traces
 - Checks that constraints, loads, and elements are represented correctly
 
-#### 14. `test_aspect_ratio_fix.py`
-Visual test demonstrating that equal aspect ratio fixes the perpendicular vector angle issue for inclined beam diagrams.
+#### 16. `test_improvements.py`
+Verifies the QOL improvements made to the post-processing functions, including:
+- Correctly retrieving central node displacements for deformed shape plots on 3-node elements
+- Verification of the generation of various normal and shear stress distribution plots
 
-#### 15. `test_fill_direction_visual.py`
-Visual test verifying the fill vector direction in `plot_structure_diagram` is correct for bending moment/shear diagrams on inclined beams.
+#### 17. `test_normal_stress_distribution_plot.py`
+Tests the plotting logic of normal stress distributions on cross-sections, ensuring correct coordinates and titles.
 
-#### 16. `visualize_perpendicular_change.py`
-Script that produces a side-by-side comparison of old vs. new perpendicular vector conventions used in diagram fill areas.
+#### 18. `test_normal_stress_side_view_plot.py`
+Tests the plotting logic of normal stress side views across elements, ensuring correctness across element orientations and sections.
 
-#### 17. `create_mockup.py`
+#### 19. `test_normal_stress_verification.py`
+Verifies normal stresses for standard elements, checking polynomial fits against analytical solutions.
+
+#### 20. `test_shear_stress_distribution_plot.py`
+Tests transverse shear stress distribution plotting, including comparison plots, side views, and Reddy formulations.
+
+#### 21. `verify_convergence_reddy.py`
+A verification script that checks Reddy-Bickford (RBT) and Modified Reddy-Bickford (MRBT) convergence for slope and rotation, comparing results directly to reference values.
+
+#### 22. `create_mockup.py`
 Script that generates a visual mockup showing the reaction forces display in the Streamlit app.
 
 ## Running the Tests
 
-### Set up the Python path first:
+### Recommended: Run the entire test suite with `pytest`
 ```bash
-export PYTHONPATH=$(pwd)   # run from the repository root
+pytest
 ```
 
-### Run individual test files:
+### Alternatively, run individual test files:
 ```bash
+export PYTHONPATH=$(pwd)   # run from the repository root
 python tests/test_euler_bernoulli.py
 python tests/test_euler_bernoulli_3node.py
 python tests/test_euler_bernoulli_3node_updated.py
@@ -156,6 +168,14 @@ python tests/test_mesh_integration.py
 python tests/test_mesh_convergence.py
 python tests/test_complex_structures.py
 python tests/test_structure_preview.py
+python tests/test_forces_polynomial_degrees.py
+python tests/test_gauss_point_selection.py
+python tests/test_improvements.py
+python tests/test_normal_stress_distribution_plot.py
+python tests/test_normal_stress_side_view_plot.py
+python tests/test_normal_stress_verification.py
+python tests/test_shear_stress_distribution_plot.py
+python tests/verify_convergence_reddy.py
 ```
 
 ## Test Results Summary
@@ -167,7 +187,7 @@ All analytical tests verify that:
 ✅ Force solutions (moment, shear) converge with mesh refinement
 ✅ Euler-Bernoulli 2-node and 3-node elements produce accurate results
 ✅ Timoshenko 2-node and 3-node elements include shear deformation effects
-⚠️ Reddy-Bickford elements have identified implementation bugs (element too stiff)
+✅ Reddy-Bickford (RBT) and Modified Reddy-Bickford (MRBT) elements are fully verified and match analytical reference solutions
 ✅ Timoshenko deflections are larger than Euler-Bernoulli (includes shear)
 ✅ Mesh handles elements at various angles (not just horizontal)
 ✅ Mesh handles multiple loads (point and distributed) simultaneously
@@ -183,6 +203,7 @@ Tests verify convergence by checking that:
 2. For problems with analytical solutions, numerical error approaches zero
 3. Euler-Bernoulli and Timoshenko elements show consistent behaviour
 4. Timoshenko deflections are larger than Euler-Bernoulli (includes shear)
+5. Reddy-Bickford and MRBT elements converge correctly, with MRBT showing significantly faster convergence on coarse meshes
 
 ## Test Coverage
 
@@ -191,7 +212,8 @@ Tests verify convergence by checking that:
 - ✅ Euler-Bernoulli 3-node elements
 - ✅ Timoshenko 2-node elements
 - ✅ Timoshenko 3-node elements
-- ⚠️ Reddy-Bickford 2-node elements (tests created, implementation has bugs)
+- ✅ Reddy-Bickford 2-node elements (standard RBT)
+- ✅ Reddy-Bickford MRBT 2-node elements
 
 ### Load Types Tested:
 - ✅ Point loads (single and multiple)

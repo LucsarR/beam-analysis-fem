@@ -2990,6 +2990,7 @@ with tab4:
     - **Normal Stress Distribution**: Examine the stress field across the cross-section
       at any cut position (cross-sectional view) and along the beam length (side view)
     - **Shear Stress Distribution**: Inspect the cross-sectional shear-stress contour at any cut position
+      (cross-sectional view) and the 2D shear-stress field contour (side view) along the element length and height
     
     #### 4. Save/Load Projects (Sidebar)
     - **Save**: Download the full project as a JSON file
@@ -3001,11 +3002,11 @@ with tab4:
     - Validation messages will guide you through errors before running the analysis
     - The **Section Preview** diagram shows dimension labels for the selected cross-section type
     - The app is **unit-agnostic** — choose any consistent unit system (see table below)
-    - For Reddy-Bickford elements, a fourth DOF per node (curvature) is automatically activated
+    - For Reddy-Bickford and MRBT elements, a fourth DOF per node (slope dv/dx) is automatically activated
     
     ### 🔧 Supported Features
     - **Element Formulations**: Euler-Bernoulli (2-node, 3-node), Timoshenko (2-node, 3-node),
-      Reddy-Bickford (2-node)
+      Reddy-Bickford (2-node), Reddy-Bickford MRBT (2-node)
     - **Section Types**: Rectangular bar/tube, Circular bar/tube, Trapezoidal bar/tube,
       Hexagonal bar/tube, I-beam, C-section, L-section, T-section, Z-section, Hat section, General
     - **Load Types**: Point loads and moments, distributed loads (constant, linear, custom functions
@@ -3014,8 +3015,8 @@ with tab4:
       improved accuracy without manually adding intermediate nodes
     - **Analysis**: Linear static FEM with automatic assembly, boundary condition enforcement,
       and reaction force recovery
-    - **Visualization**: Force diagrams, stress distributions, deformed/undeformed structure
-      preview, and section geometry diagrams
+    - **Visualization**: Force diagrams, stress distributions (cross-section and side view contours),
+      deformed/undeformed structure preview, and section geometry diagrams
 
     ---
 
