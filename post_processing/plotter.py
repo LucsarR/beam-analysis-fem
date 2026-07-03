@@ -868,6 +868,9 @@ def plot_normal_stress_distribution(element_result, x, n_points=100, query_y=Non
 
     x_title = x if display_x is None else float(display_x)
 
+    y_min, y_max = np.min(Y_plot), np.max(Y_plot)
+    y_margin = 0.15 * (y_max - y_min) if (y_max - y_min) > 1e-12 else 0.1
+
     fig.update_layout(
         title=f"Normal Stress Contour at x={x_title:.2f}",
         xaxis_title="Section x",
@@ -876,7 +879,8 @@ def plot_normal_stress_distribution(element_result, x, n_points=100, query_y=Non
         height=500,
         showlegend=False
     )
-    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    fig.update_xaxes(range=[x_min - x_margin, x_max + 2.5 * x_margin])
+    fig.update_yaxes(range=[y_min - y_margin, y_max + y_margin], scaleanchor="x", scaleratio=1)
     return fig
 
 def plot_shear_stress_distribution(element_result, x, n_points=100, query_y=None, display_x=None):
@@ -1002,6 +1006,9 @@ def plot_shear_stress_distribution(element_result, x, n_points=100, query_y=None
 
     x_title = x if display_x is None else float(display_x)
 
+    y_min, y_max = np.min(Y_plot), np.max(Y_plot)
+    y_margin = 0.15 * (y_max - y_min) if (y_max - y_min) > 1e-12 else 0.1
+
     fig.update_layout(
         title=f"Shear Stress Contour at x={x_title:.2f}",
         xaxis_title="Section x",
@@ -1010,7 +1017,8 @@ def plot_shear_stress_distribution(element_result, x, n_points=100, query_y=None
         height=500,
         showlegend=False
     )
-    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    fig.update_xaxes(range=[x_min - x_margin, x_max + 2.5 * x_margin])
+    fig.update_yaxes(range=[y_min - y_margin, y_max + y_margin], scaleanchor="x", scaleratio=1)
     return fig
 
 def plot_reddy_shear_stress_distribution(element_result, x, n_points=100, query_y=None, display_x=None):
@@ -1110,6 +1118,9 @@ def plot_reddy_shear_stress_distribution(element_result, x, n_points=100, query_
 
     x_title = x if display_x is None else float(display_x)
 
+    y_min, y_max = np.min(Y_plot), np.max(Y_plot)
+    y_margin = 0.15 * (y_max - y_min) if (y_max - y_min) > 1e-12 else 0.1
+
     fig.update_layout(
         title=f"Reddy Shear Stress Contour at x={x_title:.2f}",
         xaxis_title="Section x",
@@ -1118,7 +1129,8 @@ def plot_reddy_shear_stress_distribution(element_result, x, n_points=100, query_
         height=500,
         showlegend=False
     )
-    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    fig.update_xaxes(range=[x_min - x_margin, x_max + 2.5 * x_margin])
+    fig.update_yaxes(range=[y_min - y_margin, y_max + y_margin], scaleanchor="x", scaleratio=1)
     return fig
 
 def plot_shear_stress_comparison(element_result, x, n_points=100, query_y=None, display_x=None):
@@ -1365,8 +1377,8 @@ def plot_normal_stress_side_view(element_result, x, n_points=30, display_x=None,
     norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
     cmap = colormaps['rainbow']
     
-    # Scale factor for arrows (proportional to element length)
-    arrow_scale = L * 0.15
+    # Scale factor for arrows (proportional to element length, increased to 0.25 for better visibility)
+    arrow_scale = L * 0.25
     
     # Draw stress profile with arrows at each height
     for i, (y, sigma) in enumerate(zip(y_values, sigma_values)):
@@ -1396,21 +1408,24 @@ def plot_normal_stress_side_view(element_result, x, n_points=30, display_x=None,
         # Add arrowhead
         if abs(arrow_length) > 1e-6:
             # Arrowhead direction based on stress sign
-            arrow_sign = np.sign(arrow_length)
-            arrow_size = min(abs(arrow_length) * 0.15, L * 0.02)
+            arrow_sign = int(np.sign(arrow_length))
+            
+            # Approximate arrow length in pixels (assuming ~900px plot width)
+            arrow_pixels = abs(sigma_normalized) * 225
+            pixel_len = max(5, min(15, int(arrow_pixels * 0.5)))
             
             fig.add_annotation(
                 x=x_end,
                 y=y,
-                ax=x_end - arrow_sign * arrow_size * 1.5,
-                ay=y,
+                ax=-arrow_sign * pixel_len,
+                ay=0,
                 xref='x',
                 yref='y',
-                axref='x',
-                ayref='y',
+                axref='pixel',
+                ayref='pixel',
                 showarrow=True,
                 arrowhead=2,
-                arrowsize=1.5,
+                arrowsize=1.2,
                 arrowwidth=2,
                 arrowcolor=color_hex
             )
@@ -1758,13 +1773,18 @@ def plot_deformed_shape(
             if node.id > n_original_nodes:
                 continue
 
-        # Find the ElementResult whose node_start matches this node to get displacement
+        # Find the ElementResult whose node matches this node to get displacement
         u_node, v_node = 0.0, 0.0
         c_node, s_node = 1.0, 0.0
         for er in structure_results.element_results:
             if er.element.node_start is node:
                 u_node = er.axial_displacement(0.0)
                 v_node = er.transverse_displacement(0.0)
+                c_node, s_node = er.element.c, er.element.s
+                break
+            elif hasattr(er.element, 'node_center') and er.element.node_center is node:
+                u_node = er.axial_displacement(er.length * 0.5)
+                v_node = er.transverse_displacement(er.length * 0.5)
                 c_node, s_node = er.element.c, er.element.s
                 break
             elif er.element.node_end is node:

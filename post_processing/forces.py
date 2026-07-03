@@ -230,7 +230,8 @@ class ElementResults:
         alpha = 4.0 / (3.0 * h**2)
         
         gamma = self._reddy_gamma_factor(x)
-        return G * gamma * (3.0 * alpha * y**2 - 1.0)
+        # Negate the sign to align with Jourawski shear stress convention
+        return - G * gamma * (3.0 * alpha * y**2 - 1.0)
 
     def jourawski_shear_stress(self, x, y_val, n_points=100):
         """
@@ -241,60 +242,79 @@ class ElementResults:
         if not hasattr(section, "xy_grid"):
             return 0.0
         
-        X, Y, mask = section.xy_grid(n_points)
-        if X is None or Y is None or mask is None:
-            return 0.0
-            
         V = self.shear_force(x)
         if section.inertia is None or abs(section.inertia) < 1e-18:
             return 0.0
-            
-        n_rows = Y.shape[0]
-        if n_rows > 1:
-            dy = abs(float(np.mean(np.diff(Y[:, 0]))))
-        else:
-            dy = 1.0
 
-        row_width = np.zeros(n_rows)
-        row_first_moment = np.zeros(n_rows)
-        valid_rows = np.zeros(n_rows, dtype=bool)
-
-        for i in range(n_rows):
-            row_mask = mask[i, :]
-            if not np.any(row_mask):
-                continue
-            xi = np.sort(X[i, row_mask])
-            if xi.size > 1:
-                dx = float(np.mean(np.diff(xi)))
+        cache_key = f"_jourawski_cache_{n_points}"
+        if not hasattr(self, cache_key):
+            X, Y, mask = section.xy_grid(n_points)
+            if X is None or Y is None or mask is None:
+                setattr(self, cache_key, None)
+                return 0.0
+                
+            n_rows = Y.shape[0]
+            if n_rows > 1:
+                dy = abs(float(np.mean(np.diff(Y[:, 0]))))
             else:
-                x_full = X[i, :]
-                dx = float((np.max(x_full) - np.min(x_full)) / max(len(x_full) - 1, 1))
-            if dx <= 0:
-                continue
+                dy = 1.0
 
-            row_area = row_mask.sum() * dx * dy
-            row_y = float(np.mean(Y[i, row_mask]))
-            row_width[i] = row_mask.sum() * dx
-            row_first_moment[i] = row_y * row_area
-            valid_rows[i] = True
+            row_width = np.zeros(n_rows)
+            row_first_moment = np.zeros(n_rows)
+            valid_rows = np.zeros(n_rows, dtype=bool)
 
-        Q = np.zeros(n_rows)
-        running_Q = 0.0
-        for i in range(n_rows - 1, -1, -1):
-            if not valid_rows[i]:
-                continue
-            running_Q += row_first_moment[i]
-            Q[i] = running_Q
+            for i in range(n_rows):
+                row_mask = mask[i, :]
+                if not np.any(row_mask):
+                    continue
+                xi = np.sort(X[i, row_mask])
+                if xi.size > 1:
+                    dx = float(np.mean(np.diff(xi)))
+                else:
+                    x_full = X[i, :]
+                    dx = float((np.max(x_full) - np.min(x_full)) / max(len(x_full) - 1, 1))
+                if dx <= 0:
+                    continue
 
-        # Find the row closest to y_val
-        row_ys = np.zeros(n_rows)
-        for i in range(n_rows):
-            if valid_rows[i]:
-                row_ys[i] = float(np.mean(Y[i, mask[i, :]]))
-            else:
-                row_ys[i] = Y[i, 0]
+                row_area = row_mask.sum() * dx * dy
+                row_y = float(np.mean(Y[i, row_mask]))
+                row_width[i] = row_mask.sum() * dx
+                row_first_moment[i] = row_y * row_area
+                valid_rows[i] = True
 
-        valid_y_coords = [row_ys[i] for i in range(n_rows) if valid_rows[i]]
+            Q = np.zeros(n_rows)
+            running_Q = 0.0
+            for i in range(n_rows - 1, -1, -1):
+                if not valid_rows[i]:
+                    continue
+                running_Q += row_first_moment[i]
+                Q[i] = running_Q
+
+            # Find the row closest to y_val
+            row_ys = np.zeros(n_rows)
+            for i in range(n_rows):
+                if valid_rows[i]:
+                    row_ys[i] = float(np.mean(Y[i, mask[i, :]]))
+                else:
+                    row_ys[i] = Y[i, 0]
+
+            setattr(self, cache_key, {
+                'Q': Q,
+                'row_width': row_width,
+                'row_ys': row_ys,
+                'valid_rows': valid_rows
+            })
+
+        cache = getattr(self, cache_key)
+        if cache is None:
+            return 0.0
+
+        Q = cache['Q']
+        row_width = cache['row_width']
+        row_ys = cache['row_ys']
+        valid_rows = cache['valid_rows']
+
+        valid_y_coords = [row_ys[i] for i in range(len(row_ys)) if valid_rows[i]]
         if not valid_y_coords:
             return 0.0
         min_y, max_y = min(valid_y_coords), max(valid_y_coords)
