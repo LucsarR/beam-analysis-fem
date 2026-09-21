@@ -1,5 +1,6 @@
 # Project To-Do List
-- [ ] Montar problema do prof com subdivisoes em vez de 3 nos
+- [ ] Ver intergraacao numerica por gauss ver convergencia
+- [ ] Atualizar help Click Preview Structure with Loads to inspect the setup before solving nao existe mais
 
 # Ajuste finais
 - [ ] Atualizar README's (tanto do workspace quanto do tests)
